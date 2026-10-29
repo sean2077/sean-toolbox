@@ -46,6 +46,8 @@
 
 **实现和验证是两件事：** 仓库提供三平台原生构建 CI 和 Linux X11 真窗口测试。Windows/macOS 的焦点策略、权限提示、系统缩放和桌面交互仍需要对应系统实机验收；交叉编译通过不能替代这些检查。
 
+已完成的检查、原生界面验收与资源采样见 [验证记录](docs/VALIDATION.md)。
+
 Windows 普通权限进程无法保证控制管理员权限窗口。macOS 在“系统设置 → 隐私与安全性 → 辅助功能”授权后可在诊断页重新检查；应用路径或签名变化可能需要重新授权。Linux 桌面没有托盘宿主时仍可通过命令行打开界面。
 
 ## 获取与运行
@@ -55,6 +57,8 @@ Windows 普通权限进程无法保证控制管理员权限窗口。macOS 在“
 - Windows：完整解压后运行 `sean-toolbox.exe`。
 - macOS：解压并将 `Sean Toolbox.app` 放到固定位置，再打开应用。
 - Linux：解压后运行 `bin/sean-toolbox`；桌面入口安装方法见包内 `INSTALL.md`。
+
+Linux 文件导入/导出对话框需要可用的 XDG Desktop Portal 文件选择后端或 `zenity`；缺少后端时界面会提示错误，项目搜索与快捷键功能可独立使用。
 
 **主程序和 `sean-toolbox-ui` 必须保持在一起。** 首次打开会启动托盘宿主并显示项目页；收起界面后，默认 60 秒释放界面进程，设为 `0` 可立即释放。退出整个应用请使用托盘“退出工具箱”或 `sean-toolbox quit`。
 
@@ -131,7 +135,10 @@ Linux 真窗口测试使用独立 Xvfb、Openbox 和 xterm，清理由脚本负�
 
 ```sh
 bash crates/toolbox-windows/tests/run-x11-smoke.sh
+python scripts/smoke_host.py --binary target/release/sean-toolbox
 ```
+
+第二项检查真实快捷键、配置事务、单实例、UI 释放和退出清理；附加 `--measure` 可对当前 Linux 测试环境中的空闲宿主采样 10 秒。测试自动隔离显示服务与用户目录。
 
 构建完成后收集第三方许可并打包：
 

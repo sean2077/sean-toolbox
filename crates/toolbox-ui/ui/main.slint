@@ -1,0 +1,445 @@
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView, TextEdit, AboutSlint } from "std-widgets.slint";
+
+export struct ProjectRow { id: string, name: string, location: string, source: string }
+export struct ProfileRow { name: string, detail: string, enabled: bool, available: bool }
+component Caption inherits Text { color: #626b7a; font-size: 12px; wrap: word-wrap; }
+component FieldLabel inherits Text { color: #344054; font-size: 13px; font-weight: 600; }
+component NavButton inherits Rectangle {
+    in property <string> text;
+    in property <string> number;
+    in property <bool> selected;
+    callback clicked;
+    height: 44px; border-radius: 8px;
+    background: root.selected ? #e4edff : touch.has-hover ? #eaedf2 : transparent;
+    accessible-role: button; accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+    forward-focus: scope;
+    HorizontalLayout {
+        padding-left: 14px; padding-right: 12px; spacing: 12px;
+        Text { text: root.number; color: root.selected ? #2563eb : #8a94a3; font-size: 11px; width: 20px; }
+        Text { text: root.text; color: root.selected ? #1747a6 : #3e4859; font-weight: root.selected ? 600 : 400; font-size: 14px; }
+    }
+    touch := TouchArea { clicked => { root.clicked(); } }
+    scope := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.Return || event.text == Key.Space { root.clicked(); return accept; }
+            reject
+        }
+    }
+    border-width: scope.has-focus ? 1px : 0px; border-color: #82a8ff;
+}
+
+export component AppWindow inherits Window {
+    title: "Sean Toolbox";
+    preferred-width: 1040px; preferred-height: 740px; min-width: 860px; min-height: 620px;
+    background: #ffffff; default-font-size: 14px;
+    in-out property <bool> english: false;
+    in-out property <int> page: 0;
+    in-out property <bool> loaded: false;
+    in-out property <bool> saving: false;
+    in-out property <bool> dialog-busy: false;
+    in-out property <bool> settings-dirty: false;
+    in-out property <string> status-message: "正在连接…";
+    in-out property <bool> status-error: false;
+    in-out property <string> version-label;
+    in-out property <[ProjectRow]> projects;
+    in-out property <string> query;
+    in-out property <int> selected-project: -1;
+    in-out property <string> project-message;
+    in-out property <bool> project-loading: false;
+    in-out property <bool> project-opening: false;
+    in-out property <[ProfileRow]> profiles;
+    in-out property <int> selected-profile: -1;
+    in-out property <bool> editing: false;
+    in-out property <bool> profile-dirty: false;
+    in-out property <string> form-id;
+    in-out property <string> form-name;
+    in-out property <int> form-platform: 0;
+    in-out property <string> form-matcher;
+    in-out property <string> form-hotkey;
+    in-out property <bool> form-enabled;
+    in-out property <bool> form-maximize;
+    in-out property <bool> form-cycle;
+    in-out property <[string]> candidate-labels;
+    in-out property <int> candidate-index: 0;
+    in-out property <string> launch-executable;
+    in-out property <string> launch-args: "[]";
+    in-out property <string> launch-cwd;
+    in-out property <string> profile-help;
+    in-out property <int> setting-language: 0;
+    in-out property <string> setting-hotkey;
+    in-out property <bool> setting-autostart;
+    in-out property <bool> setting-projects;
+    in-out property <bool> setting-windows;
+    in-out property <string> setting-idle: "60";
+    in-out property <string> setting-code-path;
+    in-out property <bool> import-visible: false;
+    in-out property <bool> import-is-json: false;
+    in-out property <string> import-summary;
+    in-out property <string> diagnostics;
+    in-out property <bool> confirm-visible: false;
+    in-out property <string> confirm-title;
+    in-out property <string> confirm-message;
+    callback navigate(int);
+    callback dismiss;
+    callback query-changed(string);
+    callback refresh-projects;
+    callback open-project(int);
+    callback move-project(int);
+    callback edit-profile(int);
+    callback new-profile;
+    callback delete-profile;
+    callback save-profile;
+    callback cancel-profile;
+    callback profile-changed;
+    callback toggle-profile(int);
+    callback candidate-selected(int);
+    callback add-candidate;
+    callback remove-candidate;
+    callback browse-path(int);
+    callback settings-changed;
+    callback save-settings;
+    callback reload-config;
+    callback import-config;
+    callback export-config;
+    callback apply-import(bool);
+    callback cancel-import;
+    callback refresh-status;
+    callback confirm-action(bool);
+    callback open-link(int);
+
+    public function focus-page() {
+        if root.confirm-visible { confirm-cancel.focus(); }
+        else if root.import-visible { import-merge.focus(); }
+        else if root.page == 0 { search.focus(); }
+        else { keys.focus(); }
+    }
+    public function focus-import-actions() { import-merge.focus(); }
+    public function focus-confirm-actions() { confirm-cancel.focus(); }
+    public function reveal-selection() {
+        if (root.selected-project < 0) { return; }
+        if (root.selected-project * 72px + project-scroll.content-y < 0px) {
+            project-scroll.content-y = -root.selected-project * 72px;
+        }
+        if ((root.selected-project + 1) * 72px + project-scroll.content-y > project-scroll.visible-height) {
+            project-scroll.content-y = project-scroll.visible-height - (root.selected-project + 1) * 72px;
+        }
+    }
+    forward-focus: keys;
+    keys := FocusScope {
+        capture-key-pressed(event) => {
+            if root.dialog-busy { return accept; }
+            if event.text == Key.Escape { root.dismiss(); return accept; }
+            if root.confirm-visible && event.text == Key.Tab {
+                if confirm-cancel.has-focus { confirm-continue.focus(); } else { confirm-cancel.focus(); }
+                return accept;
+            }
+            if root.import-visible && event.text == Key.Tab {
+                if event.modifiers.shift {
+                    if import-cancel.has-focus { import-replace.focus(); }
+                    else if import-replace.has-focus { import-merge.focus(); }
+                    else { import-cancel.focus(); }
+                } else {
+                    if import-cancel.has-focus { import-merge.focus(); }
+                    else if import-merge.has-focus { import-replace.focus(); }
+                    else { import-cancel.focus(); }
+                }
+                return accept;
+            }
+            if root.page == 0 && search.has-focus && !root.confirm-visible && !root.import-visible {
+                if event.text == Key.DownArrow { root.move-project(1); return accept; }
+                if event.text == Key.UpArrow { root.move-project(-1); return accept; }
+                if event.text == Key.Return { root.open-project(root.selected-project); return accept; }
+            }
+            reject
+        }
+        HorizontalLayout {
+            spacing: 0px;
+            Rectangle {
+                width: 184px; background: #f5f7fa;
+                VerticalLayout {
+                    padding: 18px; spacing: 8px;
+                    Rectangle {
+                        height: 78px;
+                        VerticalLayout {
+                            alignment: center; spacing: 5px;
+                            Text { text: "SEAN"; font-weight: 700; font-size: 18px; color: #172b4d; }
+                            Text { text: root.english ? "Personal toolbox" : "个人工具箱"; color: #6e798a; font-size: 12px; }
+                        }
+                    }
+                    NavButton { text: root.english ? "Projects" : "最近项目"; number: "01"; selected: root.page == 0; clicked => { root.navigate(0); } }
+                    NavButton { text: root.english ? "Windows" : "窗口切换"; number: "02"; selected: root.page == 1; clicked => { root.navigate(1); } }
+                    NavButton { text: root.english ? "Settings" : "设置"; number: "03"; selected: root.page == 2; clicked => { root.navigate(2); } }
+                    NavButton { text: root.english ? "Diagnostics" : "运行状态"; number: "04"; selected: root.page == 3; clicked => { root.navigate(3); } }
+                    Rectangle { vertical-stretch: 1; }
+                    Caption { text: root.version-label; font-size: 11px; }
+                    Caption { text: root.english ? "Local. On demand." : "本地运行 · 按需加载"; font-size: 11px; }
+                }
+            }
+            Rectangle {
+                horizontal-stretch: 1;
+                VerticalLayout {
+                    padding: 26px; spacing: 14px;
+                    HorizontalLayout {
+                        height: 43px;
+                        Text {
+                            text: root.page == 0 ? (root.english ? "Recent projects" : "最近项目") : root.page == 1 ? (root.english ? "Window switcher" : "窗口切换") : root.page == 2 ? (root.english ? "Settings" : "设置") : (root.english ? "Status & about" : "运行状态与关于");
+                            font-size: 24px; font-weight: 700; color: #172b4d;
+                            horizontal-stretch: 1;
+                        }
+                        Button { width: 110px; text: root.english ? "Hide  Esc" : "收起  Esc"; clicked => { root.dismiss(); } }
+                    }
+                    Rectangle {
+                        vertical-stretch: 1;
+                        // Keep pages mounted to preserve unsaved input when navigating.
+                        VerticalLayout {
+                            visible: root.page == 0; spacing: 12px;
+                            Caption { text: root.english ? "Find a recent VS Code folder or workspace." : "快速搜索并打开 VS Code 最近使用的文件夹和工作区。"; }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                search := LineEdit { text <=> root.query; placeholder-text: root.english ? "Search name or path…" : "搜索项目名称或路径…"; edited(text) => { root.query-changed(text); } }
+                                Button { text: root.english ? "Refresh" : "刷新"; enabled: !root.project-loading; clicked => { root.refresh-projects(); } }
+                            }
+                            project-scroll := ScrollView {
+                                vertical-stretch: 1; horizontal-scrollbar-policy: always-off;
+                                VerticalLayout {
+                                    spacing: 0px;
+                                    for item[index] in root.projects: Rectangle {
+                                        height: 72px; border-radius: 8px;
+                                        border-width: index == root.selected-project ? 1px : 0px; border-color: #c3d8ff;
+                                        background: index == root.selected-project ? #edf4ff : project-touch.has-hover ? #f7f9fc : #ffffff;
+                                        accessible-role: button; accessible-label: item.name + " " + item.location;
+                                        accessible-action-default => { root.open-project(index); }
+                                        HorizontalLayout {
+                                            padding: 12px; spacing: 12px;
+                                            Rectangle { width: 36px; height: 36px; border-radius: 8px; background: #e7eef9; Text { text: "</>"; color: #315f9d; font-size: 13px; horizontal-alignment: center; vertical-alignment: center; } }
+                                            VerticalLayout {
+                                                spacing: 4px;
+                                                Text { text: item.name; color: #24354c; font-weight: 600; overflow: elide; }
+                                                Text { text: item.location; color: #748095; font-size: 11px; overflow: elide; }
+                                            }
+                                            Text { width: 55px; horizontal-alignment: right; text: index == root.selected-project ? "↵" : item.source; color: #7f8ba0; font-size: 11px; }
+                                        }
+                                        project-touch := TouchArea { enabled: !root.project-opening; clicked => { root.open-project(index); } }
+                                    }
+                                    Rectangle { min-height: 0px; vertical-stretch: 1; }
+                                }
+                            }
+                            Caption { text: root.project-message; }
+                            HorizontalLayout {
+                                Caption { text: root.english ? "↑ ↓ Select     Enter Open     Esc Hide" : "↑ ↓ 选择     Enter 打开     Esc 收起"; }
+                                Button { width: 130px; text: root.project-opening ? (root.english ? "Opening…" : "正在打开…") : (root.english ? "Open project" : "打开项目"); enabled: root.selected-project >= 0 && !root.project-opening; clicked => { root.open-project(root.selected-project); } }
+                            }
+                        }
+                        VerticalLayout {
+                            visible: root.page == 1; spacing: 12px;
+                            Caption { text: root.english ? "Use one shortcut to launch, focus, hide or cycle an app." : "为常用应用分配快捷键，快速启动、切回、收起或循环多个窗口。"; }
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    width: 245px; spacing: 8px;
+                                    Button { text: root.english ? "+ Add application" : "+ 添加应用"; enabled: root.loaded && !root.saving; clicked => { root.new-profile(); } }
+                                    ScrollView {
+                                        horizontal-scrollbar-policy: always-off; vertical-stretch: 1;
+                                        VerticalLayout {
+                                            spacing: 6px;
+                                            for item[index] in root.profiles: Rectangle {
+                                                height: 86px; border-radius: 7px; background: root.selected-profile == index ? #edf4ff : #f7f9fc;
+                                                VerticalLayout {
+                                                    padding: 10px; spacing: 4px;
+                                                    HorizontalLayout {
+                                                        Text { text: item.name; font-weight: 600; color: item.enabled ? #253952 : #9198a3; overflow: elide; }
+                                                        Text { width: 12px; text: item.enabled ? "●" : "○"; color: item.enabled ? #38815a : #9ba3af; font-size: 10px; }
+                                                    }
+                                                    Caption { text: item.detail; font-size: 11px; }
+                                                    HorizontalLayout {
+                                                        Button { text: root.english ? "Edit" : "编辑"; enabled: !root.saving; clicked => { root.edit-profile(index); } }
+                                                        Button { text: root.english ? "Toggle" : "切换"; enabled: root.loaded && item.enabled && item.available && root.setting-windows && !root.saving; clicked => { root.toggle-profile(index); } }
+                                                    }
+                                                }
+                                            }
+                                            Rectangle { min-height: 0px; vertical-stretch: 1; }
+                                        }
+                                    }
+                                }
+                                Rectangle {
+                                    horizontal-stretch: 1;
+                                    if !root.editing: Rectangle {
+                                        background: #fafbfd; border-radius: 10px;
+                                        VerticalLayout {
+                                            padding: 24px; alignment: center; spacing: 12px;
+                                            Text { text: root.english ? "Your apps, one key away" : "常用应用，一键即达"; font-size: 19px; font-weight: 600; color: #3d506d; }
+                                            Caption { text: root.english ? "Choose an app to edit its matching rule, shortcut and launch candidates. Only profiles for this system are active." : "选择左侧应用，设置匹配规则、快捷键和启动候选。只有当前系统的配置会生效。"; }
+                                        }
+                                    }
+                                    VerticalLayout {
+                                        visible: root.editing; spacing: 8px;
+                                        ScrollView {
+                                            vertical-stretch: 1; horizontal-scrollbar-policy: always-off;
+                                            VerticalLayout {
+                                                padding-right: 8px; spacing: 8px;
+                                                FieldLabel { text: root.english ? "Application" : "应用"; }
+                                                HorizontalLayout {
+                                                    spacing: 8px;
+                                                    LineEdit { text <=> root.form-name; placeholder-text: root.english ? "Name" : "名称"; enabled: !root.saving; edited => { root.profile-changed(); } }
+                                                    ComboBox { width: 120px; model: ["Windows", "macOS", "Linux"]; current-index <=> root.form-platform; enabled: !root.saving; selected => { root.profile-changed(); } }
+                                                }
+                                                LineEdit { text <=> root.form-id; placeholder-text: root.english ? "Unique ID (letters, digits, - or _)" : "唯一 ID（字母、数字、- 或 _）"; enabled: !root.saving; edited => { root.profile-changed(); } }
+                                                FieldLabel { text: root.english ? "Match rule" : "窗口匹配"; }
+                                                LineEdit { text <=> root.form-matcher; enabled: !root.saving; edited => { root.profile-changed(); } }
+                                                Caption { text: root.profile-help; font-size: 11px; }
+                                                FieldLabel { text: root.english ? "Shortcut (optional)" : "快捷键（可留空）"; }
+                                                LineEdit { text <=> root.form-hotkey; placeholder-text: "F3 / Ctrl+Alt+T"; enabled: !root.saving; edited => { root.profile-changed(); } }
+                                                HorizontalLayout {
+                                                    CheckBox { text: root.english ? "Enabled" : "启用"; checked <=> root.form-enabled; enabled: !root.saving; toggled => { root.profile-changed(); } }
+                                                    CheckBox { text: root.english ? "Maximize" : "最大化"; checked <=> root.form-maximize; enabled: !root.saving; toggled => { root.profile-changed(); } }
+                                                }
+                                                CheckBox { text: root.english ? "Cycle through all windows" : "连续按键循环多个窗口"; checked <=> root.form-cycle; enabled: !root.saving; toggled => { root.profile-changed(); } }
+                                                Rectangle { height: 1px; background: #e8ecf2; }
+                                                FieldLabel { text: root.english ? "Launch candidates" : "启动候选"; }
+                                                Caption { text: root.english ? "Tried in order when the app is not running. No shell expansion." : "应用未运行时按顺序尝试，不经过 shell 展开。"; font-size: 11px; }
+                                                HorizontalLayout {
+                                                    spacing: 5px;
+                                                    ComboBox { model: root.candidate-labels; current-index <=> root.candidate-index; enabled: !root.saving; selected => { root.candidate-selected(self.current-index); } }
+                                                    Button { width: 32px; text: "+"; enabled: root.candidate-labels.length < 8 && !root.saving; clicked => { root.add-candidate(); } }
+                                                    Button { width: 32px; text: "−"; enabled: root.candidate-labels.length > 1 && !root.saving; clicked => { root.remove-candidate(); } }
+                                                }
+                                                HorizontalLayout {
+                                                    LineEdit { text <=> root.launch-executable; placeholder-text: root.english ? "Executable or application path" : "可执行文件或应用路径"; enabled: !root.saving; edited => { root.profile-changed(); } }
+                                                    Button { width: 32px; text: "…"; enabled: !root.saving; clicked => { root.browse-path(0); } }
+                                                }
+                                                FieldLabel { text: root.english ? "Arguments (JSON array)" : "参数（JSON 数组）"; }
+                                                LineEdit { text <=> root.launch-args; placeholder-text: "[\"--new-window\", \"path with spaces\"]"; enabled: !root.saving; edited => { root.profile-changed(); } }
+                                                HorizontalLayout {
+                                                    LineEdit { text <=> root.launch-cwd; placeholder-text: root.english ? "Working directory (optional)" : "工作目录（可留空）"; enabled: !root.saving; edited => { root.profile-changed(); } }
+                                                    Button { width: 32px; text: "…"; enabled: !root.saving; clicked => { root.browse-path(1); } }
+                                                }
+                                                Rectangle { min-height: 4px; vertical-stretch: 1; }
+                                            }
+                                        }
+                                        HorizontalLayout {
+                                            spacing: 7px;
+                                            Button { text: root.english ? "Delete" : "删除"; enabled: root.selected-profile >= 0 && !root.saving; clicked => { root.delete-profile(); } }
+                                            Button { text: root.english ? "Cancel" : "取消"; enabled: !root.saving; clicked => { root.cancel-profile(); } }
+                                            Button { text: root.saving ? (root.english ? "Saving…" : "保存中…") : (root.english ? "Save app" : "保存应用"); enabled: root.loaded && !root.saving; primary: true; clicked => { root.save-profile(); } }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        VerticalLayout {
+                            visible: root.page == 2; spacing: 14px;
+                            ScrollView {
+                                vertical-stretch: 1; horizontal-scrollbar-policy: always-off;
+                                VerticalLayout {
+                                    padding-right: 10px; spacing: 12px;
+                                    FieldLabel { text: root.english ? "General" : "通用"; }
+                                    HorizontalLayout {
+                                        Text { text: root.english ? "Language" : "界面语言"; width: 200px; color: #475467; }
+                                        ComboBox { model: ["简体中文", "English"]; current-index <=> root.setting-language; enabled: root.loaded && !root.saving; selected => { root.settings-changed(); } }
+                                    }
+                                    HorizontalLayout {
+                                        Text { text: root.english ? "Open toolbox" : "唤出工具箱"; width: 200px; color: #475467; }
+                                        LineEdit { text <=> root.setting-hotkey; enabled: root.loaded && !root.saving; edited => { root.settings-changed(); } }
+                                    }
+                                    CheckBox { text: root.english ? "Start when I sign in" : "登录时启动"; checked <=> root.setting-autostart; enabled: root.loaded && !root.saving; toggled => { root.settings-changed(); } }
+                                    HorizontalLayout {
+                                        Text { text: root.english ? "Unload hidden UI after (s)" : "界面隐藏后释放（秒）"; width: 200px; color: #475467; }
+                                        LineEdit { text <=> root.setting-idle; enabled: root.loaded && !root.saving; edited => { root.settings-changed(); } }
+                                    }
+                                    Caption { text: root.english ? "0 releases the UI immediately. Shortcuts remain available through the host." : "设为 0 立即释放界面；常驻服务继续响应快捷键。"; }
+                                    Rectangle { height: 1px; background: #e8ecf2; }
+                                    FieldLabel { text: root.english ? "Modules" : "功能模块"; }
+                                    CheckBox { text: root.english ? "Recent VS Code projects" : "VS Code 最近项目"; checked <=> root.setting-projects; enabled: root.loaded && !root.saving; toggled => { root.settings-changed(); } }
+                                    CheckBox { text: root.english ? "Window switcher" : "窗口切换"; checked <=> root.setting-windows; enabled: root.loaded && !root.saving; toggled => { root.settings-changed(); } }
+                                    FieldLabel { text: root.english ? "VS Code executable (optional)" : "VS Code 可执行文件（可留空）"; }
+                                    HorizontalLayout {
+                                        LineEdit { text <=> root.setting-code-path; placeholder-text: root.english ? "Automatically detect" : "自动查找"; enabled: root.loaded && !root.saving; edited => { root.settings-changed(); } }
+                                        Button { width: 32px; text: "…"; enabled: root.loaded && !root.saving; clicked => { root.browse-path(2); } }
+                                    }
+                                    Rectangle { height: 1px; background: #e8ecf2; }
+                                    FieldLabel { text: root.english ? "Configuration" : "配置管理"; }
+                                    Caption { text: root.english ? "Import WinGuake INI or Toolbox JSON. Preview changes before applying. Export saves the configuration currently in use." : "导入 WinGuake INI 或工具箱 JSON，预览后再应用。导出保存当前已生效的配置。"; }
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        Button { text: root.english ? "Import…" : "导入…"; enabled: root.loaded && !root.saving; clicked => { root.import-config(); } }
+                                        Button { text: root.english ? "Export JSON…" : "导出 JSON…"; enabled: root.loaded && !root.saving; clicked => { root.export-config(); } }
+                                        Button { text: root.english ? "Reload saved" : "重新载入"; enabled: !root.saving; clicked => { root.reload-config(); } }
+                                    }
+                                    Rectangle { min-height: 2px; vertical-stretch: 1; }
+                                }
+                            }
+                            HorizontalLayout {
+                                Caption { text: root.settings-dirty ? (root.english ? "Unsaved changes" : "有尚未保存的修改") : (root.english ? "Changes take effect after saving." : "保存后生效。"); }
+                                Button { width: 150px; text: root.saving ? (root.english ? "Saving…" : "保存中…") : (root.english ? "Save settings" : "保存设置"); enabled: root.loaded && !root.saving; primary: true; clicked => { root.save-settings(); } }
+                            }
+                        }
+                        VerticalLayout {
+                            visible: root.page == 3; spacing: 14px;
+                            HorizontalLayout {
+                                Caption { text: root.english ? "Live capabilities and the most recent operation." : "查看当前系统的可用能力和最近一次操作结果。"; }
+                                Button { width: 90px; text: root.english ? "Refresh" : "刷新"; clicked => { root.refresh-status(); } }
+                            }
+                            TextEdit { text: root.diagnostics; read-only: true; vertical-stretch: 1; }
+                            Rectangle { height: 1px; background: #e8ecf2; }
+                            Text { text: "Sean Toolbox"; font-size: 17px; font-weight: 600; color: #253952; }
+                            Caption { text: root.english ? "An independent personal toolbox. Recent project support is adapted from Recentry (MIT)." : "独立运行的个人工具箱。最近项目功能基于 Recentry（MIT）改编。"; }
+                            HorizontalLayout {
+                                Button { text: root.english ? "Project & licenses" : "项目与许可证"; clicked => { root.open-link(0); } }
+                                Button { text: root.english ? "Slint website" : "Slint 网站"; clicked => { root.open-link(1); } }
+                                AboutSlint { width: 155px; height: 55px; }
+                            }
+                        }
+                    }
+                    Rectangle {
+                        height: 46px; border-radius: 6px; background: root.status-error ? #fff0ee : #f5f8fc;
+                        Text { x: 11px; y: 6px; width: parent.width - 22px; height: parent.height - 12px; text: root.status-message; color: root.status-error ? #ae3429 : #526581; font-size: 11px; wrap: word-wrap; overflow: elide; vertical-alignment: center; }
+                    }
+                }
+            }
+        }
+        Rectangle {
+            visible: root.import-visible; background: #16253a75; TouchArea {}
+            Rectangle {
+                x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+                width: min(710px, parent.width - 60px); height: min(560px, parent.height - 60px);
+                border-radius: 12px; background: white;
+                VerticalLayout {
+                    padding: 24px; spacing: 14px;
+                    Text { text: root.english ? "Review import" : "导入预览"; font-size: 22px; font-weight: 600; color: #24354c; }
+                    TextEdit { text: root.import-summary; read-only: true; vertical-stretch: 1; }
+                    if root.status-error: Caption { text: root.status-message; color: #ae3429; }
+                    Caption { text: root.english ? "Merge replaces apps with the same ID. Replace removes the existing app list; JSON also replaces settings. Nothing runs during import." : "合并会替换相同 ID 的应用。替换会移除原应用列表；JSON 还会替换通用设置。导入时不会启动应用。"; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        import-cancel := Button { text: root.english ? "Cancel" : "取消"; enabled: !root.saving; clicked => { root.cancel-import(); } }
+                        import-merge := Button { text: root.english ? "Merge apps" : "合并应用"; enabled: !root.saving; clicked => { root.apply-import(false); } }
+                        import-replace := Button { text: root.import-is-json ? (root.english ? "Replace all" : "替换全部配置") : (root.english ? "Replace app list" : "替换应用列表"); enabled: !root.saving; clicked => { root.apply-import(true); } }
+                    }
+                }
+            }
+        }
+        Rectangle {
+            visible: root.confirm-visible; background: #16253a75; TouchArea {}
+            Rectangle {
+                x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+                width: min(470px, parent.width - 60px); height: 220px; border-radius: 12px; background: white;
+                VerticalLayout {
+                    padding: 24px; spacing: 16px;
+                    Text { text: root.confirm-title; color: #24354c; font-weight: 600; font-size: 18px; }
+                    Caption { text: root.confirm-message; vertical-stretch: 1; }
+                    HorizontalLayout {
+                        Rectangle { horizontal-stretch: 1; }
+                        confirm-cancel := Button { text: root.english ? "Cancel" : "取消"; clicked => { root.confirm-action(false); } }
+                        confirm-continue := Button { text: root.english ? "Continue" : "继续"; clicked => { root.confirm-action(true); } }
+                    }
+                }
+            }
+        }
+        if root.dialog-busy: Rectangle {
+            background: #ffffff99;
+            TouchArea {}
+            Text { text: root.english ? "Complete the file dialog to continue…" : "请在文件选择窗口中继续…"; color: #344054; horizontal-alignment: center; vertical-alignment: center; }
+        }
+    }
+}

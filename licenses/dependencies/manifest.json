@@ -1,0 +1,469 @@
+{
+  "schema_version": 1,
+  "packages": {
+    "block2@0.5.1": [
+      {
+        "file": "objc2-MIT-e353f37b12ae.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/4fc083f1c6d6784577e38b0ee8dbd344481e2fd2/LICENSE.txt",
+        "license": "MIT",
+        "sha256": "e353f37b12aefbb9f9b29490e837cfee05d9bda70804b3562839a3285c1df1e5"
+      }
+    ],
+    "block2@0.6.2": [
+      {
+        "file": "objc2-declaration-7f976f7e9cb2.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/b4167b582b2f75f9a1be75495c41b765344fd03c/LICENSE.md",
+        "license": "MIT",
+        "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "clipboard-win@5.4.3": [
+      {
+        "file": "clipboard-win-BSL-1.0-c9bff7573892.txt",
+        "source": "https://raw.githubusercontent.com/DoumanAsh/clipboard-win/ed27008ae5d1f10cfbb266de039f0fb35fd05a56/LICENSE",
+        "license": "BSL-1.0",
+        "sha256": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566"
+      }
+    ],
+    "dispatch2@0.3.1": [
+      {
+        "file": "objc2-declaration-7f976f7e9cb2.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/8852b424193ca41602281b3d7540d7c8ed51e49a/LICENSE.md",
+        "license": "MIT",
+        "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "dispatch@0.2.0": [
+      {
+        "file": "rust-dispatch-declaration-05c60b829931.txt",
+        "source": "https://raw.githubusercontent.com/SSheldon/rust-dispatch/82d6c7a5b75dc0c71c3f46f87bb6c16a476f7748/Cargo.toml",
+        "license": "MIT",
+        "sha256": "05c60b829931ef7f1f130735843c11f5cf9cc69546eca5fc941d014781c68e31",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "drm-fourcc@2.2.0": [
+      {
+        "file": "drm-fourcc-rs-declaration-0660e17d634e.txt",
+        "source": "https://raw.githubusercontent.com/danielzfranklin/drm-fourcc-rs/7b9f80060ffd4b35cd236437e65a17fb517d163c/Cargo.toml",
+        "license": "MIT",
+        "sha256": "0660e17d634e5b8c2a82cd0b0328c42fbc6e8b77a9f37b85f49bfeba1f4931ca",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "gl_generator@0.14.0": [
+      {
+        "file": "gl-rs-Apache-2.0-cfc7749b96f6.txt",
+        "source": "https://raw.githubusercontent.com/brendanzab/gl-rs/ea503e8d5fb6d73c6030e6191ce738cd3bf3433e/LICENSE",
+        "license": "Apache-2.0",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    ],
+    "khronos_api@3.1.0": [
+      {
+        "file": "gl-rs-Apache-2.0-cfc7749b96f6.txt",
+        "source": "https://raw.githubusercontent.com/brendanzab/gl-rs/f150967b1c44ae888e6676f93f639ebc82771bdc/LICENSE",
+        "license": "Apache-2.0",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    ],
+    "libseat-sys@0.2.0": [
+      {
+        "file": "libseat-rs-declaration-022d95ce6df7.txt",
+        "source": "https://raw.githubusercontent.com/PolyMeilex/libseat-rs/cfc67eeb449b5a034a192a2fa8d23ca44d59832d/libseat-sys/Cargo.toml",
+        "license": "MIT",
+        "sha256": "022d95ce6df793a58658d9d536822c4f6a224d581f30d483d136038ec0a8f0ea",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "libseat@0.2.4": [
+      {
+        "file": "libseat-rs-declaration-710e6c1df6de.txt",
+        "source": "https://raw.githubusercontent.com/PolyMeilex/libseat-rs/00a7f14ae1cac8e475ec90bfdfb05884f53e1d0c/Cargo.toml",
+        "license": "MIT",
+        "sha256": "710e6c1df6deb1c3003330c74d6de14136a59ba2c73fea185874a5a3c5f8599c",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "lyon_algorithms@1.0.22": [
+      {
+        "file": "lyon-MIT-80f275e90d79.txt",
+        "source": "https://raw.githubusercontent.com/nical/lyon/db98d26a1a90076a7a894262dcb51117eef643c8/LICENSE-MIT",
+        "license": "MIT",
+        "sha256": "80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e"
+      }
+    ],
+    "lyon_extra@1.1.0": [
+      {
+        "file": "lyon-MIT-80f275e90d79.txt",
+        "source": "https://raw.githubusercontent.com/nical/lyon/56219c95c658d4f39de7b190d98e57d5773ba241/LICENSE-MIT",
+        "license": "MIT",
+        "sha256": "80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e"
+      }
+    ],
+    "lyon_geom@1.0.20": [
+      {
+        "file": "lyon-MIT-80f275e90d79.txt",
+        "source": "https://raw.githubusercontent.com/nical/lyon/db98d26a1a90076a7a894262dcb51117eef643c8/LICENSE-MIT",
+        "license": "MIT",
+        "sha256": "80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e"
+      }
+    ],
+    "lyon_path@1.0.19": [
+      {
+        "file": "lyon-MIT-80f275e90d79.txt",
+        "source": "https://raw.githubusercontent.com/nical/lyon/56219c95c658d4f39de7b190d98e57d5773ba241/LICENSE-MIT",
+        "license": "MIT",
+        "sha256": "80f275e90d799911ed3830a7f242a2ef5a4ade2092fe0aa07bfb2d2cf2f2b95e"
+      }
+    ],
+    "objc-sys@0.3.5": [
+      {
+        "file": "objc2-MIT-e353f37b12ae.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/4fc083f1c6d6784577e38b0ee8dbd344481e2fd2/LICENSE.txt",
+        "license": "MIT",
+        "sha256": "e353f37b12aefbb9f9b29490e837cfee05d9bda70804b3562839a3285c1df1e5"
+      }
+    ],
+    "objc2-app-kit@0.2.2": [
+      {
+        "file": "objc2-MIT-e353f37b12ae.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/e282618be4c3a3b9542957e0c8540e9588472ce8/LICENSE.txt",
+        "license": "MIT",
+        "sha256": "e353f37b12aefbb9f9b29490e837cfee05d9bda70804b3562839a3285c1df1e5"
+      }
+    ],
+    "objc2-app-kit@0.3.2": [
+      {
+        "file": "objc2-declaration-7f976f7e9cb2.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "license": "MIT",
+        "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "objc2-core-data@0.2.2": [
+      {
+        "file": "objc2-MIT-e353f37b12ae.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/e282618be4c3a3b9542957e0c8540e9588472ce8/LICENSE.txt",
+        "license": "MIT",
+        "sha256": "e353f37b12aefbb9f9b29490e837cfee05d9bda70804b3562839a3285c1df1e5"
+      }
+    ],
+    "objc2-core-foundation@0.3.2": [
+      {
+        "file": "objc2-declaration-7f976f7e9cb2.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "license": "MIT",
+        "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "objc2-core-graphics@0.3.2": [
+      {
+        "file": "objc2-declaration-7f976f7e9cb2.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "license": "MIT",
+        "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "objc2-core-image@0.2.2": [
+      {
+        "file": "objc2-MIT-e353f37b12ae.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/e282618be4c3a3b9542957e0c8540e9588472ce8/LICENSE.txt",
+        "license": "MIT",
+        "sha256": "e353f37b12aefbb9f9b29490e837cfee05d9bda70804b3562839a3285c1df1e5"
+      }
+    ],
+    "objc2-core-text@0.3.2": [
+      {
+        "file": "objc2-declaration-7f976f7e9cb2.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "license": "MIT",
+        "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "objc2-encode@4.1.0": [
+      {
+        "file": "objc2-declaration-7f976f7e9cb2.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/8d214f5477365ffcbcbb7de058c86ed9a518efb7/LICENSE.md",
+        "license": "MIT",
+        "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "objc2-foundation@0.2.2": [
+      {
+        "file": "objc2-MIT-e353f37b12ae.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/e282618be4c3a3b9542957e0c8540e9588472ce8/LICENSE.txt",
+        "license": "MIT",
+        "sha256": "e353f37b12aefbb9f9b29490e837cfee05d9bda70804b3562839a3285c1df1e5"
+      }
+    ],
+    "objc2-foundation@0.3.2": [
+      {
+        "file": "objc2-declaration-7f976f7e9cb2.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "license": "MIT",
+        "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "objc2-io-surface@0.3.2": [
+      {
+        "file": "objc2-declaration-7f976f7e9cb2.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "license": "MIT",
+        "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "objc2-metal@0.2.2": [
+      {
+        "file": "objc2-MIT-e353f37b12ae.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/e282618be4c3a3b9542957e0c8540e9588472ce8/LICENSE.txt",
+        "license": "MIT",
+        "sha256": "e353f37b12aefbb9f9b29490e837cfee05d9bda70804b3562839a3285c1df1e5"
+      }
+    ],
+    "objc2-metal@0.3.2": [
+      {
+        "file": "objc2-declaration-7f976f7e9cb2.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "license": "MIT",
+        "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "objc2-quartz-core@0.2.2": [
+      {
+        "file": "objc2-MIT-e353f37b12ae.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/e282618be4c3a3b9542957e0c8540e9588472ce8/LICENSE.txt",
+        "license": "MIT",
+        "sha256": "e353f37b12aefbb9f9b29490e837cfee05d9bda70804b3562839a3285c1df1e5"
+      }
+    ],
+    "objc2-quartz-core@0.3.2": [
+      {
+        "file": "objc2-declaration-7f976f7e9cb2.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/7b1abfd750a2cacaea71d6a56ecfb83cb7de560b/LICENSE.md",
+        "license": "MIT",
+        "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "objc2@0.5.3": [
+      {
+        "file": "objc2-MIT-e353f37b12ae.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/5237cbf081d04ef75a1f6a207b4018e7c1ae7438/LICENSE.txt",
+        "license": "MIT",
+        "sha256": "e353f37b12aefbb9f9b29490e837cfee05d9bda70804b3562839a3285c1df1e5"
+      }
+    ],
+    "objc2@0.6.5": [
+      {
+        "file": "objc2-declaration-7f976f7e9cb2.txt",
+        "source": "https://raw.githubusercontent.com/madsmtm/objc2/d7d2fa23ceaa5e6096c923b081040e5d81b3b9df/LICENSE.md",
+        "license": "MIT",
+        "sha256": "7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54",
+        "kind": "upstream_license_declaration",
+        "note": "Original upstream license declaration at the exact published crate commit; full standard MIT terms are supplied separately."
+      },
+      {
+        "file": "SPDX-MIT-b05785f9f18e.txt",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/617f1a78824394ada7525017d98c6fb215aad09b/text/MIT.txt",
+        "license": "MIT",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "kind": "standard_license_text",
+        "note": "Standard MIT terms referenced by the upstream declaration; upstream does not package its own complete license text."
+      }
+    ],
+    "profiling@1.0.18": [
+      {
+        "file": "profiling-MIT-c8167fdeeed4.txt",
+        "source": "https://raw.githubusercontent.com/aclysma/profiling/8271551172eb6fa4cba47369aedd93790c623df9/LICENSE-MIT",
+        "license": "MIT",
+        "sha256": "c8167fdeeed46d3f244d3f85c5bf998ce889343691c32be2c61a8bc4b5c08333"
+      }
+    ],
+    "rspolib@0.1.2": [
+      {
+        "file": "rspolib-MIT-4fe9b5fce8fd.txt",
+        "source": "https://raw.githubusercontent.com/mondeja/rspolib/8170d99ebad29d894712ccb3dc6d0be2198d3055/LICENSE",
+        "license": "MIT",
+        "sha256": "4fe9b5fce8fd028261959d039d19ef66182be088ab48ffa97dbeaef7b35e39c3"
+      }
+    ],
+    "skia-bindings@0.153.3": [
+      {
+        "file": "rust-skia-MIT-4b33ed5b329a.txt",
+        "source": "https://raw.githubusercontent.com/rust-skia/rust-skia/b7f043e0b1e2a850e702245de811f01df1f6b0ff/LICENSE",
+        "license": "MIT",
+        "sha256": "4b33ed5b329a3a79eb1243fd91373c68b0ae0b9df7503bfc50d0c5253adf1b9a"
+      }
+    ],
+    "skia-safe@0.153.3": [
+      {
+        "file": "rust-skia-MIT-4b33ed5b329a.txt",
+        "source": "https://raw.githubusercontent.com/rust-skia/rust-skia/b7f043e0b1e2a850e702245de811f01df1f6b0ff/LICENSE",
+        "license": "MIT",
+        "sha256": "4b33ed5b329a3a79eb1243fd91373c68b0ae0b9df7503bfc50d0c5253adf1b9a"
+      }
+    ],
+    "spirv@0.4.0+sdk-1.4.341.0": [
+      {
+        "file": "rspirv-Apache-2.0-cfc7749b96f6.txt",
+        "source": "https://raw.githubusercontent.com/gfx-rs/rspirv/8afc3d0ac8e158128cd1410bb2e4b4c26ab11bb4/LICENSE",
+        "license": "Apache-2.0",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    ],
+    "taffy@0.10.1": [
+      {
+        "file": "taffy-MIT-a7083ef3dd41.txt",
+        "source": "https://raw.githubusercontent.com/DioxusLabs/taffy/639f0acdd20f914f847abffbeaa903d66cae4882/LICENSE.md",
+        "license": "MIT",
+        "sha256": "a7083ef3dd41a65eeb2162c2c091b0082e2724fb4c6ed029b363c7840d244ecd"
+      }
+    ]
+  }
+}

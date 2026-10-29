@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Sean Toolbox
+Name[zh_CN]=Sean 个人工具箱
+Comment=Application shortcuts and recent VS Code projects
+Comment[zh_CN]=应用快捷键与 VS Code 最近项目
+Exec=sean-toolbox
+Icon=sean-toolbox
+Terminal=false
+Categories=Utility;
+StartupNotify=false

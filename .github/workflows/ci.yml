@@ -1,0 +1,137 @@
+name: Build, test and package
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  build:
+    name: ${{ matrix.platform }} / ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            platform: windows
+            arch: x86_64
+          - os: macos-15
+            platform: macos
+            arch: aarch64
+          - os: macos-15-intel
+            platform: macos
+            arch: x86_64
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x86_64
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install Linux development libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential pkg-config cmake \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libfontconfig1-dev libfreetype6-dev libdbus-1-dev libegl1-mesa-dev \
+            xvfb openbox xterm x11-utils xdotool xfonts-base fonts-dejavu-core fonts-noto-cjk
+      - name: Install pinned Rust toolchain
+        run: |
+          python - <<'PY'
+          import pathlib, subprocess, tomllib
+          with pathlib.Path("rust-toolchain.toml").open("rb") as source:
+              channel = tomllib.load(source)["toolchain"]["channel"]
+          subprocess.run(["rustup", "toolchain", "install", channel, "--profile", "minimal", "--component", "rustfmt", "--component", "clippy"], check=True)
+          PY
+          rustc --version
+          cargo --version
+      - name: macOS deployment target
+        if: runner.os == 'macOS'
+        run: echo 'MACOSX_DEPLOYMENT_TARGET=11.0' >> "$GITHUB_ENV"
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --locked --workspace
+      - name: X11 native window smoke test
+        if: runner.os == 'Linux'
+        run: bash crates/toolbox-windows/tests/run-x11-smoke.sh
+      - name: Build release binaries
+        run: cargo build --locked --release -p toolbox-host -p toolbox-ui
+      - name: Linux host and UI lifecycle smoke
+        if: runner.os == 'Linux'
+        run: python scripts/smoke_host.py --binary target/release/sean-toolbox
+      - name: Collect dependency license texts
+        run: python scripts/collect_licenses.py
+      - name: Package native binaries
+        run: python scripts/package.py --platform '${{ matrix.platform }}' --arch '${{ matrix.arch }}'
+      - name: Upload portable package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sean-toolbox-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  release:
+    name: Publish tagged release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: sean-toolbox-*
+          path: release-assets
+          merge-multiple: true
+      - name: Publish archives and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+          else
+            prerelease=()
+            if [[ "$RELEASE_TAG" == *-* ]]; then
+              prerelease=(--prerelease)
+            fi
+            gh release create "$RELEASE_TAG" release-assets/* \
+              --verify-tag --title "Sean Toolbox $RELEASE_TAG" \
+              --notes-file packaging/RELEASE_NOTES.md "${prerelease[@]}"
+          fi
