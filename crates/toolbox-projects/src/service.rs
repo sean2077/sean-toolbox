@@ -91,19 +91,26 @@ pub fn open(item: &ProjectItem, override_path: Option<&str>) -> Result<(), Strin
 #[cfg(test)]
 mod tests {
     use crate::{ProjectKind, ProjectTarget, parse_recent_value};
+    use url::Url;
 
     use super::*;
 
     #[test]
     fn wrapper_preserves_workspace_and_remote_targets_through_search() {
+        let directory = tempfile::tempdir().unwrap();
+        let folder_uri = Url::from_directory_path(directory.path().join("local-project")).unwrap();
+        let workspace_uri =
+            Url::from_file_path(directory.path().join("team.code-workspace")).unwrap();
         let projects = parse_recent_value(
-            r#"{"entries":[
-            {"folderUri":"file:///tmp/local-project"},
-            {"workspace":{"configPath":"file:///tmp/team.code-workspace"}},
-            {"folderUri":"vscode-remote://ssh-remote+dev/work/api"}
-        ]}"#,
+            &serde_json::json!({"entries": [
+                {"folderUri": folder_uri.as_str()},
+                {"workspace": {"configPath": workspace_uri.as_str()}},
+                {"folderUri": "vscode-remote://ssh-remote+dev/work/api"}
+            ]})
+            .to_string(),
         )
         .unwrap();
+        assert_eq!(projects.len(), 3);
         let items = projects
             .into_iter()
             .map(ProjectItem::from)
@@ -120,9 +127,13 @@ mod tests {
 
     #[test]
     fn presentation_fields_never_replace_the_typed_launch_target() {
-        let original = parse_recent_value(r#"{"entries":[{"folderUri":"file:///tmp/project"}]}"#)
-            .unwrap()
-            .remove(0);
+        let directory = tempfile::tempdir().unwrap();
+        let folder_uri = Url::from_directory_path(directory.path().join("project")).unwrap();
+        let original = parse_recent_value(
+            &serde_json::json!({"entries": [{"folderUri": folder_uri.as_str()}]}).to_string(),
+        )
+        .unwrap()
+        .remove(0);
         let mut item = ProjectItem::from(original.clone());
         item.location = "untrusted displayed text & executable".to_owned();
         assert_eq!(item.project.target, original.target);

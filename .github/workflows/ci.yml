@@ -80,7 +80,7 @@ jobs:
       - name: Clippy
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Test
-        run: cargo test --locked --workspace
+        run: cargo test --locked --workspace --no-fail-fast
       - name: X11 native window smoke test
         if: runner.os == 'Linux'
         run: bash crates/toolbox-windows/tests/run-x11-smoke.sh

@@ -4,6 +4,7 @@ use toolbox_projects::{
     DiagnosticLevel, ProjectKind, ProjectTarget, RecentProjectProvider, VsCodePlatformLayout,
     VsCodeRecentProvider, build_launch_request, discover_vscode, parse_recent_value,
 };
+use url::Url;
 
 #[test]
 fn provider_reads_database_without_changing_its_contents() {
@@ -15,6 +16,9 @@ fn provider_reads_database_without_changing_its_contents() {
     fs::write(app.join("resources/app/product.json"), r#"{"applicationName":"code","nameShort":"Code","version":"1.0.0","sharedDataFolderName":".vscode"}"#).unwrap();
     let database = home.join(".vscode/sharedStorage/state.vscdb");
     fs::create_dir_all(database.parent().unwrap()).unwrap();
+    let folder_uri = Url::from_directory_path(directory.path().join("project")).unwrap();
+    let recent_value =
+        serde_json::json!({"entries": [{"folderUri": folder_uri.as_str()}]}).to_string();
     {
         let connection = rusqlite::Connection::open(&database).unwrap();
         connection
@@ -23,10 +27,7 @@ fn provider_reads_database_without_changing_its_contents() {
         connection
             .execute(
                 "INSERT INTO ItemTable (key, value) VALUES (?1, ?2)",
-                [
-                    toolbox_projects::RECENT_KEY,
-                    r#"{"entries":[{"folderUri":"file:///tmp/project"}]}"#,
-                ],
+                [toolbox_projects::RECENT_KEY, recent_value.as_str()],
             )
             .unwrap();
     }
@@ -93,9 +94,19 @@ fn remote_uri_with_shell_punctuation_remains_one_argument() {
 
 #[test]
 fn ignores_unrelated_url_schemes_and_preserves_target_identity_when_label_changes() {
-    let first = parse_recent_value(r#"{"entries":[{"folderUri":"https://example.com"},{"folderUri":"file:///tmp/project","label":"Old name"}]}"#).unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let folder_uri = Url::from_directory_path(directory.path().join("project")).unwrap();
+    let first = parse_recent_value(
+        &serde_json::json!({"entries": [
+            {"folderUri": "https://example.com"},
+            {"folderUri": folder_uri.as_str(), "label": "Old name"}
+        ]})
+        .to_string(),
+    )
+    .unwrap();
     let second = parse_recent_value(
-        r#"{"entries":[{"folderUri":"file:///tmp/project","label":"New name"}]}"#,
+        &serde_json::json!({"entries": [{"folderUri": folder_uri.as_str(), "label": "New name"}]})
+            .to_string(),
     )
     .unwrap();
     assert_eq!(first.len(), 1);
