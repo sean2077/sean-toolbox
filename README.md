@@ -143,6 +143,7 @@ python scripts/smoke_host.py --binary target/release/sean-toolbox
 构建完成后收集第三方许可并打包：
 
 ```sh
+cargo fetch --locked
 python scripts/collect_licenses.py
 python scripts/package.py
 ```

@@ -4,6 +4,7 @@
 
 ```sh
 cargo build --locked --release -p toolbox-host -p toolbox-ui
+cargo fetch --locked
 python scripts/collect_licenses.py
 python scripts/package.py
 ```
@@ -12,6 +13,7 @@ python scripts/package.py
 Rust 编译目标的已解析依赖，复制本地 Cargo 缓存里的许可证原文到
 `target/THIRD_PARTY_LICENSES.txt`。可用 `--target <triple>` 为交叉编译指定目标。
 缺失文本时列出包名并失败；它不会联网补全或修改依赖源码。构建时需确保依赖已完整下载。
+`cargo fetch --locked` 会补齐锁文件中的其他平台依赖，确保 metadata 的完整包清单也可离线读取。
 
 少数 crates 发布时未包含许可文件，补充原文位于 `licenses/dependencies/`。
 其中 `manifest.json` 按精确的包名和版本映射文件，记录上游固定提交的来源链接、

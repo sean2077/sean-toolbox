@@ -75,6 +75,8 @@ jobs:
         run: echo 'MACOSX_DEPLOYMENT_TARGET=11.0' >> "$GITHUB_ENV"
       - name: Format
         run: cargo fmt --all -- --check
+      - name: Fetch locked dependencies for offline license inventory
+        run: cargo fetch --locked
       - name: Clippy
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Test
