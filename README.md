@@ -123,6 +123,8 @@ sean-toolbox quit                         退出宿主和其界面
 
 工具链固定在 `rust-toolchain.toml`，依赖版本保存在 `Cargo.lock`。需要 Rust、目标平台 C/C++ 链接工具，以及 Linux 的 X11/Wayland、字体和键盘开发库。Ubuntu 的完整依赖安装命令见 [CI](.github/workflows/ci.yml)。
 
+Windows 本地构建使用 MSVC 工具链，仓库 CI 的 Windows 构建也使用 MSVC。如果 rustup 默认 host 是 `x86_64-pc-windows-gnu`，需要完整安装 MinGW-w64（至少提供 `dlltool` 等 binutils），或为本仓库设置与 `rust-toolchain.toml` 同版本的 MSVC override；否则 `windows-strings` 等 crate 的 `raw-dylib` 链接会失败。
+
 ```sh
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets -- -D warnings

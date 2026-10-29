@@ -77,6 +77,7 @@ python scripts/package.py
 ## 环境
 
 - 工具链由 `rust-toolchain.toml` 固定（channel 1.99.1，edition 2024，minimal + clippy/rustfmt）。Linux 开发库安装清单见 `.github/workflows/ci.yml`。
+- Windows 本地构建使用 MSVC 工具链，CI 的 Windows 构建也使用 MSVC。若 rustup 默认 host 为 `x86_64-pc-windows-gnu`，需完整安装 MinGW-w64（提供 `dlltool` 等 binutils），或设置与固定 channel 同版本的 MSVC override；缺少 `dlltool` 时 `windows-strings` 等 crate 的 `raw-dylib` 链接会失败。
 - Windows 是优先平台；macOS 宿主需要辅助功能权限；Linux 需要 EWMH 兼容窗口管理器。Wayland 的外部窗口控制明确不支持。
 - 主程序和 `sean-toolbox-ui` 必须保持在一起；单实例按当前用户隔离。构建期 Python 只用于脚本，不进入应用运行时。
 
