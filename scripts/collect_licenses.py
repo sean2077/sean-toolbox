@@ -126,11 +126,11 @@ def main() -> int:
     try:
         target = arguments.target
         if target is None:
-            version = subprocess.run(["rustc", "-vV"], cwd=REPO, check=True, capture_output=True, text=True)
+            version = subprocess.run(["rustc", "-vV"], cwd=REPO, check=True, capture_output=True, text=True, encoding="utf-8")
             target = next(line.removeprefix("host: ") for line in version.stdout.splitlines() if line.startswith("host: "))
         result = subprocess.run(
             ["cargo", "metadata", "--locked", "--offline", "--format-version", "1", "--filter-platform", target],
-            cwd=REPO, check=True, capture_output=True, text=True,
+            cwd=REPO, check=True, capture_output=True, text=True, encoding="utf-8",
         )
         missing = collect(json.loads(result.stdout), arguments.output.resolve(), target=target)
     except (OSError, ValueError, KeyError, StopIteration, subprocess.CalledProcessError) as error:
