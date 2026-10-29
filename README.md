@@ -131,6 +131,8 @@ cargo build --locked --release -p toolbox-host -p toolbox-ui
 ./target/release/sean-toolbox
 ```
 
+常用操作已封装在仓库根目录的 `Makefile` 中，运行 `make help` 查看全部目标；例如 `make check`（格式 + Clippy + 测试）、`make build-release`、`make run` 和 `make package`。Makefile 假定可用的 POSIX shell，Windows 上请在 Git Bash 中运行。
+
 Linux 真窗口测试使用独立 Xvfb、Openbox 和 xterm，清理由脚本负责：
 
 ```sh
