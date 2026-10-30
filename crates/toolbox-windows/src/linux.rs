@@ -150,6 +150,7 @@ impl X11Desktop {
                 title: String::from_utf8_lossy(&title)
                     .trim_end_matches('\0')
                     .into(),
+                hidden: false,
                 minimized: iconic || states.contains(&self.atoms._NET_WM_STATE_HIDDEN),
                 maximized: states.contains(&self.atoms._NET_WM_STATE_MAXIMIZED_VERT)
                     && states.contains(&self.atoms._NET_WM_STATE_MAXIMIZED_HORZ),

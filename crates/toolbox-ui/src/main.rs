@@ -956,7 +956,29 @@ impl Controller {
     fn update_match_help(&self) {
         let ui = self.ui();
         let platform = platform_from_index(ui.get_form_platform());
+        let current_command = LaunchCommand {
+            executable: ui.get_launch_executable().trim().into(),
+            args: vec![],
+            cwd: None,
+        };
+        let state = self.state.borrow();
+        let wezterm = platform == Platform::Windows
+            && state.editor.as_ref().is_some_and(|editor| {
+                !editor.launch.is_empty()
+                    && editor.launch.iter().enumerate().all(|(index, command)| {
+                        if index == state.candidate {
+                            current_command.is_wezterm()
+                        } else {
+                            command.is_wezterm()
+                        }
+                    })
+            });
+        ui.set_form_wezterm_dropdown(wezterm);
         let (zh, en) = match platform {
+            Platform::Windows if wezterm && ui.get_form_quake_enabled() => (
+                "独立下拉窗口由工具箱自动识别。关闭下拉模式后使用此匹配标识。",
+                "The toolbox identifies the dedicated dropdown automatically. This match is used when dropdown mode is off.",
+            ),
             Platform::Windows => (
                 "填写进程文件名，例如 Code.exe。",
                 "Enter the executable filename, e.g. Code.exe.",
@@ -1110,6 +1132,7 @@ impl Controller {
                 .into(),
         );
         ui.set_launch_cwd(command.cwd.clone().unwrap_or_default().into());
+        self.update_match_help();
     }
 
     fn sync_candidate_labels(&self) {
@@ -1640,7 +1663,7 @@ impl Controller {
                 ui.set_dialog_busy(false);
                 match path {
                     Ok(Some(path)) => match kind {
-                        0 => { ui.set_launch_executable(path.into()); ui.set_profile_dirty(true); }
+                        0 => { ui.set_launch_executable(path.into()); self.profile_changed(); }
                         1 => { ui.set_launch_cwd(path.into()); ui.set_profile_dirty(true); }
                         _ => { ui.set_setting_code_path(path.into()); ui.set_settings_dirty(true); }
                     },
@@ -2025,6 +2048,71 @@ mod tests {
             assert!(ui.global::<Theme>().get_dark());
             assert_eq!(ui.get_form_quake_width(), 40);
             assert!(!ui.get_profile_dirty());
+        });
+    }
+
+    #[test]
+    fn wezterm_dropdown_hint_tracks_candidate_edits_without_rewriting_launch_settings() {
+        with_test_ui(|ui, controller, receive| {
+            controller.begin_edit(0);
+            ui.set_form_platform(0);
+            ui.set_form_hotkey("Ctrl+Alt+T".into());
+            ui.set_form_quake_enabled(true);
+            ui.set_launch_executable(r"D:\Terminal\wezterm-gui.exe".into());
+            ui.set_launch_args(r#"["start", "--", "bash", "-l"]"#.into());
+            ui.set_launch_cwd(r"D:\My Projects".into());
+            controller.profile_changed();
+            assert!(ui.get_form_wezterm_dropdown());
+
+            controller.add_candidate();
+            assert!(!ui.get_form_wezterm_dropdown());
+            ui.set_launch_executable("wezterm.exe".into());
+            controller.profile_changed();
+            assert!(ui.get_form_wezterm_dropdown());
+            ui.set_launch_executable("pwsh.exe".into());
+            controller.profile_changed();
+            assert!(!ui.get_form_wezterm_dropdown());
+            controller.remove_candidate();
+            assert!(ui.get_form_wezterm_dropdown());
+
+            ui.set_form_platform(1);
+            controller.profile_changed();
+            assert!(!ui.get_form_wezterm_dropdown());
+            ui.set_form_platform(0);
+            controller.profile_changed();
+            assert!(ui.get_form_wezterm_dropdown());
+            controller.save_profile();
+
+            let Work::Save { config, .. } = receive.try_recv().unwrap() else {
+                panic!("Expected a validated app save");
+            };
+            let profile = &config.profiles[0];
+            assert_eq!(profile.hotkey, "Ctrl+Alt+T");
+            assert_eq!(profile.launch[0].executable, r"D:\Terminal\wezterm-gui.exe");
+            assert_eq!(profile.launch[0].args, ["start", "--", "bash", "-l"]);
+            assert_eq!(profile.launch[0].cwd.as_deref(), Some(r"D:\My Projects"));
+            assert_eq!(
+                profile.matcher,
+                controller.state.borrow().config.profiles[0].matcher
+            );
+        });
+    }
+
+    #[test]
+    fn browsing_a_program_refreshes_the_wezterm_dropdown_hint() {
+        with_test_ui(|ui, controller, _| {
+            controller.begin_edit(0);
+            ui.set_form_platform(0);
+            controller.handle(Event::PathPicked {
+                kind: 0,
+                path: Ok(Some(r"C:\WezTerm\wezterm-gui.exe".into())),
+            });
+            assert!(ui.get_form_wezterm_dropdown());
+            controller.handle(Event::PathPicked {
+                kind: 0,
+                path: Ok(Some(r"C:\Editor\Code.exe".into())),
+            });
+            assert!(!ui.get_form_wezterm_dropdown());
         });
     }
 

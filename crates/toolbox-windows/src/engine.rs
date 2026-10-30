@@ -13,7 +13,7 @@ pub struct EngineOptions {
 impl Default for EngineOptions {
     fn default() -> Self {
         Self {
-            launch_timeout: Duration::from_secs(3),
+            launch_timeout: Duration::from_secs(10),
             poll_interval: Duration::from_millis(50),
             launch_cooldown: Duration::from_secs(20),
         }
@@ -59,9 +59,11 @@ impl<D: Desktop> Engine<D> {
         &mut self.backend
     }
     pub fn reset(&mut self) -> Result<(), String> {
+        // A hidden terminal must become reachable before forgetting its owner.
+        self.backend.clear_quake()?;
         self.cycles.clear();
         self.quakes.clear();
-        self.backend.clear_quake()
+        Ok(())
     }
 
     /// Called only by a native foreground-change notification, never a timer.
@@ -84,7 +86,7 @@ impl<D: Desktop> Engine<D> {
                     self.quakes.remove(&id);
                     return Ok(());
                 };
-                if window.minimized {
+                if window.minimized || window.hidden {
                     self.backend.release_quake(&session.target)?;
                     if let Some(session) = self.quakes.get_mut(&id) {
                         session.visible = false;
@@ -97,9 +99,9 @@ impl<D: Desktop> Engine<D> {
                     && !self.backend.is_foreground_family(&session.target)?
                 {
                     // A final check cancels hiding if the user refocused. Do
-                    // not change stacking until minimization actually succeeds,
+                    // not change stacking until hiding actually succeeds,
                     // or a cancelled hide would remove the visible topmost state.
-                    if self.backend.minimize_if_unfocused(&session.target)? {
+                    if self.backend.hide_quake_if_unfocused(&session.target)? {
                         if let Some(session) = self.quakes.get_mut(&id) {
                             session.visible = false;
                         }
@@ -123,11 +125,18 @@ impl<D: Desktop> Engine<D> {
         if !profile.enabled {
             return Err("Application is disabled / 该应用已禁用".into());
         }
+        let prepared = crate::launch::prepare_profile(profile)?;
+        let profile = prepared.as_ref();
+        if self
+            .quakes
+            .get(&profile.id)
+            .is_some_and(|session| !profile.quake.enabled || session.matcher != profile.matcher)
+        {
+            self.reset()?;
+        }
         self.backend.check_available()?;
         if profile.quake.enabled {
             self.backend.check_quake(&profile.quake)?;
-        } else if let Some(session) = self.quakes.remove(&profile.id) {
-            self.backend.release_quake(&session.target)?;
         }
         let foreground = self.backend.foreground()?;
         let windows = self.backend.windows(&profile.matcher)?;
@@ -140,12 +149,11 @@ impl<D: Desktop> Engine<D> {
         self.launches
             .retain(|_, started| started.elapsed() < self.options.launch_cooldown);
         let launch_key = profile.matcher.to_ascii_lowercase();
-        if windows.is_empty() {
-            if self
-                .launches
-                .get(&launch_key)
-                .is_some_and(|t| t.elapsed() < self.options.launch_cooldown)
-            {
+        let pending = self.launches.contains_key(&launch_key);
+        // WezTerm creates its HWND before initializing the renderer. A hidden
+        // window from our pending launch is not a previously hidden session.
+        if windows.is_empty() || (pending && windows.iter().all(|window| window.hidden)) {
+            if pending {
                 return Err(format!(
                     "{}：应用仍在启动，暂不重复执行启动命令 / Launch is still pending; retry after {} seconds",
                     profile.name,
@@ -282,15 +290,8 @@ impl<D: Desktop> Engine<D> {
     }
 
     fn hide_quake(&mut self, id: &str) -> Result<(), String> {
-        // Attempt minimization even when the style restoration failed. A
-        // backend retains failed cleanup entries for reset and process exit.
-        let style = self.backend.release_quake(id);
-        let minimized = self.backend.minimize(id);
-        match (style, minimized) {
-            (Ok(()), Ok(())) => Ok(()),
-            (Err(a), Err(b)) => Err(format!("{a}\n{b}")),
-            (Err(error), _) | (_, Err(error)) => Err(error),
-        }
+        self.backend.hide_quake(id)?;
+        self.backend.release_quake(id)
     }
 
     fn remember_quake(&mut self, profile: &AppProfile, target: &str) {
@@ -349,7 +350,20 @@ impl<D: Desktop> Engine<D> {
                 Ok(true)
             }
             other => {
-                let cleanup = self.backend.release_quake(&target.id);
+                // Placement can reveal a hidden window without activating it.
+                // If focus moved or activation failed, restore that prior
+                // visibility instead of leaving an unarmed dropdown onscreen.
+                let hidden = if target.hidden {
+                    self.backend.hide_quake(&target.id)
+                } else {
+                    Ok(())
+                };
+                let released = self.backend.release_quake(&target.id);
+                let cleanup = match (hidden, released) {
+                    (Err(a), Err(b)) => Err(format!("{a}\n{b}")),
+                    (Err(error), _) | (_, Err(error)) => Err(error),
+                    _ => Ok(()),
+                };
                 match (other, cleanup) {
                     (Err(a), Err(b)) => Err(format!("{a}\n{b}")),
                     (Err(error), _) | (_, Err(error)) => Err(error),
@@ -370,7 +384,12 @@ impl<D: Desktop> Engine<D> {
             .and_then(|session| windows.iter().find(|w| w.id == session.target))
             .or_else(|| windows.iter().find(|w| Some(&w.id) == foreground.as_ref()))
             .unwrap_or(&windows[0]);
-        if foreground.as_ref() == Some(&target.id) {
+        // An unclaimed dedicated instance may have appeared after a cold-start
+        // timeout or survived a host restart. First attach and position it;
+        // only subsequent toggles should dismiss it.
+        if foreground.as_ref() == Some(&target.id)
+            && (previous.is_some() || !profile.is_windows_wezterm())
+        {
             self.hide_quake(&target.id)?;
             self.remember_quake(profile, &target.id);
             self.quakes
@@ -420,7 +439,7 @@ impl<D: Desktop> Engine<D> {
             .insert(profile.matcher.to_ascii_lowercase(), start);
         loop {
             let windows = self.backend.windows(&profile.matcher)?;
-            if let Some(target) = windows.first() {
+            if let Some(target) = windows.iter().find(|window| !window.hidden) {
                 let mut activated = false;
                 if let Some(placement) = placement {
                     activated =

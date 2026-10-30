@@ -95,6 +95,21 @@ pub struct LaunchCommand {
     pub cwd: Option<String>,
 }
 
+impl LaunchCommand {
+    pub fn is_wezterm(&self) -> bool {
+        // Profiles can be edited on another platform, so accept both path separators.
+        self.executable
+            .rsplit(['/', '\\'])
+            .next()
+            .is_some_and(|name| {
+                matches!(
+                    name.to_ascii_lowercase().as_str(),
+                    "wezterm" | "wezterm.exe" | "wezterm-gui" | "wezterm-gui.exe"
+                )
+            })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AppProfile {
@@ -109,6 +124,41 @@ pub struct AppProfile {
     #[serde(default)]
     pub quake: QuakeConfig,
     pub launch: Vec<LaunchCommand>,
+}
+
+impl AppProfile {
+    pub fn is_windows_wezterm(&self) -> bool {
+        self.platform == Platform::Windows
+            && !self.launch.is_empty()
+            && self.launch.iter().all(LaunchCommand::is_wezterm)
+    }
+
+    pub fn wezterm(platform: Platform) -> Self {
+        let (matcher, executable) = match platform {
+            Platform::Windows => ("wezterm-gui.exe", "wezterm-gui.exe"),
+            Platform::Macos => ("com.github.wez.wezterm", "/Applications/WezTerm.app"),
+            Platform::Linux => ("org.wezfurlong.wezterm", "wezterm"),
+        };
+        Self {
+            id: "terminal".into(),
+            name: "WezTerm".into(),
+            platform,
+            matcher: matcher.into(),
+            hotkey: "F3".into(),
+            enabled: true,
+            maximize: false,
+            cycle_continuous: true,
+            quake: QuakeConfig {
+                enabled: platform == Platform::Windows,
+                ..Default::default()
+            },
+            launch: vec![LaunchCommand {
+                executable: executable.into(),
+                args: vec![],
+                cwd: None,
+            }],
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,20 +179,13 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         let platform = Platform::current();
-        let (terminal, terminal_exe, code, chrome) = match platform {
-            Platform::Windows => (
-                "wezterm-gui.exe",
-                "wezterm-gui.exe",
-                "Code.exe",
-                "chrome.exe",
-            ),
+        let (code, chrome) = match platform {
+            Platform::Windows => ("Code.exe", "chrome.exe"),
             Platform::Macos => (
-                "com.github.wez.wezterm",
-                "/Applications/WezTerm.app",
                 "/Applications/Visual Studio Code.app",
                 "/Applications/Google Chrome.app",
             ),
-            Platform::Linux => ("org.wezfurlong.wezterm", "wezterm", "code", "google-chrome"),
+            Platform::Linux => ("code", "google-chrome"),
         };
         let make = |id: &str, name: &str, matcher: &str, exe: &str, hotkey: &str| AppProfile {
             id: id.into(),
@@ -171,7 +214,7 @@ impl Default for Config {
             ui_idle_seconds: 0,
             vscode_path_override: None,
             profiles: vec![
-                make("terminal", "WezTerm", terminal, terminal_exe, "F3"),
+                AppProfile::wezterm(platform),
                 make(
                     "vscode",
                     "VS Code",
@@ -384,6 +427,66 @@ impl HotkeySpec {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wezterm_dropdown_recognition_uses_program_names_not_profile_labels() {
+        let mut profile = AppProfile::wezterm(Platform::Windows);
+        profile.name = "My terminal".into();
+        profile.matcher = "a-user-supplied-match".into();
+        for executable in [
+            "wezterm",
+            "wezterm.exe",
+            "wezterm-gui",
+            "WezTerm-GUI.EXE",
+            r"%ProgramFiles%\WezTerm\wezterm-gui.exe",
+            "C:/Apps/WezTerm/wezterm.exe",
+        ] {
+            profile.launch[0].executable = executable.into();
+            assert!(profile.is_windows_wezterm(), "{executable}");
+        }
+        for executable in [
+            "",
+            "my-wezterm.exe",
+            "wezterm.exe.bat",
+            "cmd.exe",
+            "WezTerm.app",
+        ] {
+            profile.launch[0].executable = executable.into();
+            assert!(!profile.is_windows_wezterm(), "{executable}");
+        }
+        profile.launch[0].executable = "wezterm-gui.exe".into();
+        profile.launch.push(LaunchCommand {
+            executable: "pwsh.exe".into(),
+            args: vec![],
+            cwd: None,
+        });
+        assert!(!profile.is_windows_wezterm());
+        profile.launch.clear();
+        assert!(!profile.is_windows_wezterm());
+        assert!(!AppProfile::wezterm(Platform::Linux).is_windows_wezterm());
+        assert!(!AppProfile::wezterm(Platform::Macos).is_windows_wezterm());
+    }
+
+    #[test]
+    fn wezterm_preset_enables_a_windows_dropdown_without_migrating_saved_profiles() {
+        let mut profile = AppProfile::wezterm(Platform::Windows);
+        assert!(profile.quake.enabled);
+        assert_eq!(profile.hotkey, "F3");
+        assert_eq!(profile.quake.edge, QuakeEdge::Top);
+        assert_eq!(
+            (profile.quake.width_percent, profile.quake.height_percent),
+            (100, 50)
+        );
+        assert!(!AppProfile::wezterm(Platform::Linux).quake.enabled);
+        assert!(!AppProfile::wezterm(Platform::Macos).quake.enabled);
+
+        profile.quake.enabled = false;
+        profile.hotkey = "Ctrl+Alt+T".into();
+        profile.launch[0].args = vec!["start".into(), "--cwd".into(), "D:/Work/My Project".into()];
+        let saved = serde_json::to_string(&profile).unwrap();
+        assert_eq!(serde_json::from_str::<AppProfile>(&saved).unwrap(), profile);
+    }
+
     #[test]
     fn shortcut_aliases_normalize_and_ambiguous_keys_are_rejected() {
         assert_eq!(

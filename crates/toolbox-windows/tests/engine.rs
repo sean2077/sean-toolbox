@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
 use toolbox_core::{AppProfile, LaunchCommand, Platform, QuakeConfig, QuakeMonitor};
 use toolbox_windows::{Desktop, Engine, EngineOptions, Window, WindowRect};
@@ -21,17 +21,43 @@ struct Fake {
     owned_dialog_for: Option<String>,
     quake_error: Option<String>,
     deny_placement: bool,
+    native_hide: bool,
+    deny_hide: bool,
+    deny_cleanup: bool,
+    window_matchers: HashMap<String, String>,
+    queried_matchers: Vec<String>,
+    launched_commands: Vec<LaunchCommand>,
+    show_after_queries: Option<usize>,
 }
 
 impl Desktop for Fake {
     fn check_available(&mut self) -> Result<(), String> {
         Ok(())
     }
-    fn windows(&mut self, _: &str) -> Result<Vec<Window>, String> {
+    fn windows(&mut self, matcher: &str) -> Result<Vec<Window>, String> {
+        self.queried_matchers.push(matcher.into());
+        if self
+            .show_after_queries
+            .is_some_and(|count| self.queried_matchers.len() >= count)
+        {
+            self.show_after_queries = None;
+            self.events.push("ready".into());
+            for window in &mut self.windows {
+                window.hidden = false;
+            }
+        }
         if self.unreadable {
             Err("Permission denied".into())
         } else {
-            Ok(self.windows.clone())
+            Ok(self
+                .windows
+                .iter()
+                .filter(|window| {
+                    self.window_matchers.is_empty()
+                        || self.window_matchers.get(&window.id).map(String::as_str) == Some(matcher)
+                })
+                .cloned()
+                .collect())
         }
     }
     fn foreground(&mut self) -> Result<Option<String>, String> {
@@ -84,11 +110,12 @@ impl Desktop for Fake {
         }
         Ok(true)
     }
-    fn launch(&mut self, _: &LaunchCommand) -> Result<(), String> {
+    fn launch(&mut self, command: &LaunchCommand) -> Result<(), String> {
         self.events.push("launch".into());
+        self.launched_commands.push(command.clone());
         self.launches += 1;
         self.launch_results.pop_front().unwrap_or(Ok(()))?;
-        self.windows = self.start_windows.clone();
+        self.windows.extend(self.start_windows.clone());
         if let Some(focus) = self.focus_after_launch.take() {
             self.focus = focus;
         }
@@ -121,6 +148,7 @@ impl Desktop for Fake {
             .ok_or("stale")?;
         target.minimized = false;
         target.maximized = false;
+        target.hidden = false;
         if let Some(focus) = self.focus_after_place.take() {
             self.focus = focus;
         }
@@ -132,6 +160,30 @@ impl Desktop for Fake {
     }
     fn clear_quake(&mut self) -> Result<(), String> {
         self.events.push("clear-quake".into());
+        if self.deny_cleanup {
+            return Err("cleanup denied".into());
+        }
+        for window in &mut self.windows {
+            window.hidden = false;
+        }
+        Ok(())
+    }
+    fn hide_quake(&mut self, id: &str) -> Result<(), String> {
+        if !self.native_hide {
+            return self.minimize(id);
+        }
+        self.events.push(format!("hide:{id}"));
+        if self.deny_hide {
+            return Err("hide denied".into());
+        }
+        self.windows
+            .iter_mut()
+            .find(|w| w.id == id)
+            .ok_or("stale")?
+            .hidden = true;
+        if self.focus.as_deref() == Some(id) {
+            self.focus = None;
+        }
         Ok(())
     }
     fn is_foreground_family(&mut self, id: &str) -> Result<bool, String> {
@@ -149,6 +201,7 @@ fn window(id: &str) -> Window {
     Window {
         id: id.into(),
         title: id.into(),
+        hidden: false,
         minimized: false,
         maximized: false,
     }
@@ -423,8 +476,8 @@ fn quake_pins_one_window_across_focus_changes_and_preserves_other_instances() {
             "monitor:Cursor",
             "place:a:-1440:32:1280:480:true",
             "activate:a",
-            "release:a",
             "minimize:a",
+            "release:a",
             "monitor:Cursor",
             "place:a:-1440:32:1280:480:true",
             "activate:a",
@@ -653,4 +706,220 @@ fn quake_window_has_one_owner_when_profiles_share_a_matcher() {
             .windows(2)
             .any(|pair| pair == ["release:a", "place:a:-1440:32:1280:480:false"])
     );
+}
+
+#[test]
+fn dedicated_wezterm_ignores_regular_windows_and_reuses_the_hidden_shell() {
+    let mut e = engine(Fake {
+        windows: vec![window("regular")],
+        start_windows: vec![window("dropdown")],
+        native_hide: true,
+        window_matchers: HashMap::from([
+            ("regular".into(), "wezterm-gui.exe".into()),
+            (
+                "dropdown".into(),
+                "class:org.sean2077.sean-toolbox.quake.terminal".into(),
+            ),
+        ]),
+        ..Default::default()
+    });
+    let profile = AppProfile::wezterm(Platform::Windows);
+    e.toggle(&profile).unwrap();
+    assert_eq!(e.backend_mut().focus.as_deref(), Some("dropdown"));
+    assert_eq!(e.backend_mut().launches, 1);
+    assert_eq!(
+        e.backend_mut().launched_commands[0].args[5..8],
+        [
+            "--always-new-process",
+            "--class",
+            "org.sean2077.sean-toolbox.quake.terminal"
+        ]
+    );
+    e.toggle(&profile).unwrap();
+    assert!(e.backend_mut().windows[1].hidden);
+    assert!(!e.backend_mut().windows[1].minimized);
+    e.backend_mut().windows[1].title.clear();
+    e.toggle(&profile).unwrap();
+    assert!(!e.backend_mut().windows[1].hidden);
+    assert_eq!(e.backend_mut().focus.as_deref(), Some("dropdown"));
+    assert_eq!(e.backend_mut().windows[0], window("regular"));
+    assert_eq!(e.backend_mut().launches, 1);
+    assert!(
+        e.backend_mut()
+            .queried_matchers
+            .iter()
+            .all(|m| m == "class:org.sean2077.sean-toolbox.quake.terminal")
+    );
+}
+
+#[test]
+fn late_wezterm_launch_is_positioned_on_first_adoption_even_when_already_foreground() {
+    let mut pending = window("late");
+    pending.hidden = true;
+    let mut e = engine(Fake {
+        native_hide: true,
+        start_windows: vec![pending],
+        ..Default::default()
+    });
+    let profile = AppProfile::wezterm(Platform::Windows);
+    assert!(e.toggle(&profile).unwrap_err().contains("Launch timed out"));
+    assert!(
+        e.toggle(&profile)
+            .unwrap_err()
+            .contains("Launch is still pending")
+    );
+    assert_eq!(e.backend_mut().launches, 1);
+    // The original process finishes starting after the bounded wait expires.
+    assert!(
+        e.backend_mut().windows[0].hidden,
+        "initializing HWND must remain untouched"
+    );
+    assert!(
+        !e.backend_mut()
+            .events
+            .iter()
+            .any(|event| event.starts_with("place:"))
+    );
+    e.backend_mut().windows[0].hidden = false;
+    e.backend_mut().focus = Some("late".into());
+    e.toggle(&profile).unwrap();
+    assert!(!e.backend_mut().windows[0].hidden);
+    assert!(
+        e.backend_mut()
+            .events
+            .iter()
+            .any(|event| event == "place:late:-1600:32:1600:480:false")
+    );
+    assert_eq!(e.backend_mut().launches, 1);
+    e.toggle(&profile).unwrap();
+    assert!(e.backend_mut().windows[0].hidden);
+}
+
+#[test]
+fn cold_start_waits_for_a_hidden_hwnd_to_finish_initializing() {
+    let mut pending = window("initializing");
+    pending.hidden = true;
+    let mut e = Engine::with_options(
+        Fake {
+            native_hide: true,
+            start_windows: vec![pending],
+            show_after_queries: Some(3),
+            ..Default::default()
+        },
+        EngineOptions {
+            launch_timeout: Duration::from_secs(1),
+            poll_interval: Duration::ZERO,
+            launch_cooldown: Duration::from_secs(20),
+        },
+    );
+    e.toggle(&AppProfile::wezterm(Platform::Windows)).unwrap();
+    assert_eq!(e.backend_mut().launches, 1);
+    assert_eq!(
+        &e.backend_mut().events[..3],
+        ["monitor:Cursor", "launch", "ready"]
+    );
+    assert!(!e.backend_mut().windows[0].hidden);
+    assert_eq!(e.backend_mut().focus.as_deref(), Some("initializing"));
+}
+
+#[test]
+fn restarted_host_can_adopt_a_hidden_dedicated_window_without_launching() {
+    let mut hidden = window("existing");
+    hidden.hidden = true;
+    let mut e = engine(Fake {
+        windows: vec![hidden],
+        native_hide: true,
+        focus: Some("editor".into()),
+        ..Default::default()
+    });
+    let profile = AppProfile::wezterm(Platform::Windows);
+    e.toggle(&profile).unwrap();
+    assert_eq!(e.backend_mut().launches, 0);
+    assert!(!e.backend_mut().windows[0].hidden);
+    assert_eq!(e.backend_mut().focus.as_deref(), Some("existing"));
+    e.toggle(&profile).unwrap();
+    e.reset().unwrap();
+    assert!(
+        !e.backend_mut().windows[0].hidden,
+        "shutdown/config reset must make the live shell reachable"
+    );
+    assert_eq!(
+        e.backend_mut().focus,
+        None,
+        "cleanup must not activate the terminal"
+    );
+}
+
+#[test]
+fn interrupted_or_denied_show_restores_the_prior_hidden_state() {
+    for deny_focus in [false, true] {
+        let mut hidden = window("hidden");
+        hidden.hidden = true;
+        let mut e = engine(Fake {
+            windows: vec![hidden],
+            native_hide: true,
+            deny_focus,
+            focus: Some("editor".into()),
+            focus_after_place: (!deny_focus).then(|| Some("other".into())),
+            ..Default::default()
+        });
+        let result = e.toggle(&quake_profile());
+        assert_eq!(result.is_err(), deny_focus);
+        assert!(e.backend_mut().windows[0].hidden);
+        assert!(
+            e.backend_mut()
+                .events
+                .ends_with(&["hide:hidden".into(), "release:hidden".into()])
+        );
+        assert_ne!(e.backend_mut().focus.as_deref(), Some("hidden"));
+        assert_eq!(e.backend_mut().launches, 0);
+    }
+}
+
+#[test]
+fn native_blur_hides_once_and_keeps_owned_dialogs_visible() {
+    let mut e = engine(Fake {
+        windows: vec![window("a")],
+        native_hide: true,
+        ..Default::default()
+    });
+    let mut profile = quake_profile();
+    profile.quake.hide_on_focus_loss = true;
+    e.toggle(&profile).unwrap();
+    e.backend_mut().focus = Some("dialog".into());
+    e.backend_mut().owned_dialog_for = Some("a".into());
+    e.foreground_changed().unwrap();
+    assert!(!e.backend_mut().windows[0].hidden);
+    e.backend_mut().focus = Some("editor".into());
+    e.foreground_changed().unwrap();
+    assert!(e.backend_mut().windows[0].hidden);
+    assert!(!e.backend_mut().windows[0].minimized);
+    let events = e.backend_mut().events.clone();
+    e.foreground_changed().unwrap();
+    assert_eq!(e.backend_mut().events, events);
+}
+
+#[test]
+fn failed_hide_keeps_the_visible_session_armed_and_failed_cleanup_is_retryable() {
+    let mut e = engine(Fake {
+        windows: vec![window("a")],
+        native_hide: true,
+        ..Default::default()
+    });
+    let mut profile = quake_profile();
+    profile.quake.hide_on_focus_loss = true;
+    e.toggle(&profile).unwrap();
+    e.backend_mut().deny_hide = true;
+    assert!(e.toggle(&profile).is_err());
+    assert!(!e.backend_mut().windows[0].hidden);
+    assert_eq!(e.backend_mut().events.last().unwrap(), "hide:a");
+    e.backend_mut().deny_hide = false;
+    e.backend_mut().deny_cleanup = true;
+    assert!(e.reset().is_err());
+    e.backend_mut().focus = Some("editor".into());
+    e.foreground_changed().unwrap();
+    assert!(e.backend_mut().windows[0].hidden);
+    e.backend_mut().deny_cleanup = false;
+    e.reset().unwrap();
+    assert!(!e.backend_mut().windows[0].hidden);
 }

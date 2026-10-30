@@ -534,6 +534,7 @@ impl MacDesktop {
         Ok(Some(Window {
             id,
             title,
+            hidden: false,
             minimized,
             maximized: entry.maximized,
         }))

@@ -21,7 +21,7 @@ Sean Toolbox 使用 Rust + Slint，支持 Windows、macOS 和 Linux，优先面�
 ## 功能
 
 - **应用快捷键**：启动应用、切回窗口或将窗口最小化；同一应用有多个窗口时依次切换。
-- **Quake 停靠**：把常用窗口放在屏幕的一侧，用同一个快捷键唤出和收起。可设置宽高、对齐方式和显示器。
+- **下拉与停靠**：Windows 可用独立的 WezTerm 下拉终端，收起后任务继续运行；其他应用也可停靠到屏幕一侧。可设置宽高、对齐方式和显示器。
 - **最近项目**：搜索 VS Code Stable 的文件夹、工作区和远程项目历史，用键盘或鼠标打开。
 - **界面与配置**：中文或英文界面，跟随系统、浅色和深色主题；支持配置导入、导出和开机启动。
 
@@ -42,7 +42,7 @@ Sean Toolbox 使用 Rust + Slint，支持 Windows、macOS 和 Linux，优先面�
 首次启动后：
 
 1. 按 `Ctrl+Alt+Space` 打开最近项目，输入关键词搜索，按 `Enter` 打开。
-2. 从托盘打开“窗口快捷键”，确认程序路径和快捷键。默认示例为 WezTerm `F3`、VS Code `F4`、Chrome `F5`。
+2. 从托盘打开“窗口快捷键”，确认程序路径和快捷键。默认示例为 WezTerm `F3`、VS Code `F4`、Chrome `F5`；Windows 新配置的 `F3` 默认唤出 [WezTerm 下拉终端](docs/USAGE.md#wezterm-下拉终端windows)。
 3. 在“设置”中选择主题、语言和开机启动。开机启动默认关闭。
 
 退出整个应用可使用托盘“退出工具箱”或 `sean-toolbox quit`。

@@ -45,6 +45,7 @@ export component AppWindow inherits Window {
     in-out property <bool> form-maximize;
     in-out property <bool> form-cycle;
     in-out property <bool> form-quake-enabled;
+    in-out property <bool> form-wezterm-dropdown;
     in-out property <int> form-quake-edge: 0;
     in-out property <int> form-quake-alignment: 1;
     in-out property <int> form-quake-width: 100;
@@ -494,9 +495,9 @@ export component AppWindow inherits Window {
                                                 if !root.form-quake-enabled: CheckBox { text: root.english ? "Wrap to the first window at the end" : "循环到末尾后回到第一个窗口"; checked <=> root.form-cycle; enabled: !root.saving; toggled => { root.profile-changed(); } }
                                                 Rectangle { height: 5px; }
                                                 Divider {}
-                                                SectionLabel { text: root.english ? "QUAKE MODE" : "QUAKE 停靠模式"; height: 23px; }
-                                                CheckBox { text: root.english ? "Dock one window to the screen edge" : "将一个应用窗口停靠到屏幕边缘"; checked <=> root.form-quake-enabled; enabled: !root.saving; toggled => { root.profile-changed(); } }
-                                                Caption { text: root.english ? "Summon the same window with your shortcut. Press again while it is active to minimize it." : "快捷键唤回同一个窗口；窗口在前台时再按一次即可收起。"; font-size: 11px; }
+                                                SectionLabel { text: root.english ? "QUAKE MODE" : "下拉与停靠"; height: 23px; }
+                                                CheckBox { text: root.form-wezterm-dropdown ? (root.english ? "Enable a dedicated WezTerm dropdown" : "启用 WezTerm 独立下拉") : (root.english ? "Dock one window to the screen edge" : "将一个应用窗口停靠到屏幕边缘"); checked <=> root.form-quake-enabled; enabled: !root.saving; toggled => { root.profile-changed(); } }
+                                                Caption { text: root.form-wezterm-dropdown ? (root.english ? "Opens a dedicated window with your WezTerm shell, font and colors. Terminal tasks keep running while hidden." : "打开独立窗口，沿用 WezTerm 的 shell、字体与配色。收起后终端任务继续运行。") : (root.english ? "Summon the same window with your shortcut. Press again while it is active to hide it." : "快捷键唤回同一个窗口；窗口在前台时再按一次即可收起。"); font-size: 11px; }
                                                 if root.form-quake-enabled: VerticalLayout {
                                                     spacing: 10px;
                                                     QuakePreview { edge: root.form-quake-edge; alignment: root.form-quake-alignment; width-percent: root.form-quake-width; height-percent: root.form-quake-height; }

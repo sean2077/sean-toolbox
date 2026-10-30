@@ -10,7 +10,7 @@ Matchers are literal application identifiers, compared case-insensitively.
 
 | Backend | Matching | Native operations | Requirements |
 | --- | --- | --- | --- |
-| Windows | Executable filename; a full path is reduced to its filename | Win32 enumeration, process identity checks, foreground requests, asynchronous show/minimize/restore | An interactive shell; elevated or protected targets can reject access |
+| Windows | Executable filename (full paths use the filename), or `class:<class-name>` for an exact window-class match | Win32 enumeration, process identity checks, foreground requests, asynchronous show/hide/minimize/restore | An interactive shell; elevated or protected targets can reject access |
 | macOS | Bundle ID, application display name, executable filename or path | Accessibility window objects and AppKit application activation | Accessibility permission for the host executable |
 | Linux X11 | WM_CLASS instance/class or process executable filename/path | EWMH/ICCCM requests through x11rb and client/process identity checks | X11 with an EWMH window manager |
 
@@ -19,9 +19,10 @@ Native Wayland window control is unavailable.
 ## Toggle behavior
 
 - **No matching window:** try launch candidates in order until a process starts,
-  then wait up to 3 seconds for a window. A pending launch has a 20-second
+  then wait up to 10 seconds for a window. A pending launch has a 20-second
   cooldown shared by matching application identifiers, including across
   configuration reloads.
+  A later toggle can adopt a window that appeared after the wait expired.
 - **One window:** minimize it when foreground; otherwise restore and activate it,
   preserving its maximization state.
 - **Multiple windows:** keep a stable cycle order across Z-order changes. With
@@ -33,7 +34,7 @@ Native Wayland window control is unavailable.
 
 ## Quake docking
 
-`quake.enabled` selects a fixed window for repeated show/minimize operations. It
+`quake.enabled` selects a fixed window for repeated show/hide operations. It
 chooses the focused matching window, or the first match, and retains it until it
 closes. Showing the window applies the configured position and size. Ordinary
 `maximize` and `cycle_continuous` settings apply when Quake is disabled.
@@ -56,16 +57,53 @@ place.
 
 `always_on_top` defaults to false. When enabled, the original stacking state is
 recorded and restored on hide, configuration reset, failure or orderly host exit.
-Hiding uses normal minimization.
+Windows hides the window with `SW_HIDE` and positions it before showing it again.
+The backend retains its process/window identity, so hidden windows remain
+discoverable. Configuration reset and orderly host exit make windows hidden by
+the host visible again without activating them. macOS and Linux X11 use normal
+minimization.
 
 `hide_on_focus_loss` defaults to false and is available on Windows. The host
 receives `EVENT_SYSTEM_FOREGROUND` events through `SetWinEventHook` and forwards
 them to the window worker. A shown Quake window is eligible for auto-hide; its
 owned dialogs count as part of that window. The worker rechecks foreground before
-minimizing, so refocusing cancels dismissal. Confirmed minimization ends the
+hiding, so refocusing cancels dismissal. Confirmed hiding ends the
 visible session before stacking cleanup. Each window has one Quake owner, and
 hook installation errors are returned to the caller. Escape remains available
 to the target application.
+
+### Dedicated WezTerm dropdown on Windows
+
+For Windows profiles whose launch candidates all name `wezterm` or `wezterm-gui`
+(with or without `.exe`), enabling Quake prepares an isolated GUI instance at
+runtime. The saved profile retains the user's shortcut, arguments and working
+directory. New Windows configurations enable this mode for the default `F3`
+terminal profile.
+
+The launcher uses `wezterm-gui.exe`, `start --always-new-process` and a window
+class derived from the profile ID: `org.sean2077.sean-toolbox.quake.<id>`. The
+backend matches that class, including hidden windows, and excludes owned/tool
+windows. Ordinary executable matching excludes these dedicated dropdowns. A
+restarted host can therefore find its previous dropdown without selecting an
+ordinary WezTerm window.
+
+User configuration continues to supply `default_prog`, fonts and colors. Two
+CLI overrides apply only to the dedicated instance: `window_decorations='RESIZE'`
+removes the title bar while preserving a resize border, and
+`adjust_window_size_when_changing_font_size=false` keeps the outer window size
+when changing the font size. No WezTerm configuration file is written.
+
+The argument adapter accepts an omitted command, `start`, or its `-e` alias.
+Global `--config-file`, `--config`, `--skip-config` and `-n` options are preserved,
+apart from the two managed overrides above. The adapter supplies its own class
+and new-process options and removes `--new-tab`; arguments after `--`, or after
+the first program argument, pass through unchanged. An explicit
+`wezterm.exe` path resolves to `wezterm-gui.exe` in the same directory.
+
+The integration follows WezTerm's [GUI launcher guidance](https://wezterm.org/cli/general.html),
+[process and class options](https://wezterm.org/cli/start.html), and
+[resizable decoration guidance](https://wezterm.org/config/lua/config/window_decorations.html).
+These upstream references were checked on 2026-10-30.
 
 ## Launch commands
 
@@ -89,6 +127,11 @@ The X11 script requires Xvfb, Openbox, xterm and x11-utils. It creates a private
 display and checks launch, matching, focus, maximize/minimize/restore, cycling,
 Quake placement, topmost cleanup and stale-handle rejection. It closes its test
 clients when finished.
+
+Windows unit tests create private HWND fixtures to check hidden/empty-title
+matching, owned/tool window exclusion, dedicated-instance isolation and
+show/hide/cleanup without activation. They do not start WezTerm or use user
+configuration.
 
 On Windows and macOS, check foreground policies, Accessibility permissions,
 multiple displays, Spaces and application-specific window behavior on the target

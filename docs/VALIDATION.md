@@ -324,3 +324,37 @@ Linux 在新增的界面验收步骤发现项目面板未随真实失焦收起�
 
 最后用重建后的 release 程序执行与 CI 相同的完整无截图入口，全部通过，包括新增的
 确定性失焦回归、长按/重复快捷键保护及全部原有生命周期检查；私有测试进程均已清理。
+
+## 2026-10-30：Windows WezTerm 独立下拉
+
+本轮基于 `3c8d93b`。Windows WezTerm 的 Quake 配置在运行时使用专用 GUI 进程和
+独立窗口类名；普通终端窗口不参与该配置的切换。收起改用 `SW_HIDE`，隐藏窗口仍可
+按原身份找回，配置重置和正常退出宿主时恢复可见。已有配置只需开启对应应用的下拉选项。
+
+对照 WezTerm 的 [start 参数](https://wezterm.org/cli/start.html)、
+[窗口装饰](https://wezterm.org/config/lua/config/window_decorations.html) 和
+[初始化源码](https://github.com/wezterm/wezterm/blob/e68a8ec27727fbbda15e07f0a0737cd5e16481f6/wezterm-gui/src/termwindow/mod.rs)
+核对独立实例与启动时序：创建 HWND 后还需完成图形初始化，因此冷启动等待窗口实际显示，
+已运行的隐藏终端则直接接管。默认启动等待为 10 秒；等待超时后的重试不会把正在初始化的
+隐藏窗口当成旧会话，也不会在 20 秒启动冷却期内再创建进程。
+
+本地 Linux 环境执行结果：
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| workspace / all-targets 严格 Clippy | 通过，使用锁定依赖与离线缓存 |
+| `cargo test --locked --offline --workspace` | 124 项通过，1 项 X11 桌面用例由下一项单独执行 |
+| `run-x11-smoke.sh` | 通过；独立 Xvfb/Openbox 下验证真实 xterm，普通切换与 Quake 停靠行为保留 |
+| Windows GNU 目标 core/windows / all-targets 严格 Clippy | 通过；包含新增 Windows 原生测试的编译检查 |
+
+新增行为回归覆盖专用类名与普通终端隔离、隐藏后同一窗口复用、空标题、用户启动参数和
+工作目录保留、初始化未完成、超时后的接管、失焦及所属对话框、显示失败回滚、隐藏失败和
+清理重试。UI 测试覆盖候选编辑与程序浏览后的提示更新，保存时保留用户参数和快捷键。
+首次完整测试被执行环境的 Unix socket 限制阻断；在允许测试临时本地 socket 的隔离执行中
+重新运行全部测试通过，没有跳过 IPC 用例或调整断言。
+
+Windows 增加两项使用私有 HWND 的原生测试，随 Windows CI 默认执行：检查隐藏/空标题
+窗口、owned/tool 窗口过滤、普通进程匹配隔离，以及无激活的显示、隐藏、复用和退出恢复。
+本地交叉检查没有运行这些 Windows 用例。真实 WezTerm 的前台激活、混合 DPI、多显示器
+和任务栏行为仍需 Windows 桌面验收；本轮不包含滑入滑出动画或跨虚拟桌面迁移。

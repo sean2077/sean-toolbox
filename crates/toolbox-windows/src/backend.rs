@@ -54,6 +54,8 @@ pub fn quake_bounds(area: WindowRect, config: &QuakeConfig) -> Result<WindowRect
 pub struct Window {
     pub id: String,
     pub title: String,
+    /// A retained Quake window can exist without being visible or minimized.
+    pub hidden: bool,
     pub minimized: bool,
     pub maximized: bool,
 }
@@ -93,14 +95,19 @@ pub trait Desktop {
     fn clear_quake(&mut self) -> Result<(), String> {
         Ok(())
     }
+    /// Keep the application alive while dismissing its Quake window. Backends
+    /// without retained hidden-window support fall back to minimization.
+    fn hide_quake(&mut self, id: &str) -> Result<(), String> {
+        self.minimize(id)
+    }
     fn is_foreground_family(&mut self, id: &str) -> Result<bool, String> {
         Ok(self.foreground()?.as_deref() == Some(id))
     }
-    fn minimize_if_unfocused(&mut self, id: &str) -> Result<bool, String> {
+    fn hide_quake_if_unfocused(&mut self, id: &str) -> Result<bool, String> {
         if self.foreground()?.is_none() || self.is_foreground_family(id)? {
             return Ok(false);
         }
-        self.minimize(id)?;
+        self.hide_quake(id)?;
         Ok(true)
     }
     /// An error must mean that no process was started, so a fallback is safe.
@@ -151,11 +158,14 @@ impl<T: Desktop + ?Sized> Desktop for Box<T> {
     fn clear_quake(&mut self) -> Result<(), String> {
         (**self).clear_quake()
     }
+    fn hide_quake(&mut self, id: &str) -> Result<(), String> {
+        (**self).hide_quake(id)
+    }
     fn is_foreground_family(&mut self, id: &str) -> Result<bool, String> {
         (**self).is_foreground_family(id)
     }
-    fn minimize_if_unfocused(&mut self, id: &str) -> Result<bool, String> {
-        (**self).minimize_if_unfocused(id)
+    fn hide_quake_if_unfocused(&mut self, id: &str) -> Result<bool, String> {
+        (**self).hide_quake_if_unfocused(id)
     }
     fn launch(&mut self, command: &LaunchCommand) -> Result<(), String> {
         (**self).launch(command)
