@@ -113,3 +113,101 @@ fn ignores_unrelated_url_schemes_and_preserves_target_identity_when_label_change
     assert_eq!(first[0].id, second[0].id);
     assert_ne!(first[0].name, second[0].name);
 }
+
+#[test]
+fn uri_components_preserve_project_names_with_reserved_characters() {
+    let directory = tempfile::tempdir().unwrap();
+    let first_path = directory.path().join("C# notes%2F25");
+    let second_path = directory.path().join("C# drafts%2F25");
+    let component = |path: &std::path::Path| {
+        serde_json::json!({"folderUri": {
+            "scheme": "file",
+            "path": path.to_string_lossy().replace('\\', "/")
+        }})
+    };
+    let projects = parse_recent_value(
+        &serde_json::json!({"entries": [component(&first_path), component(&second_path)]})
+            .to_string(),
+    )
+    .unwrap();
+    assert_eq!(projects.len(), 2, "distinct names must not collapse at '#'");
+    assert_eq!(
+        projects[0].target,
+        ProjectTarget::LocalPath(first_path.clone())
+    );
+    assert_eq!(projects[1].target, ProjectTarget::LocalPath(second_path));
+    assert_eq!(projects[0].name, "C# notes%2F25");
+    let expected_uri = Url::from_directory_path(&first_path).unwrap();
+    let request = build_launch_request(PathBuf::from("code"), &projects[0], &[]).unwrap();
+    assert_eq!(request.args[2], expected_uri.as_str());
+
+    let string_form = parse_recent_value(
+        &serde_json::json!({"entries": [{"folderUri": expected_uri.as_str()}]}).to_string(),
+    )
+    .unwrap();
+    assert_eq!(projects[0].id, string_form[0].id);
+}
+
+#[test]
+fn remote_names_are_readable_without_changing_the_launch_uri() {
+    let projects = parse_recent_value(
+        &serde_json::json!({"entries": [{"folderUri": {
+            "scheme": "vscode-remote",
+            "authority": "ssh-remote+dev",
+            "path": "/work/项目 + C#%2F?",
+            "query": "window=1",
+            "fragment": "recent"
+        }}]})
+        .to_string(),
+    )
+    .unwrap();
+    assert_eq!(projects.len(), 1);
+    assert_eq!(projects[0].name, "项目 + C#%2F?");
+    let uri =
+        "vscode-remote://ssh-remote+dev/work/%E9%A1%B9%E7%9B%AE%20+%20C%23%252F%3F?window=1#recent";
+    assert_eq!(projects[0].target, ProjectTarget::Uri(uri.into()));
+    let request = build_launch_request(PathBuf::from("code"), &projects[0], &[]).unwrap();
+    assert_eq!(request.args[2], uri);
+}
+
+#[cfg(unix)]
+#[test]
+fn uri_component_backslashes_are_literal_unix_filename_characters() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("project\\notes");
+    let projects = parse_recent_value(
+        &serde_json::json!({"entries": [{"folderUri": {
+            "scheme": "file",
+            "path": path.to_string_lossy()
+        }}]})
+        .to_string(),
+    )
+    .unwrap();
+    assert_eq!(projects.len(), 1);
+    assert_eq!(projects[0].target, ProjectTarget::LocalPath(path));
+    assert_eq!(projects[0].name, "project\\notes");
+}
+
+#[test]
+fn root_and_remote_trailing_slash_folders_remain_searchable() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().ancestors().last().unwrap();
+    let root_uri = Url::from_directory_path(root).unwrap();
+    let projects = parse_recent_value(
+        &serde_json::json!({"entries": [
+            {"folderUri": root_uri.as_str()},
+            {"folderUri": "vscode-remote://ssh-remote+dev/"},
+            {"folderUri": "vscode-remote://ssh-remote+dev/work/team%20project/"}
+        ]})
+        .to_string(),
+    )
+    .unwrap();
+    assert_eq!(projects.len(), 3);
+    assert_eq!(projects[0].name, root.to_string_lossy());
+    assert_eq!(projects[1].name, "ssh-remote+dev");
+    assert_eq!(projects[2].name, "team project");
+    assert_eq!(
+        toolbox_projects::search_projects(&projects, "team project").len(),
+        1
+    );
+}

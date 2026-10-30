@@ -679,16 +679,33 @@ fn uri_from_value(value: &Value) -> Option<String> {
         .unwrap_or_default();
     let path = object
         .get("path")
-        .or_else(|| object.get("fsPath"))
         .and_then(Value::as_str)
-        .unwrap_or_default()
-        .replace('\\', "/");
-    let raw = if authority.is_empty() {
-        format!("{scheme}://{path}")
-    } else {
-        format!("{scheme}://{authority}{path}")
+        .map(str::to_owned)
+        .or_else(|| {
+            object.get("fsPath").and_then(Value::as_str).map(|path| {
+                if cfg!(windows) {
+                    path.replace('\\', "/")
+                } else {
+                    path.to_owned()
+                }
+            })
+        })
+        .unwrap_or_default();
+    // URI components contain a decoded path. Interpolating it into a URL would
+    // turn '#' and '?' in a project name into a fragment or query, and would
+    // reinterpret literal percent escapes as different path characters.
+    let mut uri = Url::parse(&format!("{scheme}://{authority}/")).ok()?;
+    uri.set_path(&path.replace('%', "%25").replace('\\', "%5C"));
+    let component = |name| {
+        object
+            .get(name)
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|value| value.replace('%', "%25"))
     };
-    Url::parse(&raw).ok().map(Into::into)
+    uri.set_query(component("query").as_deref());
+    uri.set_fragment(component("fragment").as_deref());
+    Some(uri.into())
 }
 
 fn project_target(value: &str) -> Option<ProjectTarget> {
@@ -714,12 +731,20 @@ fn project_target(value: &str) -> Option<ProjectTarget> {
 fn target_name(kind: ProjectKind, target: &ProjectTarget) -> Option<String> {
     let name = match target {
         ProjectTarget::LocalPath(path) => match kind {
-            ProjectKind::Folder => path.file_name()?.to_string_lossy().into_owned(),
+            ProjectKind::Folder => path
+                .file_name()
+                .unwrap_or(path.as_os_str())
+                .to_string_lossy()
+                .into_owned(),
             ProjectKind::Workspace => path.file_stem()?.to_string_lossy().into_owned(),
         },
         ProjectTarget::Uri(value) => {
             let url = Url::parse(value).ok()?;
-            let segment = url.path_segments()?.next_back()?.to_owned();
+            let segment = url
+                .path_segments()?
+                .rfind(|segment| !segment.is_empty())
+                .map(decode_path_segment)
+                .unwrap_or_else(|| url.host_str().unwrap_or("/").to_owned());
             match kind {
                 ProjectKind::Folder => segment,
                 ProjectKind::Workspace => segment
@@ -730,6 +755,27 @@ fn target_name(kind: ProjectKind, target: &ProjectTarget) -> Option<String> {
         }
     };
     (!name.is_empty()).then_some(name)
+}
+
+// Decode names for presentation only. Launch targets and their identity retain
+// the original URI; '+' is a literal path character, not a form-encoded space.
+fn decode_path_segment(segment: &str) -> String {
+    let mut bytes = segment.bytes();
+    let mut decoded = Vec::with_capacity(segment.len());
+    while let Some(byte) = bytes.next() {
+        if byte == b'%' {
+            let mut next = bytes.clone();
+            if let Some(high) = next.next().and_then(|b| (b as char).to_digit(16))
+                && let Some(low) = next.next().and_then(|b| (b as char).to_digit(16))
+            {
+                decoded.push((high * 16 + low) as u8);
+                bytes = next;
+                continue;
+            }
+        }
+        decoded.push(byte);
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
 }
 
 fn path_fingerprint(path: &Path) -> String {
