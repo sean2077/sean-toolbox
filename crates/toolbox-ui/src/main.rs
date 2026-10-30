@@ -113,7 +113,7 @@ fn active_display_area() -> Option<DisplayArea> {
 }
 
 #[cfg(target_os = "linux")]
-fn x11_window_is_active(window: &winit::window::Window) -> Option<bool> {
+fn x11_window_has_focus(window: &winit::window::Window) -> Option<bool> {
     use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
     use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
 
@@ -122,11 +122,33 @@ fn x11_window_is_active(window: &winit::window::Window) -> Option<bool> {
         RawWindowHandle::Xcb(handle) => handle.window.get(),
         _ => return None,
     };
-    // Winit 0.30 also reports XI_FocusOut for a passive keyboard grab. A
-    // global shortcut does not change the WM's active window; distinguish it
-    // from real dismissal with a single read instead of a polling timer.
+    // Keyboard grabs synthesize FocusOut without moving the actual input
+    // focus. Query the server first: the WM's _NET_ACTIVE_WINDOW can still
+    // name us after a real FocusOut, with no later event to correct that read.
     let (connection, _) = x11rb::connect(None).ok()?;
+    let mut focus = connection.get_input_focus().ok()?.reply().ok()?.focus;
+    if focus == id {
+        return Some(true);
+    }
+    if focus == x11rb::NONE {
+        return Some(false);
+    }
     let root = connection.query_tree(id).ok()?.reply().ok()?.root;
+    // PointerRoot (1) has no concrete focus window; only this case needs the
+    // WM's active-window hint. Otherwise include native child windows in the
+    // same focus family, with a bounded walk for malformed window trees.
+    if focus != 1 {
+        for _ in 0..64 {
+            if focus == id {
+                return Some(true);
+            }
+            if focus == root || focus == x11rb::NONE {
+                return Some(false);
+            }
+            focus = connection.query_tree(focus).ok()?.reply().ok()?.parent;
+        }
+        return None;
+    }
     let atom = connection
         .intern_atom(true, b"_NET_ACTIVE_WINDOW")
         .ok()?
@@ -143,12 +165,7 @@ fn x11_window_is_active(window: &winit::window::Window) -> Option<bool> {
             return Some(active == id);
         }
     }
-    connection
-        .get_input_focus()
-        .ok()?
-        .reply()
-        .ok()
-        .map(|reply| reply.focus == id)
+    None
 }
 
 struct State {
@@ -415,7 +432,7 @@ impl Controller {
             if self
                 .launcher()
                 .window()
-                .with_winit_window(x11_window_is_active)
+                .with_winit_window(x11_window_has_focus)
                 .flatten()
                 == Some(true)
             {
@@ -435,7 +452,13 @@ impl Controller {
                 let focused = controller
                     .launcher()
                     .window()
-                    .with_winit_window(|window| window.has_focus())
+                    .with_winit_window(|window| {
+                        #[cfg(target_os = "linux")]
+                        if let Some(focused) = x11_window_has_focus(window) {
+                            return focused;
+                        }
+                        window.has_focus()
+                    })
                     .unwrap_or(false);
                 controller.launcher_focus_changed(focused);
             });

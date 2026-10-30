@@ -29,6 +29,16 @@ from typing import Any
 from smoke_host import Desktop, SmokeFailure, become_child_subreaper, process_info, request, require, wait_for
 
 
+class X11FocusEvent(ctypes.Structure):
+    _fields_ = [("type", ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int),
+                ("display", ctypes.c_void_p), ("window", ctypes.c_ulong),
+                ("mode", ctypes.c_int), ("detail", ctypes.c_int)]
+
+
+class X11Event(ctypes.Union):
+    _fields_ = [("type", ctypes.c_int), ("focus", X11FocusEvent), ("pad", ctypes.c_long * 24)]
+
+
 class X11Probe:
     def __init__(self, display: str) -> None:
         library = ctypes.util.find_library("X11")
@@ -48,8 +58,34 @@ class X11Probe:
             ctypes.POINTER(ulong), ctypes.POINTER(ptr),
         ]
         self.x.XFree.argtypes = [ptr]
+        self.x.XGetInputFocus.argtypes = [ptr, ctypes.POINTER(ulong), ctypes.POINTER(integer)]
+        self.x.XSelectInput.argtypes = [ptr, ulong, ctypes.c_long]
+        self.x.XSync.argtypes = [ptr, integer]
+        self.x.XPending.argtypes = [ptr]
+        self.x.XNextEvent.argtypes = [ptr, ctypes.POINTER(X11Event)]
         self.display = self.x.XOpenDisplay(display.encode())
         require(self.display, "Cannot connect to the private X11 display")
+
+    def input_focus(self) -> int:
+        window, revert = ctypes.c_ulong(), ctypes.c_int()
+        self.x.XGetInputFocus(self.display, ctypes.byref(window), ctypes.byref(revert))
+        return window.value
+
+    def watch_window_events(self, window: int) -> None:
+        self.x.XSelectInput(self.display, window, (1 << 17) | (1 << 21))
+        self.x.XSync(self.display, False)
+        self.window_events()
+
+    def window_events(self) -> list[dict[str, int]]:
+        events = []
+        while self.x.XPending(self.display):
+            event = X11Event()
+            self.x.XNextEvent(self.display, ctypes.byref(event))
+            item = {"type": event.type, "window": event.focus.window}
+            if event.type in (9, 10):  # FocusIn / FocusOut
+                item.update(mode=event.focus.mode, detail=event.focus.detail)
+            events.append(item)
+        return events
 
     def pixel(self, window: int, x: int, y: int) -> tuple[int, int, int]:
         image = self.x.XGetImage(self.display, window, x, y, 1, 1, ctypes.c_ulong(-1).value, 2)
@@ -261,18 +297,27 @@ class AppearanceDesktop(Desktop):
         wait_for("cold project panel acquires focus", lambda: self.active() == popup)
         self.wait_theme(dark, popup)
         self.wait_popup_geometry(popup)
+        require(self.probe is not None, "Native probe is not initialized")
+        self.probe.watch_window_events(popup)
         self.spawn(["xterm", "-title", "Appearance external target", "-e", "cat"], "appearance-external")
         external = wait_for("external focus target", lambda: self.command(
             "xdotool", "search", "--onlyvisible", "--name", "^Appearance external target$", check=False
         ).stdout.strip())
-        self.activate(int(external.splitlines()[0]))
-        wait_for("automatic blur dismissal", lambda: popup not in self.visible("^Sean Toolbox.*Recent Projects$"))
+        external_window = int(external.splitlines()[0])
+        self.activate(external_window)
+        try:
+            wait_for("automatic blur dismissal", lambda: popup not in self.visible("^Sean Toolbox.*Recent Projects$"))
+        except SmokeFailure as error:
+            raise SmokeFailure(f"{error}; input_focus={self.probe.input_focus()}, active_window={self.active()}, "
+                               f"popup={popup}, native_events={self.probe.window_events()}") from error
         require(self.ui_children() == [current], "Automatic blur ignored the explicit warm-cache timeout")
         self.key("ctrl+alt+space")
         wait_for("same panel reused from warm cache", lambda: popup in self.visible("^Sean Toolbox.*Recent Projects$") and self.active() == popup)
         self.wait_popup_geometry(popup)
         require(self.ui_children() == [current], "Warm activation replaced the retained UI process")
         print("PASS automatic focus-loss dismissal preserves the configured warm cache and reuses the UI", flush=True)
+        self.check_shortcut_grab_focus(popup)
+        self.check_delayed_wm_focus(popup, external_window, current)
 
         self.key("Escape")
         self.require_ui_reaped(current, endpoint)
@@ -326,6 +371,54 @@ class AppearanceDesktop(Desktop):
         self.key("Escape")
         self.require_ui_reaped(current, endpoint)
         print("PASS a stopped live UI is reported without duplication and recovers with the same PID", flush=True)
+
+    def check_shortcut_grab_focus(self, popup: int) -> None:
+        require(self.probe is not None, "Native probe is not initialized")
+        self.probe.watch_window_events(popup)
+        self.command("xdotool", "keydown", "ctrl+alt+space")
+        try:
+            # Hold through Xvfb's normal autorepeat delay. A passive keyboard
+            # grab can emit FocusOut without changing the actual input focus.
+            deadline = time.monotonic() + 0.9
+            while time.monotonic() < deadline:
+                require(popup in self.visible("^Sean Toolbox.*Recent Projects$"), "Holding the launcher shortcut dismissed its panel")
+                require(self.probe.input_focus() == popup, "Holding the launcher shortcut changed native input focus")
+                time.sleep(0.04)
+        finally:
+            self.command("xdotool", "keyup", "space", "alt", "ctrl")
+        for _ in range(3):
+            self.key("ctrl+alt+space")
+            self.wait_popup_geometry(popup)
+            require(popup in self.visible("^Sean Toolbox.*Recent Projects$"), "Repeated launcher shortcut dismissed its panel")
+        events = self.probe.window_events()
+        require(not any(event["type"] == 18 for event in events), f"Shortcut grab unmapped and reopened the panel: {events}")
+        print("PASS held/repeated global shortcuts preserve the focused panel without unmapping it", flush=True)
+
+    def check_delayed_wm_focus(self, popup: int, external: int, current: int) -> None:
+        require(self.probe is not None, "Native probe is not initialized")
+        self.probe.watch_window_events(popup)
+        wm = next(process for process in self.processes if Path(process.args[0]).name == "openbox")
+        os.kill(wm.pid, signal.SIGSTOP)
+        try:
+            wait_for("private window manager stopped", lambda: (process_info(wm.pid) or {}).get("state") == "T")
+            # Direct XSetInputFocus creates the real FocusOut while our paused
+            # WM deliberately leaves _NET_ACTIVE_WINDOW pointing at the panel.
+            self.command("xdotool", "windowfocus", "--sync", str(external))
+            require(self.probe.input_focus() == external, "Delayed-WM fixture did not transfer native input focus")
+            require(self.active() == popup, "Delayed-WM fixture did not preserve the old active-window property")
+            try:
+                wait_for("blur dismissal with delayed WM active-window property", lambda: popup not in self.visible("^Sean Toolbox.*Recent Projects$"), timeout=3)
+            except SmokeFailure as error:
+                raise SmokeFailure(f"{error}; input_focus={self.probe.input_focus()}, active_window={self.active()}, "
+                                   f"popup={popup}, native_events={self.probe.window_events()}") from error
+        finally:
+            os.kill(wm.pid, signal.SIGCONT)
+        require(self.ui_children() == [current], "Delayed-WM dismissal ignored the configured warm cache")
+        self.key("ctrl+alt+space")
+        wait_for("same panel reopened after delayed WM dismissal", lambda: popup in self.visible("^Sean Toolbox.*Recent Projects$") and self.active() == popup)
+        self.wait_popup_geometry(popup)
+        require(self.ui_children() == [current], "Delayed-WM recovery replaced the retained UI process")
+        print("PASS real input-focus loss dismisses the panel even while WM active-window metadata is stale", flush=True)
 
     def ready_popup(self) -> bool:
         children = self.ui_children()
