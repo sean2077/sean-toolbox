@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::time::Duration;
-use toolbox_core::{AppProfile, LaunchCommand, Platform};
-use toolbox_windows::{Desktop, Engine, EngineOptions, Window};
+use toolbox_core::{AppProfile, LaunchCommand, Platform, QuakeConfig, QuakeMonitor};
+use toolbox_windows::{Desktop, Engine, EngineOptions, Window, WindowRect};
 
 #[derive(Default)]
 struct Fake {
@@ -16,6 +16,11 @@ struct Fake {
     unreadable: bool,
     deny_focus: bool,
     reorder_on_focus: bool,
+    focus_after_place: Option<Option<String>>,
+    focus_after_family_check: Option<Option<String>>,
+    owned_dialog_for: Option<String>,
+    quake_error: Option<String>,
+    deny_placement: bool,
 }
 
 impl Desktop for Fake {
@@ -80,6 +85,7 @@ impl Desktop for Fake {
         Ok(true)
     }
     fn launch(&mut self, _: &LaunchCommand) -> Result<(), String> {
+        self.events.push("launch".into());
         self.launches += 1;
         self.launch_results.pop_front().unwrap_or(Ok(()))?;
         self.windows = self.start_windows.clone();
@@ -87,6 +93,55 @@ impl Desktop for Fake {
             self.focus = focus;
         }
         Ok(())
+    }
+    fn check_quake(&mut self, _: &QuakeConfig) -> Result<(), String> {
+        self.quake_error.clone().map_or(Ok(()), Err)
+    }
+    fn quake_work_area(&mut self, monitor: QuakeMonitor) -> Result<WindowRect, String> {
+        self.events.push(format!("monitor:{monitor:?}"));
+        Ok(WindowRect {
+            x: -1600,
+            y: 32,
+            width: 1600,
+            height: 960,
+        })
+    }
+    fn place_quake(&mut self, id: &str, bounds: WindowRect, above: bool) -> Result<(), String> {
+        self.events.push(format!(
+            "place:{id}:{}:{}:{}:{}:{above}",
+            bounds.x, bounds.y, bounds.width, bounds.height
+        ));
+        if self.deny_placement {
+            return Err("placement denied".into());
+        }
+        let target = self
+            .windows
+            .iter_mut()
+            .find(|w| w.id == id)
+            .ok_or("stale")?;
+        target.minimized = false;
+        target.maximized = false;
+        if let Some(focus) = self.focus_after_place.take() {
+            self.focus = focus;
+        }
+        Ok(())
+    }
+    fn release_quake(&mut self, id: &str) -> Result<(), String> {
+        self.events.push(format!("release:{id}"));
+        Ok(())
+    }
+    fn clear_quake(&mut self) -> Result<(), String> {
+        self.events.push("clear-quake".into());
+        Ok(())
+    }
+    fn is_foreground_family(&mut self, id: &str) -> Result<bool, String> {
+        let matches = self.focus.as_deref() == Some(id)
+            || (self.focus.as_deref() == Some("dialog")
+                && self.owned_dialog_for.as_deref() == Some(id));
+        if let Some(focus) = self.focus_after_family_check.take() {
+            self.focus = focus;
+        }
+        Ok(matches)
     }
 }
 
@@ -108,6 +163,7 @@ fn profile() -> AppProfile {
         enabled: true,
         maximize: true,
         cycle_continuous: true,
+        quake: Default::default(),
         launch: vec![
             LaunchCommand {
                 executable: "app".into(),
@@ -226,7 +282,10 @@ fn launch_only_maximizes_the_new_window_and_stops_after_successful_candidate() {
         ..Default::default()
     });
     e.toggle(&profile()).unwrap();
-    assert_eq!(e.backend_mut().events, ["maximize:new", "activate:new"]);
+    assert_eq!(
+        e.backend_mut().events,
+        ["launch", "maximize:new", "activate:new"]
+    );
     assert_eq!(e.backend_mut().launches, 1);
 }
 
@@ -247,7 +306,7 @@ fn failed_spawn_tries_fallback_but_successful_spawn_timeout_never_does() {
             .contains("timed out")
     );
     assert_eq!(timed_out.backend_mut().launches, 1);
-    timed_out.reset();
+    timed_out.reset().unwrap();
     assert!(
         timed_out
             .toggle(&profile())
@@ -270,7 +329,7 @@ fn user_switching_away_during_launch_prevents_both_maximize_and_activation() {
         ..Default::default()
     });
     e.toggle(&profile()).unwrap();
-    assert!(e.backend_mut().events.is_empty());
+    assert_eq!(e.backend_mut().events, ["launch"]);
     assert_eq!(e.backend_mut().focus.as_deref(), Some("other"));
 }
 
@@ -283,7 +342,7 @@ fn lost_known_foreground_is_not_permission_to_steal_focus() {
         ..Default::default()
     });
     e.toggle(&profile()).unwrap();
-    assert!(e.backend_mut().events.is_empty());
+    assert_eq!(e.backend_mut().events, ["launch"]);
 }
 
 #[test]
@@ -295,7 +354,7 @@ fn focus_is_rechecked_after_native_maximize_wait() {
         ..Default::default()
     });
     e.toggle(&profile()).unwrap();
-    assert_eq!(e.backend_mut().events, ["maximize:new"]);
+    assert_eq!(e.backend_mut().events, ["launch", "maximize:new"]);
 }
 
 #[test]
@@ -330,4 +389,268 @@ fn denied_focus_does_not_advance_the_cycle() {
     e.backend_mut().deny_focus = false;
     e.toggle(&profile()).unwrap();
     assert_eq!(e.backend_mut().focus.as_deref(), Some("a"));
+}
+
+fn quake_profile() -> AppProfile {
+    let mut profile = profile();
+    profile.quake.enabled = true;
+    profile.quake.width_percent = 80;
+    profile.quake.always_on_top = true;
+    profile
+}
+
+#[test]
+fn quake_pins_one_window_across_focus_changes_and_preserves_other_instances() {
+    let mut e = engine(Fake {
+        windows: vec![window("a"), window("b")],
+        ..Default::default()
+    });
+    e.toggle(&quake_profile()).unwrap();
+    e.backend_mut().focus = Some("b".into());
+    e.toggle(&quake_profile()).unwrap();
+    assert_eq!(e.backend_mut().focus.as_deref(), Some("a"));
+    e.toggle(&quake_profile()).unwrap();
+    assert!(e.backend_mut().windows[0].minimized);
+    assert!(!e.backend_mut().windows[1].minimized);
+    e.toggle(&quake_profile()).unwrap();
+    assert_eq!(e.backend_mut().focus.as_deref(), Some("a"));
+    assert_eq!(
+        e.backend_mut().events,
+        [
+            "monitor:Cursor",
+            "place:a:-1440:32:1280:480:true",
+            "activate:a",
+            "monitor:Cursor",
+            "place:a:-1440:32:1280:480:true",
+            "activate:a",
+            "release:a",
+            "minimize:a",
+            "monitor:Cursor",
+            "place:a:-1440:32:1280:480:true",
+            "activate:a",
+        ]
+    );
+}
+
+#[test]
+fn quake_initially_attaches_the_active_instance_and_recovers_if_it_closes() {
+    let mut e = engine(Fake {
+        windows: vec![window("a"), window("b")],
+        focus: Some("b".into()),
+        ..Default::default()
+    });
+    e.toggle(&quake_profile()).unwrap();
+    assert!(!e.backend_mut().windows[0].minimized);
+    assert!(e.backend_mut().windows[1].minimized);
+    e.backend_mut().windows.retain(|w| w.id != "b");
+    e.toggle(&quake_profile()).unwrap();
+    assert_eq!(e.backend_mut().focus.as_deref(), Some("a"));
+    assert!(
+        e.backend_mut()
+            .events
+            .windows(2)
+            .any(|pair| pair == ["release:b", "monitor:Cursor"]),
+        "closed targets must release their retained style snapshot before a replacement is attached"
+    );
+}
+
+#[test]
+fn quake_captures_monitor_before_start_and_ignores_legacy_maximize() {
+    let mut e = engine(Fake {
+        start_windows: vec![window("new")],
+        ..Default::default()
+    });
+    let mut profile = quake_profile();
+    profile.quake.monitor = QuakeMonitor::Foreground;
+    e.toggle(&profile).unwrap();
+    assert_eq!(
+        e.backend_mut().events,
+        [
+            "monitor:Foreground",
+            "launch",
+            "place:new:-1440:32:1280:480:true",
+            "activate:new",
+        ]
+    );
+    assert_eq!(e.backend_mut().launches, 1);
+    assert!(!e.backend_mut().windows[0].maximized);
+}
+
+#[test]
+fn quake_cannot_steal_focus_after_restore_and_releases_temporary_stacking() {
+    let mut e = engine(Fake {
+        windows: vec![window("a")],
+        focus: Some("original".into()),
+        focus_after_place: Some(Some("other".into())),
+        ..Default::default()
+    });
+    let mut profile = quake_profile();
+    profile.quake.hide_on_focus_loss = true;
+    assert!(e.toggle(&profile).unwrap().contains("Focus changed"));
+    e.foreground_changed().unwrap();
+    assert_eq!(
+        e.backend_mut().events,
+        [
+            "monitor:Cursor",
+            "place:a:-1440:32:1280:480:true",
+            "release:a"
+        ]
+    );
+    assert_eq!(e.backend_mut().focus.as_deref(), Some("other"));
+    assert!(!e.backend_mut().windows[0].minimized);
+}
+
+#[test]
+fn quake_placement_and_activation_failures_release_styles_and_never_arm_blur() {
+    for deny_placement in [true, false] {
+        let mut e = engine(Fake {
+            windows: vec![window("a")],
+            deny_placement,
+            deny_focus: !deny_placement,
+            ..Default::default()
+        });
+        let mut profile = quake_profile();
+        profile.quake.hide_on_focus_loss = true;
+        assert!(e.toggle(&profile).is_err());
+        assert_eq!(
+            e.backend_mut().events.last().map(String::as_str),
+            Some("release:a")
+        );
+        e.backend_mut().focus = Some("other".into());
+        e.foreground_changed().unwrap();
+        assert!(!e.backend_mut().windows[0].minimized);
+    }
+}
+
+#[test]
+fn quake_foreground_events_recheck_focus_and_keep_owned_dialogs_open() {
+    let mut e = engine(Fake {
+        windows: vec![window("a")],
+        ..Default::default()
+    });
+    let mut profile = quake_profile();
+    profile.quake.hide_on_focus_loss = true;
+    e.toggle(&profile).unwrap();
+    e.foreground_changed().unwrap();
+    e.backend_mut().focus = None;
+    e.foreground_changed().unwrap();
+    e.backend_mut().focus = Some("dialog".into());
+    e.backend_mut().owned_dialog_for = Some("a".into());
+    e.foreground_changed().unwrap();
+    assert!(!e.backend_mut().windows[0].minimized);
+    e.backend_mut().focus = Some("other".into());
+    e.foreground_changed().unwrap();
+    assert!(e.backend_mut().windows[0].minimized);
+    assert_eq!(&e.backend_mut().events[3..], ["minimize:a", "release:a"]);
+    let count = e.backend_mut().events.len();
+    e.foreground_changed().unwrap();
+    assert_eq!(
+        e.backend_mut().events.len(),
+        count,
+        "one native change must hide only once"
+    );
+    e.toggle(&profile).unwrap();
+    e.foreground_changed().unwrap();
+    assert!(
+        !e.backend_mut().windows[0].minimized,
+        "a queued notification must read current foreground"
+    );
+}
+
+#[test]
+fn quake_reset_clears_armed_sessions_and_unsupported_mode_does_not_spawn() {
+    let mut e = engine(Fake {
+        windows: vec![window("a")],
+        ..Default::default()
+    });
+    let mut profile = quake_profile();
+    profile.quake.hide_on_focus_loss = true;
+    e.toggle(&profile).unwrap();
+    e.reset().unwrap();
+    e.backend_mut().focus = Some("other".into());
+    e.foreground_changed().unwrap();
+    assert!(!e.backend_mut().windows[0].minimized);
+    assert_eq!(
+        e.backend_mut().events.last().map(String::as_str),
+        Some("clear-quake")
+    );
+    let mut unsupported = engine(Fake {
+        quake_error: Some("unsupported".into()),
+        ..Default::default()
+    });
+    assert!(
+        unsupported
+            .toggle(&profile)
+            .unwrap_err()
+            .contains("unsupported")
+    );
+    assert_eq!(unsupported.backend_mut().launches, 0);
+}
+
+#[test]
+fn normal_profile_does_not_arm_focus_loss_actions() {
+    let mut e = engine(Fake {
+        windows: vec![window("a")],
+        ..Default::default()
+    });
+    e.toggle(&profile()).unwrap();
+    e.backend_mut().focus = Some("other".into());
+    e.foreground_changed().unwrap();
+    assert_eq!(e.backend_mut().events, ["activate:a"]);
+    assert!(!e.backend_mut().windows[0].minimized);
+}
+
+#[test]
+fn quake_refocusing_before_minimizing_cancels_auto_hide_without_changing_stacking() {
+    let mut e = engine(Fake {
+        windows: vec![window("a")],
+        ..Default::default()
+    });
+    let mut profile = quake_profile();
+    profile.quake.hide_on_focus_loss = true;
+    e.toggle(&profile).unwrap();
+    e.backend_mut().focus = Some("other".into());
+    e.backend_mut().focus_after_family_check = Some(Some("a".into()));
+    e.foreground_changed().unwrap();
+    assert!(!e.backend_mut().windows[0].minimized);
+    assert_eq!(e.backend_mut().focus.as_deref(), Some("a"));
+    assert_eq!(
+        e.backend_mut().events.last().map(String::as_str),
+        Some("activate:a")
+    );
+    assert!(
+        !e.backend_mut()
+            .events
+            .iter()
+            .any(|event| event.starts_with("release:") || event.starts_with("minimize:")),
+        "a cancelled hide must leave the shown window's stacking intact"
+    );
+}
+
+#[test]
+fn quake_window_has_one_owner_when_profiles_share_a_matcher() {
+    let mut e = engine(Fake {
+        windows: vec![window("a")],
+        ..Default::default()
+    });
+    let mut first = quake_profile();
+    first.quake.hide_on_focus_loss = true;
+    e.toggle(&first).unwrap();
+    e.backend_mut().focus = Some("other".into());
+    let mut second = quake_profile();
+    second.id = "other-profile".into();
+    second.quake.always_on_top = false;
+    e.toggle(&second).unwrap();
+    e.backend_mut().focus = Some("other".into());
+    e.foreground_changed().unwrap();
+    assert!(
+        !e.backend_mut().windows[0].minimized,
+        "old opt-in must not survive ownership transfer"
+    );
+    assert!(
+        e.backend_mut()
+            .events
+            .windows(2)
+            .any(|pair| pair == ["release:a", "place:a:-1440:32:1280:480:false"])
+    );
 }

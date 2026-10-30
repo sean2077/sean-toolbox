@@ -79,20 +79,45 @@ impl UiProcess {
                         },
                         2_000,
                     );
-                    match response {
+                    let failure = match response {
                         Ok(response) if response.ok => {
                             notify(Ok(()));
                             continue;
                         }
-                        _ => {
-                            // An unresponsive existing UI is reported, never duplicated or killed here.
-                            notify(Err(
-                                "界面未响应，请关闭界面后重试 / The existing UI is not responding"
-                                    .into(),
-                            ));
+                        Ok(response) => response.message,
+                        Err(_) => {
+                            "界面未响应，请关闭界面后重试 / The existing UI is not responding"
+                                .into()
+                        }
+                    };
+                    // Closing the last surface can end the UI between the
+                    // initial try_wait and this request. Only a confirmed exit
+                    // permits replacement; a live, unresponsive child is never
+                    // killed or duplicated to satisfy another Show request.
+                    match wait_for_exit(
+                        child.as_mut().expect("alive child checked above"),
+                        &stopping_worker,
+                        Duration::from_millis(200),
+                    ) {
+                        Ok(true) => {
+                            child = None;
+                            cleanup_endpoint(&endpoint);
+                        }
+                        Ok(false) => {
+                            if stopping_worker.load(Ordering::Relaxed) {
+                                break;
+                            }
+                            notify(Err(failure));
+                            continue;
+                        }
+                        Err(error) => {
+                            notify(Err(format!("Cannot inspect the UI process: {error}")));
                             continue;
                         }
                     }
+                }
+                if stopping_worker.load(Ordering::Relaxed) {
+                    break;
                 }
                 generation += 1;
                 let id = format!("sean-toolbox-ui-{}-{generation}", std::process::id());
@@ -189,6 +214,27 @@ impl UiProcess {
     }
 }
 
+fn wait_for_exit(
+    child: &mut Child,
+    stopping: &AtomicBool,
+    grace: Duration,
+) -> std::io::Result<bool> {
+    let started = Instant::now();
+    let mut pause = Duration::from_millis(5);
+    loop {
+        if child.try_wait()?.is_some() {
+            return Ok(true);
+        }
+        if stopping.load(Ordering::Relaxed) || started.elapsed() >= grace {
+            return Ok(false);
+        }
+        // Retry only after failed activation, with a small fixed total budget.
+        // Normal warm activation does not pay this delay or start a poller.
+        thread::sleep(pause.min(grace.saturating_sub(started.elapsed())));
+        pause = (pause * 2).min(Duration::from_millis(40));
+    }
+}
+
 fn cleanup_endpoint(endpoint: &str) {
     #[cfg(unix)]
     {
@@ -210,5 +256,81 @@ impl Drop for UiProcess {
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    struct ControlledChild(Child);
+
+    impl ControlledChild {
+        fn new() -> Self {
+            // A test-owned child blocked on its private stdin, with no desktop
+            // connection, user configuration or timing-dependent startup work.
+            Self(
+                Command::new("/bin/sh")
+                    .args(["-c", "read value"])
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .unwrap(),
+            )
+        }
+    }
+
+    impl Drop for ControlledChild {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    #[test]
+    fn an_exiting_owned_child_is_reaped_before_replacement() {
+        let mut child = ControlledChild::new();
+        assert!(child.0.try_wait().unwrap().is_none());
+        child
+            .0
+            .stdin
+            .as_mut()
+            .unwrap()
+            .write_all(b"close\n")
+            .unwrap();
+        assert!(
+            wait_for_exit(
+                &mut child.0,
+                &AtomicBool::new(false),
+                Duration::from_secs(2),
+            )
+            .unwrap()
+        );
+        assert!(child.0.try_wait().unwrap().unwrap().success());
+    }
+
+    #[test]
+    fn a_live_unresponsive_child_remains_owned_and_running() {
+        let mut child = ControlledChild::new();
+        assert!(
+            !wait_for_exit(
+                &mut child.0,
+                &AtomicBool::new(false),
+                Duration::from_millis(20),
+            )
+            .unwrap()
+        );
+        assert!(child.0.try_wait().unwrap().is_none());
+    }
+
+    #[test]
+    fn supervisor_shutdown_cancels_the_exit_grace_wait() {
+        let mut child = ControlledChild::new();
+        assert!(
+            !wait_for_exit(&mut child.0, &AtomicBool::new(true), Duration::from_secs(2),).unwrap()
+        );
+        assert!(child.0.try_wait().unwrap().is_none());
     }
 }

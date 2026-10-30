@@ -67,11 +67,13 @@ def package(system: str, architecture: str, binary_dir: Path, output: Path) -> P
             (app / "Contents").mkdir(parents=True)
             with (app / "Contents/Info.plist").open("wb") as target:
                 plistlib.dump(info, target, sort_keys=False)
+            copy_file(REPO / "packaging/icons/sean-toolbox.icns", app / "Contents/Resources/sean-toolbox.icns")
             copy_file(REPO / "packaging/macos/README.md", root / "INSTALL.md")
         elif system == "linux":
             binary_target = root / "bin"
             copy_file(REPO / "packaging/linux/sean-toolbox.desktop", root / "share/applications/sean-toolbox.desktop")
             copy_file(REPO / "packaging/sean-toolbox.svg", root / "share/icons/hicolor/scalable/apps/sean-toolbox.svg")
+            copy_file(REPO / "packaging/icons/sean-toolbox.png", root / "share/icons/hicolor/256x256/apps/sean-toolbox.png")
             copy_file(REPO / "packaging/linux/README.md", root / "INSTALL.md")
         else:
             binary_target = root

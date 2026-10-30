@@ -10,6 +10,8 @@
     <string>sean-toolbox</string>
     <key>CFBundleIdentifier</key>
     <string>com.sean2077.toolbox</string>
+    <key>CFBundleIconFile</key>
+    <string>sean-toolbox.icns</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

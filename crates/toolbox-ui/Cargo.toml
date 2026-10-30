@@ -22,6 +22,7 @@ rfd = { version = "=0.17.2", default-features = false, features = ["xdg-portal"]
 
 [build-dependencies]
 slint-build = "=1.18.1"
+cc = "=1.10.0"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }

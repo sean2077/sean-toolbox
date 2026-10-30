@@ -345,6 +345,29 @@ fn open_link(index: i32) -> Result<(), String> {
     }
 }
 
+fn activation_reply(receive: &Receiver<Response>, stopping: &AtomicBool) -> Response {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    loop {
+        if stopping.load(Ordering::Acquire) {
+            return Response::error("UI is closing");
+        }
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return Response::error("UI did not acknowledge activation");
+        }
+        // Only an in-flight request waits here. After the event loop exits its
+        // queued reply sender may remain alive, so do not hold process memory
+        // until the full activation deadline while shutdown joins this thread.
+        match receive.recv_timeout(remaining.min(std::time::Duration::from_millis(20))) {
+            Ok(response) => return response,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                return Response::error("UI did not acknowledge activation");
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+        }
+    }
+}
+
 pub fn serve(endpoint_id: String, stopping: Arc<AtomicBool>) {
     let result = (|| -> Result<(), String> {
         let endpoint =
@@ -371,9 +394,7 @@ pub fn serve(endpoint_id: String, stopping: Arc<AtomicBool>) {
                     reply,
                 });
             }
-            let response = receive
-                .recv_timeout(std::time::Duration::from_secs(3))
-                .unwrap_or_else(|_| Response::error("UI did not acknowledge activation"));
+            let response = activation_reply(&receive, &stopping);
             let _ = connection.send(&response);
         }
         Ok(())
@@ -388,5 +409,34 @@ pub fn stop_server(endpoint_id: &str) {
     // its own socket rather than leaving a new stale path for every UI launch.
     if let Ok(endpoint) = toolbox_ipc::current_user_endpoint(endpoint_id) {
         let _ = toolbox_ipc::connect_local(&endpoint, 200);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shutdown_does_not_wait_for_a_reply_retained_by_a_stopped_ui_loop() {
+        let (_retained_sender, receive) = std::sync::mpsc::channel();
+        let stopping = AtomicBool::new(true);
+        let response = activation_reply(&receive, &stopping);
+        assert!(!response.ok);
+        assert_eq!(response.message, "UI is closing");
+    }
+
+    #[test]
+    fn activation_ack_is_preserved_and_disconnection_is_reported() {
+        let (send, receive) = std::sync::mpsc::channel();
+        let stopping = AtomicBool::new(false);
+        send.send(Response {
+            ok: true,
+            revision: 17,
+            ..Response::default()
+        })
+        .unwrap();
+        assert_eq!(activation_reply(&receive, &stopping).revision, 17);
+        drop(send);
+        assert!(!activation_reply(&receive, &stopping).ok);
     }
 }

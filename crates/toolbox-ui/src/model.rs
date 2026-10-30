@@ -1,5 +1,8 @@
 //! UI-owned input handling. Parsing is deliberately separate from execution.
-use toolbox_core::{AppProfile, Config, LaunchCommand, Platform, UiPage};
+use toolbox_core::{
+    AppProfile, Config, LaunchCommand, Platform, QuakeAlignment, QuakeEdge, QuakeMonitor,
+    ThemePreference, UiPage,
+};
 
 pub const MAX_IMPORT_BYTES: usize = 1024 * 1024;
 
@@ -93,6 +96,39 @@ impl ImportedConfig {
                 profile.id,
                 profile.matcher
             ));
+            if profile.quake.enabled {
+                let q = &profile.quake;
+                out.push_str(&if english {
+                    format!(
+                        "  Quake: {:?}, {}% × {}%, {:?} display, topmost={}, auto-hide={}\n",
+                        q.edge,
+                        q.width_percent,
+                        q.height_percent,
+                        q.monitor,
+                        q.always_on_top,
+                        q.hide_on_focus_loss
+                    )
+                } else {
+                    format!(
+                        "  Quake 停靠：{}，宽 {}% × 高 {}%，显示器={}，置顶={}，失焦收起={}\n",
+                        match q.edge {
+                            QuakeEdge::Top => "顶部",
+                            QuakeEdge::Bottom => "底部",
+                            QuakeEdge::Left => "左侧",
+                            QuakeEdge::Right => "右侧",
+                        },
+                        q.width_percent,
+                        q.height_percent,
+                        match q.monitor {
+                            QuakeMonitor::Cursor => "鼠标所在",
+                            QuakeMonitor::Foreground => "前台窗口所在",
+                            QuakeMonitor::Primary => "主屏",
+                        },
+                        q.always_on_top,
+                        q.hide_on_focus_loss
+                    )
+                });
+            }
             for (index, command) in profile.launch.iter().enumerate() {
                 out.push_str(&format!(
                     "  {}. {} {}\n",
@@ -107,9 +143,9 @@ impl ImportedConfig {
         }
         if let Some(config) = &self.config {
             out.push_str(&if english {
-                format!("\nJSON settings: language={}, shortcut={}, autostart={}, projects={}, windows={}, UI idle={} s\n", config.language, config.launcher_hotkey, config.autostart, config.projects_enabled, config.windows_enabled, config.ui_idle_seconds)
+                format!("\nJSON settings: language={}, theme={:?}, shortcut={}, autostart={}, projects={}, windows={}, UI idle={} s\n", config.language, config.theme, config.launcher_hotkey, config.autostart, config.projects_enabled, config.windows_enabled, config.ui_idle_seconds)
             } else {
-                format!("\nJSON 通用设置：语言={}，唤出快捷键={}，自启={}，项目模块={}，窗口模块={}，界面释放={} 秒\n", config.language, config.launcher_hotkey, config.autostart, config.projects_enabled, config.windows_enabled, config.ui_idle_seconds)
+                format!("\nJSON 通用设置：语言={}，主题={}，唤出快捷键={}，自启={}，项目模块={}，窗口模块={}，界面释放={} 秒\n", config.language, match config.theme { ThemePreference::System => "跟随系统", ThemePreference::Light => "浅色", ThemePreference::Dark => "深色" }, config.launcher_hotkey, config.autostart, config.projects_enabled, config.windows_enabled, config.ui_idle_seconds)
             });
         }
         if !self.warnings.is_empty() {
@@ -174,6 +210,72 @@ pub fn platform_from_index(index: i32) -> Platform {
         0 => Platform::Windows,
         1 => Platform::Macos,
         _ => Platform::Linux,
+    }
+}
+
+pub fn theme_index(theme: ThemePreference) -> i32 {
+    match theme {
+        ThemePreference::System => 0,
+        ThemePreference::Light => 1,
+        ThemePreference::Dark => 2,
+    }
+}
+
+pub fn theme_from_index(index: i32) -> ThemePreference {
+    match index {
+        1 => ThemePreference::Light,
+        2 => ThemePreference::Dark,
+        _ => ThemePreference::System,
+    }
+}
+
+pub fn quake_edge_index(edge: QuakeEdge) -> i32 {
+    match edge {
+        QuakeEdge::Top => 0,
+        QuakeEdge::Bottom => 1,
+        QuakeEdge::Left => 2,
+        QuakeEdge::Right => 3,
+    }
+}
+
+pub fn quake_edge_from_index(index: i32) -> QuakeEdge {
+    match index {
+        1 => QuakeEdge::Bottom,
+        2 => QuakeEdge::Left,
+        3 => QuakeEdge::Right,
+        _ => QuakeEdge::Top,
+    }
+}
+
+pub fn quake_alignment_index(alignment: QuakeAlignment) -> i32 {
+    match alignment {
+        QuakeAlignment::Start => 0,
+        QuakeAlignment::Center => 1,
+        QuakeAlignment::End => 2,
+    }
+}
+
+pub fn quake_alignment_from_index(index: i32) -> QuakeAlignment {
+    match index {
+        0 => QuakeAlignment::Start,
+        2 => QuakeAlignment::End,
+        _ => QuakeAlignment::Center,
+    }
+}
+
+pub fn quake_monitor_index(monitor: QuakeMonitor) -> i32 {
+    match monitor {
+        QuakeMonitor::Cursor => 0,
+        QuakeMonitor::Foreground => 1,
+        QuakeMonitor::Primary => 2,
+    }
+}
+
+pub fn quake_monitor_from_index(index: i32) -> QuakeMonitor {
+    match index {
+        1 => QuakeMonitor::Foreground,
+        2 => QuakeMonitor::Primary,
+        _ => QuakeMonitor::Cursor,
     }
 }
 pub fn page_index(page: UiPage) -> i32 {

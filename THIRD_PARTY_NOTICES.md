@@ -23,6 +23,17 @@ Rust implementation. The INI importer was adapted from the prior uTools importer
 at commit `eaffe0312b1f266a27f6878545389eac4737e4b2`; the original notice is retained
 in `licenses/WinGuake-MIT.txt`. No AutoHotkey or Koffi runtime is included.
 
+## Windows Terminal Quake
+
+Source: <https://github.com/flyingpie/windows-terminal-quake>, commit
+`5a30af25040de90dd833388036a15e93e3ead527` (MIT).
+
+The per-application Quake mode, attached-window interaction, relative geometry,
+and monitor choices were informed by this project. Sean Toolbox implements them
+independently in its Rust desktop backends, using display work areas and native
+Windows foreground notifications. No WTQ source, assets, .NET runtime, polling
+focus tracker, or window animation implementation is included.
+
 ## Slint
 
 Source: <https://github.com/slint-ui/slint/tree/v1.18.1>.

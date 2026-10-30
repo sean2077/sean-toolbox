@@ -1,11 +1,16 @@
 //! Win32 backend. Requests ordinary foreground activation; it never injects
 //! keys, attaches input threads, or changes foreground-lock policy.
-use crate::backend::{Desktop, Window};
+use crate::backend::{Desktop, Window, WindowRect};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::{Duration, Instant};
-use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, HWND, LPARAM};
+use toolbox_core::{QuakeConfig, QuakeMonitor};
+use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, HWND, LPARAM, POINT, RECT};
 use windows_sys::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute};
+use windows_sys::Win32::Graphics::Gdi::{
+    GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTOPRIMARY, MONITORINFO,
+    MonitorFromPoint, MonitorFromWindow,
+};
 use windows_sys::Win32::System::Threading::{
     GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
 };
@@ -13,12 +18,14 @@ use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
 pub(crate) struct WindowsDesktop {
     restore_maximized: HashMap<String, bool>,
+    quake_topmost: HashMap<String, bool>,
 }
 
 impl WindowsDesktop {
     pub(crate) fn new() -> Result<Self, String> {
         let mut desktop = Self {
             restore_maximized: HashMap::new(),
+            quake_topmost: HashMap::new(),
         };
         desktop.check_available()?;
         Ok(desktop)
@@ -90,6 +97,53 @@ impl WindowsDesktop {
             (GetWindowPlacement(hwnd, &mut placement) != 0).then_some(placement)
         }
     }
+    fn topmost(hwnd: HWND) -> bool {
+        // SAFETY: querying window style is safe for a stale HWND as well.
+        #[cfg(target_pointer_width = "64")]
+        let style = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } as u32;
+        #[cfg(target_pointer_width = "32")]
+        let style = unsafe { GetWindowLongW(hwnd, GWL_EXSTYLE) } as u32;
+        style & WS_EX_TOPMOST != 0
+    }
+    fn position(hwnd: HWND, bounds: WindowRect, move_only: bool) -> Result<(), String> {
+        let flags = SWP_NOACTIVATE
+            | SWP_NOZORDER
+            | SWP_ASYNCWINDOWPOS
+            | if move_only { SWP_NOSIZE } else { 0 };
+        // SAFETY: coordinates were bounded by quake_bounds; Win32 validates HWND.
+        if unsafe {
+            SetWindowPos(
+                hwnd,
+                std::ptr::null_mut(),
+                bounds.x,
+                bounds.y,
+                bounds.width as i32,
+                bounds.height as i32,
+                flags,
+            )
+        } == 0
+        {
+            return Err(format!("SetWindowPos: {}", std::io::Error::last_os_error()));
+        }
+        Ok(())
+    }
+    fn at_bounds(hwnd: HWND, bounds: WindowRect, position_only: bool) -> bool {
+        let mut actual = RECT::default();
+        if unsafe { GetWindowRect(hwnd, &mut actual) } == 0 {
+            return false;
+        }
+        let close = |a: i64, b: i64| (a - b).abs() <= 4;
+        close(i64::from(actual.left), i64::from(bounds.x))
+            && close(i64::from(actual.top), i64::from(bounds.y))
+            && (position_only
+                || (close(
+                    i64::from(actual.right) - i64::from(actual.left),
+                    i64::from(bounds.width),
+                ) && close(
+                    i64::from(actual.bottom) - i64::from(actual.top),
+                    i64::from(bounds.height),
+                )))
+    }
     fn wait_for(
         &self,
         id: &str,
@@ -108,6 +162,12 @@ impl WindowsDesktop {
             }
             std::thread::sleep(Duration::from_millis(20));
         }
+    }
+}
+
+impl Drop for WindowsDesktop {
+    fn drop(&mut self) {
+        let _ = self.clear_quake();
     }
 }
 
@@ -307,5 +367,161 @@ impl Desktop for WindowsDesktop {
             }
             std::thread::sleep(Duration::from_millis(15));
         }
+    }
+    fn check_quake(&mut self, _config: &QuakeConfig) -> Result<(), String> {
+        self.check_available()
+    }
+    fn quake_work_area(&mut self, monitor: QuakeMonitor) -> Result<WindowRect, String> {
+        // Capture on the worker before restore/activation changes foreground.
+        let handle = unsafe {
+            match monitor {
+                QuakeMonitor::Cursor => {
+                    let mut point = POINT::default();
+                    if GetCursorPos(&mut point) == 0 {
+                        return Err(format!("GetCursorPos: {}", std::io::Error::last_os_error()));
+                    }
+                    MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST)
+                }
+                QuakeMonitor::Foreground => {
+                    MonitorFromWindow(GetForegroundWindow(), MONITOR_DEFAULTTOPRIMARY)
+                }
+                QuakeMonitor::Primary => {
+                    MonitorFromWindow(std::ptr::null_mut(), MONITOR_DEFAULTTOPRIMARY)
+                }
+            }
+        };
+        let mut info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        if handle.is_null() || unsafe { GetMonitorInfoW(handle, &mut info) } == 0 {
+            return Err(format!(
+                "GetMonitorInfoW: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        let width = u32::try_from(i64::from(info.rcWork.right) - i64::from(info.rcWork.left))
+            .map_err(|_| "Invalid Windows monitor work area")?;
+        let height = u32::try_from(i64::from(info.rcWork.bottom) - i64::from(info.rcWork.top))
+            .map_err(|_| "Invalid Windows monitor work area")?;
+        Ok(WindowRect {
+            x: info.rcWork.left,
+            y: info.rcWork.top,
+            width,
+            height,
+        })
+    }
+    fn place_quake(
+        &mut self,
+        id: &str,
+        bounds: WindowRect,
+        always_on_top: bool,
+    ) -> Result<(), String> {
+        let hwnd = self.validate(id)?;
+        // Restoration must remove maximization before applying the requested
+        // work-area fraction; keep ordinary (non-Quake) restore behavior intact.
+        if unsafe { IsIconic(hwnd) != 0 || IsZoomed(hwnd) != 0 } {
+            if unsafe { ShowWindowAsync(hwnd, SW_RESTORE) } == 0 {
+                return Err(format!(
+                    "ShowWindowAsync: {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+            self.wait_for(id, "恢复下拉窗口", |h| unsafe {
+                IsIconic(h) == 0 && IsZoomed(h) == 0
+            })?;
+            self.restore_maximized.remove(id);
+        }
+        // Move first and acknowledge the monitor transition. Windows delivers
+        // WM_DPICHANGED on cross-monitor movement; only then set the final size.
+        Self::position(self.validate(id)?, bounds, true)?;
+        self.wait_for(id, "移动到显示器", |h| {
+            Self::at_bounds(h, bounds, true)
+        })?;
+        Self::position(self.validate(id)?, bounds, false)?;
+        self.wait_for(id, "调整下拉尺寸", |h| {
+            Self::at_bounds(h, bounds, false)
+        })?;
+        if always_on_top {
+            let hwnd = self.validate(id)?;
+            self.quake_topmost
+                .entry(id.into())
+                .or_insert_with(|| Self::topmost(hwnd));
+            if unsafe {
+                SetWindowPos(
+                    hwnd,
+                    HWND_TOPMOST,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS,
+                )
+            } == 0
+            {
+                return Err(format!(
+                    "SetWindowPos topmost: {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+            self.wait_for(id, "置顶", Self::topmost)?;
+        }
+        Ok(())
+    }
+    fn release_quake(&mut self, id: &str) -> Result<(), String> {
+        let Some(original) = self.quake_topmost.get(id).copied() else {
+            return Ok(());
+        };
+        let Ok(hwnd) = self.validate(id) else {
+            // Never apply a saved style to a recycled or inaccessible handle.
+            self.quake_topmost.remove(id);
+            return Ok(());
+        };
+        let level = if original {
+            HWND_TOPMOST
+        } else {
+            HWND_NOTOPMOST
+        };
+        if unsafe {
+            SetWindowPos(
+                hwnd,
+                level,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS,
+            )
+        } == 0
+        {
+            return Err(format!(
+                "Restore window stacking: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        self.wait_for(id, "恢复窗口层级", |h| Self::topmost(h) == original)?;
+        self.quake_topmost.remove(id);
+        Ok(())
+    }
+    fn clear_quake(&mut self) -> Result<(), String> {
+        let ids = self.quake_topmost.keys().cloned().collect::<Vec<_>>();
+        let errors = ids
+            .iter()
+            .filter_map(|id| self.release_quake(id).err())
+            .collect::<Vec<_>>();
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join("\n"))
+        }
+    }
+    fn is_foreground_family(&mut self, id: &str) -> Result<bool, String> {
+        let hwnd = self.validate(id)?;
+        let foreground = unsafe { GetForegroundWindow() };
+        if foreground.is_null() {
+            return Ok(true);
+        }
+        Ok(hwnd == foreground
+            || unsafe { GetAncestor(hwnd, GA_ROOTOWNER) == GetAncestor(foreground, GA_ROOTOWNER) })
     }
 }

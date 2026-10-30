@@ -8,11 +8,16 @@
 
 ## 界面预览
 
-![快捷键最近项目面板](docs/images/project-launcher.png)
+![深色快捷键最近项目面板](docs/images/project-launcher-dark.png)
 
 快捷键唤出独立的紧凑搜索面板，按名称或路径快速回到最近项目。
 应用配置与设置使用完整管理窗口，保留左侧导航和独立编辑区。
-更多界面：[管理窗口中的项目页](docs/images/projects.png) · [应用编辑](docs/images/window-editor.png) · [设置](docs/images/settings.png)。
+
+| 浅色主题 | 深色主题 |
+| --- | --- |
+| ![浅色设置](docs/images/settings-light.png) | ![深色设置](docs/images/settings-dark.png) |
+
+更多界面：[管理窗口中的项目页](docs/images/projects.png) · [应用编辑](docs/images/window-editor.png) · [Quake 停靠编辑器](docs/images/quake-editor.png)。
 截图来自真实 Slint 窗口，使用隔离测试配置与示例项目；字体、标题栏及缩放随系统变化。
 
 ## 功能
@@ -27,6 +32,22 @@
 - 启动过程中如果用户主动切到别的窗口，停止自动抢焦点。系统拒绝激活时显示真实错误。
 
 默认示例：WezTerm `F3`、VS Code `F4`、Chrome `F5`。请按实际安装路径调整。Windows 会尝试这些应用的常用安装目录；macOS 使用 `/Applications`；Linux 使用 `PATH`。
+
+### Quake 停靠模式
+
+在应用编辑区开启“Quake 停靠模式”，可把终端、编辑器等常用应用固定为随时唤出的面板。
+交互参考 [Windows Terminal Quake](https://github.com/flyingpie/windows-terminal-quake)。
+
+- 同一个快捷键唤回同一个应用窗口；窗口在前台时再按一次收起，其他同应用窗口不参与循环。
+- 支持顶部、底部、左侧和右侧停靠，宽高分别设置为显示器可用工作区的 **10–100%**，并可选择起始、居中或末端对齐。
+- 支持鼠标所在显示器、前台窗口所在显示器和主显示器。每次显示重新计算位置，使用工作区避开任务栏或 Dock。
+- 编辑区实时预览布局，提供“顶部半屏”“右侧边栏”“铺满工作区”预设；尺寸与位置在下一次唤起时应用。
+- Windows / X11 可选“显示时保持置顶”。收起、停用、重新配置或退出宿主时恢复窗口原本的置顶状态。
+- Windows 可选“失去焦点时自动收起”，通过系统焦点事件触发；所属对话框获得焦点时保持显示。没有全局 Esc 拦截，终端和编辑器仍可正常使用 Esc。
+- 旧配置默认关闭 Quake 模式，继续使用原有多窗口循环。停靠模式不使用“仅新启动窗口最大化”和“继续循环”选项。
+
+macOS 支持通过辅助功能定位窗口，暂不支持外部应用置顶与失焦自动收起；Linux 需要 X11 / EWMH，显示器发现优先使用 RandR，Wayland 外部窗口控制仍不支持。
+目标应用的最小尺寸、终端字符网格和操作系统焦点策略可能影响最终大小与激活结果。平台实现细节见 [窗口模块说明](crates/toolbox-windows/README.md)。
 
 ### 最近项目
 
@@ -45,6 +66,8 @@
 
 - 默认 `Ctrl+Alt+Space` 唤出独立项目面板，也可从托盘打开项目面板、应用配置、设置和运行状态。
 - 中文默认界面，可切换英文；固定侧边导航、分组设置和独立应用编辑区。设置包含模块启停、开机启动和界面闲置释放时间。
+- 支持**跟随系统、浅色、深色**三种主题，管理窗口、最近项目面板和表单控件同步即时预览；保存后生效，撤销可恢复原主题。
+- 使用统一应用图标，包括窗口、托盘、Windows EXE、macOS 应用包和 Linux 桌面入口；macOS 菜单栏使用随系统外观着色的模板图标。
 - 应用和设置各自保留未保存的修改，导航显示修改标记；可以单独撤销设置。`Ctrl+S`（macOS 也支持 `⌘+S`）保存当前编辑页，`Ctrl+1`–`4` 切换页面。
 - INI / JSON 导入有预览，支持合并或替换应用配置；支持 JSON 导出。
 - 快捷键冲突不会覆盖当前配置；保存有版本校验和原子文件替换。
@@ -75,7 +98,11 @@ Windows 普通权限进程无法保证控制管理员权限窗口。macOS 在“
 
 Linux 文件导入/导出对话框需要可用的 XDG Desktop Portal 文件选择后端或 `zenity`；缺少后端时界面会提示错误，项目搜索与快捷键功能可独立使用。
 
-**主程序和 `sean-toolbox-ui` 必须保持在一起。** 首次打开会启动托盘宿主并显示项目面板；面板和管理窗口都收起后，默认 60 秒释放界面进程，设为 `0` 可立即释放。可见的管理窗口、未保存的草稿和正在执行的操作会阻止空闲释放。退出整个应用请使用托盘“退出工具箱”或 `sean-toolbox quit`。
+**主程序和 `sean-toolbox-ui` 必须保持在一起。** 首次打开会启动托盘宿主并显示项目面板；最后一个界面关闭后，UI 进程退出并释放其内存，负责全局快捷键和托盘的宿主继续运行。再次唤起会按需启动新的 UI 进程。
+
+新配置的界面缓存默认为 **0 秒**。可在设置中为自动失焦收起、打开项目后的自动收起配置 1–3600 秒缓存，以换取更快的热唤起；已有明确缓存值保持不变。点击系统关闭按钮、界面的“关闭界面”或按 `Esc` 主动关闭最后一个界面时，始终立即释放，不等待缓存计时。可见的另一界面、未保存的草稿、文件对话框和进行中的操作会阻止提前退出；关闭有修改的管理窗口时先确认是否放弃修改。
+
+退出整个应用请使用托盘“退出工具箱”或 `sean-toolbox quit`。
 
 当前构建没有 Windows Authenticode 签名或 macOS Developer ID 签名及公证。下载完成并不代表本机所有桌面权限已就绪，请先检查诊断页。
 
@@ -117,6 +144,23 @@ Linux 文件导入/导出对话框需要可用的 XDG Desktop Portal 文件选�
 
 旧 WinGuake INI 导入会转换常用 AHK 热键表示法，但不会执行 AHK。导入的 Windows 配置保留平台标签，在其他系统上不会自动启用。
 
+全局 `theme` 可设为 `"system"`、`"light"` 或 `"dark"`，省略时跟随系统。单个应用的 `quake` 字段可使用以下对象；省略时保持普通切换模式：
+
+```json
+{
+  "enabled": true,
+  "edge": "top",
+  "alignment": "center",
+  "width_percent": 100,
+  "height_percent": 50,
+  "monitor": "cursor",
+  "always_on_top": false,
+  "hide_on_focus_loss": false
+}
+```
+
+`edge` 支持 `top` / `bottom` / `left` / `right`；`alignment` 支持 `start` / `center` / `end`；`monitor` 支持 `cursor` / `foreground` / `primary`。启用失焦自动收起需要 Windows，启用置顶需要 Windows 或 X11。旧 JSON 无需手动迁移；导入预览会展示新增设置，合并仍只修改应用配置，完整替换才恢复通用设置。
+
 ## 命令行
 
 ```text
@@ -155,9 +199,11 @@ Linux 真窗口测试使用独立 Xvfb、Openbox 和 xterm，清理由脚本负�
 ```sh
 bash crates/toolbox-windows/tests/run-x11-smoke.sh
 python scripts/smoke_host.py --binary target/release/sean-toolbox
+python scripts/smoke_appearance.py --binary target/release/sean-toolbox
 ```
 
 第二项检查真实快捷键、配置事务、单实例、UI 释放和退出清理；附加 `--measure` 可对当前 Linux 测试环境中的空闲宿主采样 10 秒。测试自动隔离显示服务与用户目录。
+第三项验证真实界面的主题保存、窗口图标、预览撤销、关闭释放、快速重唤起，以及 Quake 预设保存后通过快捷键控制真实窗口；可用 `--scale 1.5` 检查 150% 缩放，`--screenshots <目录>` 保存截图（仅截图功能需要 ImageMagick）。
 
 构建完成后收集第三方许可并打包：
 
@@ -192,6 +238,6 @@ python scripts/package.py
 
 ## 来源和许可
 
-应用自有代码采用 [MIT](LICENSE)。项目历史读取及 IPC 源自 [Recentry](https://github.com/sean2077/recentry)，窗口行为和 INI 迁移参考 [WinGuake](https://github.com/sean2077/winguake)，保留其 MIT 许可与来源记录。
+应用自有代码采用 [MIT](LICENSE)。项目历史读取及 IPC 源自 [Recentry](https://github.com/sean2077/recentry)，窗口行为和 INI 迁移参考 [WinGuake](https://github.com/sean2077/winguake)，保留其 MIT 许可与来源记录；Quake 停靠与显示器选择交互参考 [Windows Terminal Quake](https://github.com/flyingpie/windows-terminal-quake)，以现有 Rust 原生后端独立实现。
 
 Slint 在本应用中按 Royalty-free Desktop, Mobile, and Web Applications License 2.0 使用，保留界面中的 `AboutSlint` 和本页归属徽章。详见 [第三方说明](THIRD_PARTY_NOTICES.md)；发行包另附依赖许可汇总。

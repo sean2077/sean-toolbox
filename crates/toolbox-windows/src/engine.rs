@@ -1,4 +1,4 @@
-use crate::backend::{Desktop, Window};
+use crate::backend::{Desktop, Window, WindowRect, quake_bounds};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 use toolbox_core::AppProfile;
@@ -26,9 +26,18 @@ struct Cycle {
     last_id: Option<String>,
 }
 
+#[derive(Clone)]
+struct QuakeSession {
+    target: String,
+    matcher: String,
+    hide_on_focus_loss: bool,
+    visible: bool,
+}
+
 pub struct Engine<D> {
     backend: D,
     cycles: HashMap<String, Cycle>,
+    quakes: HashMap<String, QuakeSession>,
     launches: HashMap<String, Instant>,
     options: EngineOptions,
 }
@@ -41,6 +50,7 @@ impl<D: Desktop> Engine<D> {
         Self {
             backend,
             cycles: HashMap::new(),
+            quakes: HashMap::new(),
             launches: HashMap::new(),
             options,
         }
@@ -48,8 +58,65 @@ impl<D: Desktop> Engine<D> {
     pub fn backend_mut(&mut self) -> &mut D {
         &mut self.backend
     }
-    pub fn reset(&mut self) {
+    pub fn reset(&mut self) -> Result<(), String> {
         self.cycles.clear();
+        self.quakes.clear();
+        self.backend.clear_quake()
+    }
+
+    /// Called only by a native foreground-change notification, never a timer.
+    pub fn foreground_changed(&mut self) -> Result<(), String> {
+        let armed = self
+            .quakes
+            .iter()
+            .filter(|(_, session)| session.visible && session.hide_on_focus_loss)
+            .map(|(id, session)| (id.clone(), session.clone()))
+            .collect::<Vec<_>>();
+        if armed.is_empty() || self.backend.foreground()?.is_none() {
+            return Ok(());
+        }
+        let mut errors = Vec::new();
+        for (id, session) in armed {
+            let result = (|| {
+                let windows = self.backend.windows(&session.matcher)?;
+                let Some(window) = windows.iter().find(|w| w.id == session.target) else {
+                    self.backend.release_quake(&session.target)?;
+                    self.quakes.remove(&id);
+                    return Ok(());
+                };
+                if window.minimized {
+                    self.backend.release_quake(&session.target)?;
+                    if let Some(session) = self.quakes.get_mut(&id) {
+                        session.visible = false;
+                    }
+                    return Ok(());
+                }
+                // Re-read actual focus after the inventory round trip. Dialogs
+                // owned by the target belong to the same interaction session.
+                if self.backend.foreground()?.is_some()
+                    && !self.backend.is_foreground_family(&session.target)?
+                {
+                    // A final check cancels hiding if the user refocused. Do
+                    // not change stacking until minimization actually succeeds,
+                    // or a cancelled hide would remove the visible topmost state.
+                    if self.backend.minimize_if_unfocused(&session.target)? {
+                        if let Some(session) = self.quakes.get_mut(&id) {
+                            session.visible = false;
+                        }
+                        self.backend.release_quake(&session.target)?;
+                    }
+                }
+                Ok::<(), String>(())
+            })();
+            if let Err(error) = result {
+                errors.push(error);
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors.join("\n"))
+        }
     }
 
     pub fn toggle(&mut self, profile: &AppProfile) -> Result<String, String> {
@@ -57,8 +124,19 @@ impl<D: Desktop> Engine<D> {
             return Err("Application is disabled / 该应用已禁用".into());
         }
         self.backend.check_available()?;
+        if profile.quake.enabled {
+            self.backend.check_quake(&profile.quake)?;
+        } else if let Some(session) = self.quakes.remove(&profile.id) {
+            self.backend.release_quake(&session.target)?;
+        }
         let foreground = self.backend.foreground()?;
         let windows = self.backend.windows(&profile.matcher)?;
+        if let Some(session) = self.quakes.get(&profile.id)
+            && !windows.iter().any(|window| window.id == session.target)
+        {
+            self.backend.release_quake(&session.target)?;
+            self.quakes.remove(&profile.id);
+        }
         self.launches
             .retain(|_, started| started.elapsed() < self.options.launch_cooldown);
         let launch_key = profile.matcher.to_ascii_lowercase();
@@ -74,9 +152,20 @@ impl<D: Desktop> Engine<D> {
                     self.options.launch_cooldown.as_secs()
                 ));
             }
-            return self.start(profile, foreground);
+            let placement = if profile.quake.enabled {
+                Some(quake_bounds(
+                    self.backend.quake_work_area(profile.quake.monitor)?,
+                    &profile.quake,
+                )?)
+            } else {
+                None
+            };
+            return self.start(profile, foreground, placement);
         }
         self.launches.remove(&launch_key);
+        if profile.quake.enabled {
+            return self.toggle_quake(profile, foreground, windows);
+        }
         let available: HashSet<&str> = windows.iter().map(|w| w.id.as_str()).collect();
         let previous = self.cycles.get(&profile.id);
         let mut order: Vec<String> = previous
@@ -192,10 +281,121 @@ impl<D: Desktop> Engine<D> {
         })
     }
 
+    fn hide_quake(&mut self, id: &str) -> Result<(), String> {
+        // Attempt minimization even when the style restoration failed. A
+        // backend retains failed cleanup entries for reset and process exit.
+        let style = self.backend.release_quake(id);
+        let minimized = self.backend.minimize(id);
+        match (style, minimized) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(a), Err(b)) => Err(format!("{a}\n{b}")),
+            (Err(error), _) | (_, Err(error)) => Err(error),
+        }
+    }
+
+    fn remember_quake(&mut self, profile: &AppProfile, target: &str) {
+        self.quakes
+            .retain(|id, session| id == &profile.id || session.target != target);
+        self.quakes.insert(
+            profile.id.clone(),
+            QuakeSession {
+                target: target.into(),
+                matcher: profile.matcher.clone(),
+                hide_on_focus_loss: profile.quake.hide_on_focus_loss,
+                visible: true,
+            },
+        );
+    }
+
+    fn show_quake(
+        &mut self,
+        profile: &AppProfile,
+        target: &Window,
+        foreground: &Option<String>,
+        windows: &[Window],
+        placement: WindowRect,
+    ) -> Result<bool, String> {
+        if !self.can_focus(foreground, windows)? {
+            return Ok(false);
+        }
+        if self
+            .quakes
+            .iter()
+            .any(|(id, session)| id != &profile.id && session.target == target.id)
+        {
+            self.backend.release_quake(&target.id)?;
+            self.quakes.retain(|_, session| session.target != target.id);
+            if !self.can_focus(foreground, windows)? {
+                return Ok(false);
+            }
+        }
+        let result = (|| {
+            self.backend
+                .place_quake(&target.id, placement, profile.quake.always_on_top)?;
+            if !self.can_focus(foreground, windows)? {
+                return Ok(false);
+            }
+            if !self.backend.activate(&target.id)? {
+                return Err(format!(
+                    "{}：系统拒绝激活窗口，请再次使用快捷键 / Focus request was denied",
+                    profile.name
+                ));
+            }
+            Ok(true)
+        })();
+        match result {
+            Ok(true) => {
+                self.remember_quake(profile, &target.id);
+                Ok(true)
+            }
+            other => {
+                let cleanup = self.backend.release_quake(&target.id);
+                match (other, cleanup) {
+                    (Err(a), Err(b)) => Err(format!("{a}\n{b}")),
+                    (Err(error), _) | (_, Err(error)) => Err(error),
+                    _ => Ok(false),
+                }
+            }
+        }
+    }
+
+    fn toggle_quake(
+        &mut self,
+        profile: &AppProfile,
+        foreground: Option<String>,
+        windows: Vec<Window>,
+    ) -> Result<String, String> {
+        let previous = self.quakes.get(&profile.id);
+        let target = previous
+            .and_then(|session| windows.iter().find(|w| w.id == session.target))
+            .or_else(|| windows.iter().find(|w| Some(&w.id) == foreground.as_ref()))
+            .unwrap_or(&windows[0]);
+        if foreground.as_ref() == Some(&target.id) {
+            self.hide_quake(&target.id)?;
+            self.remember_quake(profile, &target.id);
+            self.quakes
+                .get_mut(&profile.id)
+                .expect("remembered above")
+                .visible = false;
+            return Ok(format!("{}：已收起 / Hidden", profile.name));
+        }
+        let placement = quake_bounds(
+            self.backend.quake_work_area(profile.quake.monitor)?,
+            &profile.quake,
+        )?;
+        let shown = self.show_quake(profile, target, &foreground, &windows, placement)?;
+        Ok(if shown {
+            format!("{}：{} / Quake", profile.name, target.title)
+        } else {
+            format!("{}：焦点已切换，未抢占 / Focus changed", profile.name)
+        })
+    }
+
     fn start(
         &mut self,
         profile: &AppProfile,
         foreground: Option<String>,
+        placement: Option<WindowRect>,
     ) -> Result<String, String> {
         let mut errors = Vec::new();
         let mut launched = false;
@@ -222,7 +422,10 @@ impl<D: Desktop> Engine<D> {
             let windows = self.backend.windows(&profile.matcher)?;
             if let Some(target) = windows.first() {
                 let mut activated = false;
-                if self.can_focus(&foreground, &windows)? {
+                if let Some(placement) = placement {
+                    activated =
+                        self.show_quake(profile, target, &foreground, &windows, placement)?;
+                } else if self.can_focus(&foreground, &windows)? {
                     // Maximizing itself can activate a native window. The
                     // guard must precede maximize as well as explicit focus.
                     if profile.maximize && !target.maximized {

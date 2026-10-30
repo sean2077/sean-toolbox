@@ -1,6 +1,8 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod autostart;
+#[cfg(any(windows, test))]
+mod focus_watch;
 mod hotkeys;
 mod runtime;
 mod ui_process;

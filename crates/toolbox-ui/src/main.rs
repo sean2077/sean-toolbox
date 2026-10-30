@@ -5,7 +5,9 @@ mod worker;
 
 use model::{
     ImportedConfig, launch_command, next_profile_id, page_from_index, page_index,
-    platform_from_index, platform_index, platform_name,
+    platform_from_index, platform_index, platform_name, quake_alignment_from_index,
+    quake_alignment_index, quake_edge_from_index, quake_edge_index, quake_monitor_from_index,
+    quake_monitor_index, theme_from_index, theme_index,
 };
 use slint::{
     ComponentHandle, Model, ModelRc, SharedString, Timer, TimerMode, VecModel,
@@ -21,7 +23,10 @@ use std::{
     },
     time::Duration,
 };
-use toolbox_core::{AppProfile, Config, HostStatus, LaunchCommand, Platform, Response, UiPage};
+use toolbox_core::{
+    AppProfile, Config, HostStatus, LaunchCommand, Platform, QuakeConfig, Response,
+    ThemePreference, UiPage,
+};
 use worker::{DialogKind, Event, SaveKind, Work};
 
 slint::include_modules!();
@@ -44,7 +49,7 @@ pub(crate) fn post(event: Event) {
 
 #[derive(Clone)]
 enum ConfirmAction {
-    Hide,
+    Close,
     Edit(i32),
     New,
     CancelEdit,
@@ -156,10 +161,13 @@ struct State {
     confirmation: Option<ConfirmAction>,
     dialog_open: bool,
     visible: bool,
+    release_requested: bool,
+    exit_requested: bool,
     launcher_visible: bool,
     launcher_had_focus: bool,
     launcher_session: u64,
     launcher_placement_pending: bool,
+    launcher_placement_attempts: u8,
     launcher_display: Option<DisplayArea>,
     project_open_target: Option<ProjectOpenTarget>,
     toggling: bool,
@@ -217,8 +225,10 @@ impl Controller {
             let mut state = self.state.borrow_mut();
             state.launcher_had_focus &= state.launcher_visible;
             state.launcher_visible = true;
+            state.release_requested = false;
             state.launcher_session = state.launcher_session.wrapping_add(1);
             state.launcher_placement_pending = true;
+            state.launcher_placement_attempts = 0;
             state.launcher_display = active_display_area();
         }
         ui.set_query("".into());
@@ -258,11 +268,11 @@ impl Controller {
             return;
         }
         self.place_launcher();
+        self.apply_native_theme();
         let launcher = self.launcher();
         let focused = launcher
             .window()
             .with_winit_window(|window| {
-                window.set_resizable(false);
                 #[cfg(windows)]
                 {
                     use winit::platform::windows::WindowExtWindows;
@@ -279,18 +289,20 @@ impl Controller {
     }
 
     fn place_launcher(&self) {
-        let (visible, pending, requested_area) = {
+        let (visible, pending, requested_area, attempts) = {
             let state = self.state.borrow();
             (
                 state.launcher_visible,
                 state.launcher_placement_pending,
                 state.launcher_display,
+                state.launcher_placement_attempts,
             )
         };
         if !visible || !pending {
             return;
         }
         let launcher = self.launcher();
+        let mut resize_request = None;
         let placed = launcher.window().with_winit_window(|window| {
             let monitor = requested_area
                 .and_then(|area| {
@@ -322,6 +334,12 @@ impl Controller {
                 ((f64::from(launcher.get_panel_width()) * scale).round() as u32).min(area.width);
             let height =
                 ((f64::from(launcher.get_panel_height()) * scale).round() as u32).min(area.height);
+            let size = winit::dpi::PhysicalSize::new(width, height);
+            if window.inner_size() != size {
+                // X11 locks a non-resizable window to its current physical
+                // size. Release that constraint before requesting a new size.
+                window.set_resizable(true);
+            }
             let (x, y) = centered_position(area, width, height);
             window.set_outer_position(winit::dpi::PhysicalPosition::new(x, y));
             // Move before resizing: Windows rescales the old physical size in
@@ -329,12 +347,28 @@ impl Controller {
             if (window.scale_factor() - monitor.scale_factor()).abs() > f64::EPSILON {
                 return false;
             }
-            let size = winit::dpi::PhysicalSize::new(width, height);
             if window.inner_size() != size {
-                let _ = window.request_inner_size(size);
+                if attempts < 4 {
+                    // Keep placement pending until Resized confirms the size;
+                    // locking here would freeze the old minimum on X11.
+                    resize_request = Some(slint::PhysicalSize::new(width, height));
+                    return false;
+                }
+                // A small display or the window manager may enforce a larger
+                // minimum. Center the actual window without a resize loop.
+                let actual = window.inner_size();
+                let (x, y) = centered_position(area, actual.width, actual.height);
+                window.set_outer_position(winit::dpi::PhysicalPosition::new(x, y));
             }
+            window.set_resizable(false);
             true
         });
+        if let Some(size) = resize_request {
+            self.state.borrow_mut().launcher_placement_attempts += 1;
+            // Slint records an explicit, in-flight size request, preventing a
+            // later property update from restoring obsolete logical dimensions.
+            launcher.window().set_size(size);
+        }
         if placed == Some(true) {
             self.state.borrow_mut().launcher_placement_pending = false;
         }
@@ -345,6 +379,9 @@ impl Controller {
             let mut state = self.state.borrow_mut();
             if !state.launcher_visible {
                 return;
+            }
+            if !state.launcher_placement_pending {
+                state.launcher_placement_attempts = 0;
             }
             state.launcher_placement_pending = true;
             state.launcher_session
@@ -424,6 +461,13 @@ impl Controller {
         }
     }
 
+    fn close_launcher(&self) {
+        // Explicit dismissal releases the UI even when automatic dismissal has
+        // a configured warm-cache delay. Other surfaces/drafts still guard it.
+        self.state.borrow_mut().release_requested = true;
+        self.hide_launcher();
+    }
+
     fn send(&self, work: Work) {
         if self.work.send(work).is_err() {
             let ui = self.ui();
@@ -466,6 +510,11 @@ impl Controller {
     }
 
     fn show(&self, page: UiPage, refresh: bool) -> Result<(), String> {
+        if self.state.borrow().exit_requested {
+            // quit_event_loop queues a terminal event; showing a window cannot
+            // retract it. Let the supervisor replace us after confirmed exit.
+            return Err("UI is closing".into());
+        }
         let ui = self.ui();
         // Activation must not move the page underneath an open modal dialog.
         let modal = ui.get_confirm_visible() || ui.get_import_visible() || ui.get_dialog_busy();
@@ -473,13 +522,18 @@ impl Controller {
             return self.show_launcher(refresh);
         }
         self.idle_timer.stop();
-        self.state.borrow_mut().visible = true;
+        {
+            let mut state = self.state.borrow_mut();
+            state.visible = true;
+            state.release_requested = false;
+        }
         self.hide_launcher();
         if !modal {
             ui.set_page(page_index(page));
         }
         ui.window().set_minimized(false);
         ui.show().map_err(|e| e.to_string())?;
+        self.apply_native_theme();
         ui.window()
             .with_winit_window(|window| window.focus_window());
         ui.invoke_focus_page();
@@ -532,15 +586,20 @@ impl Controller {
             self.cancel_import();
         } else if self.dirty() {
             self.ask(
-                ConfirmAction::Hide,
+                ConfirmAction::Close,
                 "放弃尚未保存的修改？",
                 "Discard unsaved changes?",
-                "收起后界面将按设置释放，尚未保存的修改会丢失。",
-                "The hidden UI will unload; unsaved changes will be lost.",
+                "关闭界面会释放内存，尚未保存的修改会丢失。",
+                "Closing releases the UI from memory; unsaved changes will be lost.",
             );
         } else {
-            self.hide();
+            self.close_manager();
         }
+    }
+
+    fn close_manager(&self) {
+        self.state.borrow_mut().release_requested = true;
+        self.hide();
     }
 
     fn hide(&self) {
@@ -552,26 +611,41 @@ impl Controller {
         self.schedule_unload();
     }
 
-    fn schedule_unload(&self) {
+    fn unload_delay(&self) -> Option<Duration> {
         let state = self.state.borrow();
-        if state.visible
+        if state.exit_requested
+            || state.visible
             || state.launcher_visible
             || state.toggling
+            || state.dialog_open
             || self.ui().get_project_opening()
             || self.ui().get_saving()
             || self.dirty()
         {
-            return;
+            return None;
         }
-        let delay = state.config.ui_idle_seconds;
-        drop(state);
-        if delay == 0 {
-            let _ = slint::quit_event_loop();
+        Some(Duration::from_secs(if state.release_requested {
+            0
         } else {
-            self.idle_timer
-                .start(TimerMode::SingleShot, Duration::from_secs(delay), || {
-                    let _ = slint::quit_event_loop();
+            state.config.ui_idle_seconds
+        }))
+    }
+
+    fn schedule_unload(&self) {
+        self.idle_timer.stop();
+        if let Some(delay) = self.unload_delay() {
+            // Recheck at the event-loop boundary: a new summon or operation may
+            // arrive after dismissal but before this timer is dispatched.
+            self.idle_timer.start(TimerMode::SingleShot, delay, || {
+                with_controller(|controller| {
+                    if controller.unload_delay().is_some() {
+                        controller.state.borrow_mut().exit_requested = true;
+                        if slint::quit_event_loop().is_err() {
+                            controller.state.borrow_mut().exit_requested = false;
+                        }
+                    }
                 });
+            });
         }
     }
 
@@ -581,6 +655,8 @@ impl Controller {
         let config = &state.config;
         ui.set_english(config.language == "en");
         ui.set_setting_language(i32::from(config.language == "en"));
+        ui.set_setting_theme(theme_index(config.theme));
+        self.apply_theme();
         ui.set_setting_hotkey(config.launcher_hotkey.clone().into());
         ui.set_setting_autostart(config.autostart);
         ui.set_setting_projects(config.projects_enabled);
@@ -762,9 +838,32 @@ impl Controller {
         let ui = self.ui();
         ui.set_settings_dirty(true);
         ui.set_english(ui.get_setting_language() == 1);
+        self.apply_theme();
         self.update_match_help();
         self.sync_candidate_labels();
         self.sync_diagnostics();
+    }
+
+    fn apply_theme(&self) {
+        let scheme = match theme_from_index(self.ui().get_setting_theme()) {
+            ThemePreference::System => slint::language::ColorScheme::Unknown,
+            ThemePreference::Light => slint::language::ColorScheme::Light,
+            ThemePreference::Dark => slint::language::ColorScheme::Dark,
+        };
+        self.ui().global::<Palette>().set_color_scheme(scheme);
+        self.launcher().global::<Palette>().set_color_scheme(scheme);
+        self.apply_native_theme();
+    }
+
+    fn apply_native_theme(&self) {
+        let native = match theme_from_index(self.ui().get_setting_theme()) {
+            ThemePreference::System => None,
+            ThemePreference::Light => Some(winit::window::Theme::Light),
+            ThemePreference::Dark => Some(winit::window::Theme::Dark),
+        };
+        for window in [self.ui().window(), self.launcher().window()] {
+            window.with_winit_window(|window| window.set_theme(native));
+        }
     }
 
     fn reset_settings(&self) {
@@ -791,6 +890,7 @@ impl Controller {
             "zh-CN"
         }
         .into();
+        config.theme = theme_from_index(ui.get_setting_theme());
         config.launcher_hotkey = ui.get_setting_hotkey().trim().to_owned();
         config.autostart = ui.get_setting_autostart();
         config.projects_enabled = ui.get_setting_projects();
@@ -851,7 +951,14 @@ impl Controller {
     }
 
     fn profile_changed(&self) {
-        self.ui().set_profile_dirty(true);
+        let ui = self.ui();
+        ui.set_profile_dirty(true);
+        if ui.get_form_platform() != 0 {
+            ui.set_form_quake_auto_hide(false);
+        }
+        if ui.get_form_platform() == 1 {
+            ui.set_form_quake_topmost(false);
+        }
         self.update_match_help();
     }
 
@@ -887,6 +994,7 @@ impl Controller {
                 enabled: true,
                 maximize: false,
                 cycle_continuous: true,
+                quake: QuakeConfig::default(),
                 launch: vec![LaunchCommand {
                     executable: String::new(),
                     args: vec![],
@@ -911,6 +1019,14 @@ impl Controller {
         ui.set_form_enabled(profile.enabled);
         ui.set_form_maximize(profile.maximize);
         ui.set_form_cycle(profile.cycle_continuous);
+        ui.set_form_quake_enabled(profile.quake.enabled);
+        ui.set_form_quake_edge(quake_edge_index(profile.quake.edge));
+        ui.set_form_quake_alignment(quake_alignment_index(profile.quake.alignment));
+        ui.set_form_quake_width(i32::from(profile.quake.width_percent));
+        ui.set_form_quake_height(i32::from(profile.quake.height_percent));
+        ui.set_form_quake_monitor(quake_monitor_index(profile.quake.monitor));
+        ui.set_form_quake_topmost(profile.quake.always_on_top);
+        ui.set_form_quake_auto_hide(profile.quake.hide_on_focus_loss);
         ui.set_profile_dirty(false);
         {
             let mut state = self.state.borrow_mut();
@@ -1085,6 +1201,22 @@ impl Controller {
         profile.enabled = ui.get_form_enabled();
         profile.maximize = ui.get_form_maximize();
         profile.cycle_continuous = ui.get_form_cycle();
+        let width = ui.get_form_quake_width();
+        let height = ui.get_form_quake_height();
+        if !(10..=100).contains(&width) || !(10..=100).contains(&height) {
+            self.error("停靠宽高必须为 10–100% / Quake dimensions must be between 10 and 100%");
+            return;
+        }
+        profile.quake = QuakeConfig {
+            enabled: ui.get_form_quake_enabled(),
+            edge: quake_edge_from_index(ui.get_form_quake_edge()),
+            alignment: quake_alignment_from_index(ui.get_form_quake_alignment()),
+            width_percent: width as u8,
+            height_percent: height as u8,
+            monitor: quake_monitor_from_index(ui.get_form_quake_monitor()),
+            always_on_top: ui.get_form_quake_topmost(),
+            hide_on_focus_loss: ui.get_form_quake_auto_hide(),
+        };
         if let Some(index) = index {
             let Some(existing) = config.profiles.get_mut(index) else {
                 self.error("应用列表已变化，请重新载入 / App list changed; reload configuration");
@@ -1195,10 +1327,10 @@ impl Controller {
             return;
         }
         match action {
-            Some(ConfirmAction::Hide) => {
+            Some(ConfirmAction::Close) => {
                 self.sync_settings();
                 self.cancel_editor();
-                self.hide();
+                self.close_manager();
             }
             Some(ConfirmAction::Edit(index)) => self.begin_edit(index),
             Some(ConfirmAction::New) => self.begin_edit(-1),
@@ -1515,7 +1647,8 @@ impl Controller {
             Event::LinkOpened(result) => { if let Err(error) = result { self.error(error); } }
             Event::ServerError(error) => self.error(format!("界面唤起服务失败 / UI activation service failed: {error}")),
             Event::Ready { reply } => {
-                let _ = reply.send(Response::success("ready"));
+                let response = if self.state.borrow().exit_requested { Response::error("UI is closing") } else { Response::success("ready") };
+                let _ = reply.send(response);
             }
             Event::Show { page, reply } => {
                 let response = match self.show(page, true) { Ok(()) => Response::success("shown"), Err(error) => Response::error(error) };
@@ -1582,10 +1715,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             confirmation: None,
             dialog_open: false,
             visible: false,
+            release_requested: false,
+            exit_requested: false,
             launcher_visible: false,
             launcher_had_focus: false,
             launcher_session: 0,
             launcher_placement_pending: false,
+            launcher_placement_attempts: 0,
             launcher_display: None,
             project_open_target: None,
             toggling: false,
@@ -1633,10 +1769,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     launcher.on_select_project(|index| with_controller(|c| c.select_launcher_project(index)));
     launcher.on_open_project(|index| with_controller(|c| c.open_launcher_project(index)));
     launcher.on_move_project(|delta| with_controller(|c| c.move_project(delta)));
-    launcher.on_dismiss(|| with_controller(Controller::hide_launcher));
+    launcher.on_dismiss(|| with_controller(Controller::close_launcher));
     launcher.on_open_settings(|| with_controller(Controller::open_launcher_settings));
     launcher.window().on_close_requested(|| {
-        with_controller(Controller::hide_launcher);
+        with_controller(Controller::close_launcher);
         slint::CloseRequestResponse::KeepWindowShown
     });
     launcher.window().on_winit_window_event(|_window, event| {
@@ -1741,10 +1877,13 @@ mod tests {
                     confirmation: None,
                     dialog_open: false,
                     visible: true,
+                    release_requested: false,
+                    exit_requested: false,
                     launcher_visible: false,
                     launcher_had_focus: false,
                     launcher_session: 0,
                     launcher_placement_pending: false,
+                    launcher_placement_attempts: 0,
                     launcher_display: None,
                     project_open_target: None,
                     toggling: false,
@@ -1761,6 +1900,207 @@ mod tests {
         })
         .join()
         .unwrap();
+    }
+
+    #[test]
+    fn theme_preview_reaches_both_surfaces_and_discard_preserves_app_drafts() {
+        with_test_ui(|ui, controller, _| {
+            controller.state.borrow_mut().config.theme = ThemePreference::Light;
+            controller.sync_settings();
+            controller.begin_edit(0);
+            ui.set_launch_args("[unfinished".into());
+            controller.profile_changed();
+
+            ui.set_setting_theme(2);
+            controller.settings_changed();
+            assert!(ui.global::<Theme>().get_dark());
+            assert!(controller.launcher().global::<Theme>().get_dark());
+            assert!(ui.get_settings_dirty());
+            assert_eq!(
+                controller.state.borrow().config.theme,
+                ThemePreference::Light
+            );
+            assert_eq!(
+                controller.settings_config().unwrap().theme,
+                ThemePreference::Dark
+            );
+
+            controller.reset_settings();
+            controller.confirm(true);
+            assert_eq!(ui.get_setting_theme(), 1);
+            assert!(!ui.global::<Theme>().get_dark());
+            assert!(!controller.launcher().global::<Theme>().get_dark());
+            assert!(!ui.get_settings_dirty());
+            assert!(ui.get_profile_dirty());
+            assert_eq!(ui.get_launch_args(), "[unfinished");
+
+            ui.set_setting_theme(0);
+            controller.settings_changed();
+            assert_eq!(
+                ui.global::<Palette>().get_color_scheme(),
+                slint::language::ColorScheme::Unknown
+            );
+            assert_eq!(
+                controller.launcher().global::<Palette>().get_color_scheme(),
+                slint::language::ColorScheme::Unknown
+            );
+        });
+    }
+
+    #[test]
+    fn saving_quake_options_preserves_launch_arguments_and_pending_theme() {
+        with_test_ui(|ui, controller, receive| {
+            controller.begin_edit(0);
+            ui.set_form_platform(0);
+            ui.set_form_quake_enabled(true);
+            ui.set_form_quake_edge(3);
+            ui.set_form_quake_alignment(2);
+            ui.set_form_quake_width(40);
+            ui.set_form_quake_height(75);
+            ui.set_form_quake_monitor(1);
+            ui.set_form_quake_topmost(true);
+            ui.set_form_quake_auto_hide(true);
+            ui.set_launch_args(r#"["literal path with spaces", "$(not-a-shell)"]"#.into());
+            controller.profile_changed();
+            ui.set_setting_theme(2);
+            controller.settings_changed();
+            controller.save_profile();
+
+            let Work::Save { config, kind, .. } = receive.try_recv().unwrap() else {
+                panic!("Expected a validated app save");
+            };
+            assert_eq!(kind, SaveKind::Profile);
+            assert_eq!(config.theme, ThemePreference::System);
+            let profile = &config.profiles[0];
+            assert!(profile.quake.enabled);
+            assert_eq!(profile.quake.edge, toolbox_core::QuakeEdge::Right);
+            assert_eq!(profile.quake.alignment, toolbox_core::QuakeAlignment::End);
+            assert_eq!(
+                (profile.quake.width_percent, profile.quake.height_percent),
+                (40, 75)
+            );
+            assert_eq!(
+                profile.quake.monitor,
+                toolbox_core::QuakeMonitor::Foreground
+            );
+            assert!(profile.quake.always_on_top);
+            assert!(profile.quake.hide_on_focus_loss);
+            assert_eq!(
+                profile.launch[0].args,
+                ["literal path with spaces", "$(not-a-shell)"]
+            );
+            controller.handle(Event::Saved {
+                response: Ok(Response {
+                    ok: true,
+                    revision: 2,
+                    ..Response::default()
+                }),
+                config,
+                kind,
+            });
+            assert!(ui.get_settings_dirty());
+            assert!(ui.global::<Theme>().get_dark());
+            assert_eq!(ui.get_form_quake_width(), 40);
+            assert!(!ui.get_profile_dirty());
+        });
+    }
+
+    #[test]
+    fn unsupported_quake_controls_cannot_leak_across_platform_edits() {
+        with_test_ui(|ui, controller, receive| {
+            controller.begin_edit(0);
+            ui.set_form_platform(0);
+            ui.set_form_quake_enabled(true);
+            ui.set_form_quake_topmost(true);
+            ui.set_form_quake_auto_hide(true);
+            ui.set_form_platform(1);
+            controller.profile_changed();
+            assert!(!ui.get_form_quake_topmost());
+            assert!(!ui.get_form_quake_auto_hide());
+            ui.set_form_quake_width(0);
+            controller.save_profile();
+            assert!(ui.get_status_error());
+            assert!(receive.try_recv().is_err());
+            assert!(ui.get_profile_dirty());
+        });
+    }
+
+    #[test]
+    fn explicit_close_bypasses_cache_but_never_unloads_a_visible_or_busy_surface() {
+        with_test_ui(|ui, controller, _| {
+            controller.state.borrow_mut().config.ui_idle_seconds = 60;
+            controller.state.borrow_mut().visible = false;
+            controller.state.borrow_mut().launcher_visible = true;
+            controller.hide_launcher();
+            assert_eq!(controller.unload_delay(), Some(Duration::from_secs(60)));
+
+            controller.state.borrow_mut().launcher_visible = true;
+            controller.close_launcher();
+            assert_eq!(controller.unload_delay(), Some(Duration::ZERO));
+            controller.state.borrow_mut().visible = true;
+            assert_eq!(controller.unload_delay(), None);
+            controller.state.borrow_mut().visible = false;
+            ui.set_project_opening(true);
+            assert_eq!(controller.unload_delay(), None);
+            ui.set_project_opening(false);
+            ui.set_saving(true);
+            assert_eq!(controller.unload_delay(), None);
+            ui.set_saving(false);
+            controller.state.borrow_mut().dialog_open = true;
+            assert_eq!(controller.unload_delay(), None);
+            controller.state.borrow_mut().dialog_open = false;
+            ui.set_profile_dirty(true);
+            assert_eq!(controller.unload_delay(), None);
+            ui.set_profile_dirty(false);
+            assert_eq!(controller.unload_delay(), Some(Duration::ZERO));
+            controller.show(UiPage::Settings, false).unwrap();
+            assert_eq!(controller.unload_delay(), None);
+            assert!(!controller.state.borrow().release_requested);
+        });
+    }
+
+    #[test]
+    fn cancelling_close_keeps_drafts_and_confirming_releases_memory() {
+        with_test_ui(|ui, controller, _| {
+            controller.state.borrow_mut().config.ui_idle_seconds = 60;
+            controller.begin_edit(0);
+            ui.set_form_name("Unsaved application".into());
+            controller.profile_changed();
+            controller.dismiss();
+            assert!(ui.get_confirm_visible());
+            controller.confirm(false);
+            assert!(controller.state.borrow().visible);
+            assert!(ui.get_profile_dirty());
+            assert_eq!(controller.unload_delay(), None);
+            controller.dismiss();
+            controller.confirm(true);
+            assert!(!ui.get_profile_dirty());
+            assert!(!controller.state.borrow().visible);
+            assert_eq!(controller.unload_delay(), Some(Duration::ZERO));
+        });
+    }
+
+    #[test]
+    fn committed_exit_rejects_readiness_and_activation_instead_of_losing_a_summon() {
+        with_test_ui(|_ui, controller, receive| {
+            controller.state.borrow_mut().visible = false;
+            controller.state.borrow_mut().exit_requested = true;
+            let (reply, ready) = mpsc::channel();
+            controller.handle(Event::Ready { reply });
+            let response = ready.recv().unwrap();
+            assert!(!response.ok);
+            assert_eq!(response.message, "UI is closing");
+            for page in [UiPage::Projects, UiPage::Settings] {
+                let (reply, shown) = mpsc::channel();
+                controller.handle(Event::Show { page, reply });
+                let response = shown.recv().unwrap();
+                assert!(!response.ok);
+                assert_eq!(response.message, "UI is closing");
+            }
+            assert!(!controller.state.borrow().visible);
+            assert!(!controller.state.borrow().launcher_visible);
+            assert!(receive.try_recv().is_err());
+        });
     }
 
     #[test]

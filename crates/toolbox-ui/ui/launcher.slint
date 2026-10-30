@@ -7,10 +7,10 @@ component HoverHint inherits Rectangle {
     in property <string> text;
     max-width: 620px;
     border-radius: 5px;
-    background: #263349;
+    background: Theme.tooltip;
     VerticalLayout {
         padding: 10px;
-        Text { text: root.text; color: white; font-size: 12px; wrap: word-wrap; }
+        Text { text: root.text; color: Theme.on-accent; font-size: 12px; wrap: word-wrap; }
     }
 }
 
@@ -22,7 +22,7 @@ component PanelAction inherits Rectangle {
     width: 28px;
     height: 28px;
     border-radius: 5px;
-    background: touch.has-hover ? #e9edf4 : transparent;
+    background: touch.has-hover ? Theme.hover : transparent;
     border-width: keys.has-focus ? 1px : 0px;
     border-color: Theme.accent;
     opacity: root.enabled ? 1 : 0.4;
@@ -51,6 +51,7 @@ component PanelAction inherits Rectangle {
 // A transient search surface. Configuration stays in the separate AppWindow.
 export component LauncherWindow inherits Window {
     title: "Sean Toolbox · Recent Projects";
+    icon: @image-url("../../../packaging/sean-toolbox.svg");
     in property <length> panel-width: 760px;
     in property <length> panel-height: 408px;
     preferred-width: root.panel-width;
@@ -112,20 +113,20 @@ export component LauncherWindow inherits Window {
         }
         Rectangle {
             border-width: 1px;
-            border-color: #cfd7e4;
+            border-color: Theme.strong-border;
             VerticalLayout {
                 padding: 1px;
                 spacing: 0px;
                 Rectangle {
                     height: 54px;
-                    background: #fafbfe;
+                    background: Theme.panel;
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 12px;
                         spacing: 10px;
                         Icon { source: @image-url("icons/code.svg"); width: 17px; colorize: Theme.accent; }
                         Text { text: "VS Code"; color: Theme.secondary; font-size: 12px; font-weight: 600; vertical-alignment: center; }
-                        Text { text: "›"; color: #99a5b6; font-size: 22px; vertical-alignment: center; }
+                        Text { text: "›"; color: Theme.muted; font-size: 22px; vertical-alignment: center; }
                         Rectangle {
                             horizontal-stretch: 1;
                             Text {
@@ -148,7 +149,7 @@ export component LauncherWindow inherits Window {
                                 color: Theme.text;
                                 font-size: 14px;
                                 vertical-alignment: center;
-                                selection-background-color: #dce7ff;
+                                selection-background-color: Theme.selection;
                                 selection-foreground-color: Theme.text;
                                 accessible-label: root.english ? "Search recent projects by name or path" : "按名称或路径搜索最近项目";
                                 edited => { root.query-changed(self.text); }
@@ -185,7 +186,7 @@ export component LauncherWindow inherits Window {
                             spacing: 0px;
                             for item[index] in root.projects: Rectangle {
                                 height: 26px;
-                                background: index == root.selected-project ? Theme.accent : row-touch.has-hover ? #f0f4fb : Theme.surface;
+                                background: index == root.selected-project ? Theme.button : row-touch.has-hover ? Theme.hover : Theme.surface;
                                 accessible-role: button;
                                 accessible-label: item.name + " " + item.location;
                                 accessible-action-default => { root.open-project(index); }
@@ -197,7 +198,7 @@ export component LauncherWindow inherits Window {
                                         text: "[VSCode]";
                                         width: 60px;
                                         font-size: 11px;
-                                        color: index == root.selected-project ? #e7efff : Theme.accent;
+                                        color: index == root.selected-project ? Theme.on-accent-muted : Theme.accent;
                                         vertical-alignment: center;
                                     }
                                     Text {
@@ -205,7 +206,7 @@ export component LauncherWindow inherits Window {
                                         width: root.width < 600px ? 142px : 205px;
                                         font-size: 12px;
                                         font-weight: 500;
-                                        color: index == root.selected-project ? white : Theme.text;
+                                        color: index == root.selected-project ? Theme.on-accent : Theme.text;
                                         overflow: elide;
                                         vertical-alignment: center;
                                     }
@@ -214,7 +215,7 @@ export component LauncherWindow inherits Window {
                                         horizontal-stretch: 1;
                                         min-width: 0px;
                                         font-size: 12px;
-                                        color: index == root.selected-project ? #e7efff : Theme.muted;
+                                        color: index == root.selected-project ? Theme.on-accent-muted : Theme.muted;
                                         overflow: elide;
                                         vertical-alignment: center;
                                     }
@@ -255,7 +256,7 @@ export component LauncherWindow inherits Window {
                 Rectangle { height: 1px; background: Theme.border; }
                 Rectangle {
                     height: 38px;
-                    background: #fafbfe;
+                    background: Theme.panel;
                     HorizontalLayout {
                         padding-left: 14px;
                         padding-right: 10px;

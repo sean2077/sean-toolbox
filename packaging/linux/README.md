@@ -16,11 +16,12 @@ Wayland 下的全局窗口操作受合成器限制，项目浏览/打开仍可�
 在解压后的目录执行以下命令。这会复制两个程序及桌面入口到当前用户目录：
 
 ```sh
-mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/scalable/apps"
+mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/scalable/apps" "$HOME/.local/share/icons/hicolor/256x256/apps"
 cp bin/sean-toolbox bin/sean-toolbox-ui "$HOME/.local/bin/"
 chmod +x "$HOME/.local/bin/sean-toolbox" "$HOME/.local/bin/sean-toolbox-ui"
 cp share/applications/sean-toolbox.desktop "$HOME/.local/share/applications/"
 cp share/icons/hicolor/scalable/apps/sean-toolbox.svg "$HOME/.local/share/icons/hicolor/scalable/apps/"
+cp share/icons/hicolor/256x256/apps/sean-toolbox.png "$HOME/.local/share/icons/hicolor/256x256/apps/"
 ```
 
 桌面会话的 PATH 需要包含 `~/.local/bin`。若未包含，请将安装后 `.desktop` 文件的

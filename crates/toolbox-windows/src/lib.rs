@@ -10,7 +10,7 @@ mod macos;
 #[cfg(windows)]
 mod windows;
 
-pub use backend::{Desktop, Window};
+pub use backend::{Desktop, Window, WindowRect, quake_bounds};
 pub use engine::{Engine, EngineOptions};
 use toolbox_core::{AppProfile, Platform};
 
@@ -65,11 +65,19 @@ impl WindowService {
         self.connect()?.toggle(profile)
     }
 
-    pub fn reset(&mut self) {
+    pub fn reset(&mut self) -> Result<(), String> {
         // Keep launch cooldowns across configuration reloads to prevent a
         // duplicate launch while an already-started application is opening.
         if let Some(engine) = &mut self.engine {
-            engine.reset();
+            engine.reset()?;
         }
+        Ok(())
+    }
+
+    pub fn foreground_changed(&mut self) -> Result<(), String> {
+        if let Some(engine) = &mut self.engine {
+            engine.foreground_changed()?;
+        }
+        Ok(())
     }
 }

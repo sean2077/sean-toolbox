@@ -1,3 +1,5 @@
+#[cfg(windows)]
+use crate::focus_watch::{FocusQueue, FocusWatch};
 use crate::{
     autostart,
     hotkeys::{Binding, Hotkeys},
@@ -9,7 +11,7 @@ use std::{
     path::PathBuf,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
     thread,
@@ -41,12 +43,19 @@ pub enum Event {
     Capabilities(WindowCapabilities, Option<Reply>),
     Ui(Result<(), String>),
     Warning(String),
+    #[cfg(windows)]
+    ForegroundChanged(u64),
+    #[cfg(windows)]
+    ForegroundChecked(Result<(), String>),
     Quit,
 }
 enum WindowTask {
-    Toggle(AppProfile, Option<Reply>),
+    Toggle(AppProfile, u64, Option<Reply>),
     Reset,
     Probe(Option<Reply>),
+    #[cfg(windows)]
+    ForegroundChanged,
+    Shutdown,
 }
 
 pub fn run(
@@ -141,6 +150,16 @@ struct App {
     hotkeys: Option<Hotkeys>,
     tray: Option<TrayIcon>,
     window_tx: mpsc::SyncSender<WindowTask>,
+    window_stopping: Arc<AtomicBool>,
+    window_reset_requested: Arc<AtomicBool>,
+    window_revision: Arc<AtomicU64>,
+    window_worker: Option<thread::JoinHandle<()>>,
+    #[cfg(windows)]
+    proxy: EventLoopProxy<Event>,
+    #[cfg(windows)]
+    focus_watch: Option<FocusWatch>,
+    #[cfg(windows)]
+    focus_queue: FocusQueue,
     busy: HashSet<String>,
     ui: UiProcess,
     initial: Option<UiPage>,
@@ -156,6 +175,10 @@ impl App {
         initial: Option<UiPage>,
     ) -> Result<Self, String> {
         let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+        let revision = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| e.to_string())?
+            .as_micros() as u64;
         let ui_executable = executable.with_file_name(if cfg!(windows) {
             "sean-toolbox-ui.exe"
         } else {
@@ -166,30 +189,67 @@ impl App {
             let _ = sender.send_event(Event::Ui(result));
         });
         let (window_tx, rx) = mpsc::sync_channel(16);
-        thread::spawn(move || {
+        let window_stopping = Arc::new(AtomicBool::new(false));
+        let worker_stopping = window_stopping.clone();
+        let window_reset_requested = Arc::new(AtomicBool::new(false));
+        let worker_reset_requested = window_reset_requested.clone();
+        let window_revision = Arc::new(AtomicU64::new(revision));
+        let worker_revision = window_revision.clone();
+        let worker_proxy = proxy.clone();
+        let window_worker = thread::spawn(move || {
             let mut windows = WindowService::new();
-            let _ = proxy.send_event(Event::Capabilities(windows.capabilities(), None));
+            let _ = worker_proxy.send_event(Event::Capabilities(windows.capabilities(), None));
             while let Ok(task) = rx.recv() {
-                match task {
-                    WindowTask::Toggle(profile, reply) => {
-                        let result = windows.toggle(&profile);
-                        let _ = proxy.send_event(Event::WindowDone(profile.id, result, reply));
-                    }
-                    WindowTask::Reset => windows.reset(),
-                    WindowTask::Probe(reply) => {
-                        let _ =
-                            proxy.send_event(Event::Capabilities(windows.capabilities(), reply));
-                    }
+                // Quit cancels queued work, then drops the backend on its owner
+                // thread so temporary window styles are restored before exit.
+                if worker_stopping.load(Ordering::Acquire) {
+                    break;
                 }
+                // A committed configuration change must invalidate retained
+                // window state even if the bounded queue was full when saved.
+                if worker_reset_requested.swap(false, Ordering::AcqRel)
+                    && let Err(error) = windows.reset()
+                {
+                    let _ = worker_proxy.send_event(Event::Warning(format!("Windows: {error}")));
+                }
+                match task {
+                    WindowTask::Toggle(profile, revision, reply) => {
+                        let (mut result, needs_reset) =
+                            toggle_at_revision(revision, &worker_revision, || {
+                                windows.toggle(&profile)
+                            });
+                        if needs_reset && let Err(error) = windows.reset() {
+                            result = Err(format!(
+                                "{}\nWindow cleanup: {error}",
+                                result.err().unwrap_or_default()
+                            ));
+                        }
+                        // Even a stale task completes through WindowDone, so
+                        // the host clears its busy id and replies to its caller.
+                        let _ =
+                            worker_proxy.send_event(Event::WindowDone(profile.id, result, reply));
+                    }
+                    WindowTask::Reset => {}
+                    WindowTask::Probe(reply) => {
+                        let _ = worker_proxy
+                            .send_event(Event::Capabilities(windows.capabilities(), reply));
+                    }
+                    #[cfg(windows)]
+                    WindowTask::ForegroundChanged => {
+                        let result = windows.foreground_changed();
+                        let _ = worker_proxy.send_event(Event::ForegroundChecked(result));
+                    }
+                    WindowTask::Shutdown => break,
+                }
+            }
+            if let Err(error) = windows.reset() {
+                eprintln!("Sean Toolbox: window cleanup: {error}");
             }
         });
         Ok(Self {
             config,
             store,
-            revision: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|e| e.to_string())?
-                .as_micros() as u64,
+            revision,
             status: HostStatus {
                 process_id: std::process::id(),
                 ..HostStatus::default()
@@ -197,6 +257,16 @@ impl App {
             hotkeys: None,
             tray: None,
             window_tx,
+            window_stopping,
+            window_reset_requested,
+            window_revision,
+            window_worker: Some(window_worker),
+            #[cfg(windows)]
+            proxy,
+            #[cfg(windows)]
+            focus_watch: None,
+            #[cfg(windows)]
+            focus_queue: FocusQueue::default(),
             busy: HashSet::new(),
             ui,
             initial,
@@ -226,13 +296,24 @@ impl App {
             if profile.platform != Platform::current() {
                 return Err("此配置属于其他操作系统 / Profile belongs to another platform".into());
             }
+            #[cfg(windows)]
+            if profile.quake.enabled
+                && profile.quake.hide_on_focus_loss
+                && self.focus_watch.is_none()
+            {
+                return Err("失焦收起监听未就绪，请重新保存配置或查看运行状态 / Foreground watcher is unavailable".into());
+            }
             if self.busy.contains(id) {
                 return Err(
                     "此应用正在处理上一操作 / Application operation is already in progress".into(),
                 );
             }
             self.window_tx
-                .try_send(WindowTask::Toggle(profile.clone(), reply.clone()))
+                .try_send(WindowTask::Toggle(
+                    profile.clone(),
+                    self.revision,
+                    reply.clone(),
+                ))
                 .map_err(|_| "Window worker is busy".to_string())?;
             self.busy.insert(id.into());
             Ok(())
@@ -258,6 +339,21 @@ impl App {
                     .into(),
             );
         }
+        #[cfg(windows)]
+        if self.focus_queue.pending() {
+            return Err(
+                "请等待当前窗口操作完成后保存 / Wait for the current window operation to finish"
+                    .into(),
+            );
+        }
+        // Install a newly requested watcher before touching shortcuts, startup
+        // settings or disk. On any later failure this local guard unhooks itself.
+        #[cfg(windows)]
+        let prepared_watch = if needs_focus_watch(&config) && self.focus_watch.is_none() {
+            Some(FocusWatch::new(self.proxy.clone())?)
+        } else {
+            None
+        };
         let hotkeys = self.hotkeys.as_mut().ok_or("Host is still starting")?;
         let prepared = hotkeys.prepare(&config)?;
         let startup_changed = config.autostart != self.config.autostart;
@@ -282,13 +378,52 @@ impl App {
         self.status.warnings.extend(warnings);
         let language_changed = self.config.language != config.language;
         self.config = config;
+        #[cfg(windows)]
+        {
+            if !needs_focus_watch(&self.config) {
+                self.focus_watch = None;
+                self.focus_queue.clear();
+            } else if let Some(watch) = prepared_watch {
+                self.focus_watch = Some(watch);
+            }
+            self.status
+                .warnings
+                .retain(|warning| !warning.starts_with("Quake focus:"));
+        }
         self.revision += 1;
+        self.window_revision.store(self.revision, Ordering::Release);
         self.pressed.clear();
+        self.window_reset_requested.store(true, Ordering::Release);
         let _ = self.window_tx.try_send(WindowTask::Reset);
         if language_changed {
             self.create_tray();
         }
         Ok(())
+    }
+
+    #[cfg(windows)]
+    fn dispatch_focus_check(&mut self) {
+        if self.focus_watch.is_some() {
+            self.focus_queue.dispatch(|| {
+                self.window_tx
+                    .try_send(WindowTask::ForegroundChanged)
+                    .is_ok()
+            });
+        }
+    }
+
+    fn stop_window_worker(&mut self) {
+        #[cfg(windows)]
+        {
+            self.focus_watch = None;
+        }
+        self.window_stopping.store(true, Ordering::Release);
+        // A full queue already wakes the receiver; the atomic flag makes it
+        // discard those tasks. An empty queue is woken by Shutdown itself.
+        let _ = self.window_tx.try_send(WindowTask::Shutdown);
+        if let Some(worker) = self.window_worker.take() {
+            let _ = worker.join();
+        }
     }
 
     fn response(&self, message: &str, with_config: bool) -> Response {
@@ -387,32 +522,21 @@ impl App {
                 menu.append(&MenuItem::with_id(id, label, true, None))
                     .map_err(|e| e.to_string())?;
             }
-            let mut rgba = vec![0u8; 32 * 32 * 4];
-            for y in 3..29 {
-                for x in 3..29 {
-                    let handle = (10..22).contains(&x)
-                        && (3..9).contains(&y)
-                        && !((12..20).contains(&x) && (5..8).contains(&y));
-                    let body = (9..28).contains(&y);
-                    if handle || body {
-                        let color = if (14..18).contains(&x) && (15..21).contains(&y) {
-                            [245, 248, 252, 255]
-                        } else {
-                            [50, 115, 212, 255]
-                        };
-                        rgba[(y * 32 + x) * 4..(y * 32 + x) * 4 + 4].copy_from_slice(&color);
-                    }
-                }
-            }
+            #[cfg(target_os = "macos")]
+            let rgba = include_bytes!("../../../packaging/icons/tray-template-32.rgba").to_vec();
+            #[cfg(not(target_os = "macos"))]
+            let rgba = include_bytes!("../../../packaging/icons/tray-32.rgba").to_vec();
             let icon = tray_icon::Icon::from_rgba(rgba, 32, 32).map_err(|e| e.to_string())?;
-            TrayIconBuilder::new()
+            let builder = TrayIconBuilder::new()
                 .with_id("sean-toolbox")
                 .with_menu(Box::new(menu))
                 .with_tooltip("Sean Toolbox · 个人工具箱")
-                .with_icon(icon)
-                .with_menu_on_left_click(false)
-                .build()
-                .map_err(|e| e.to_string())
+                .with_menu_on_left_click(false);
+            #[cfg(target_os = "macos")]
+            let builder = builder.with_icon_templated(icon);
+            #[cfg(not(target_os = "macos"))]
+            let builder = builder.with_icon(icon);
+            builder.build().map_err(|e| e.to_string())
         };
         match build() {
             Ok(tray) => {
@@ -437,6 +561,13 @@ impl ApplicationHandler<Event> for App {
         self.status.warnings.extend(warnings);
         self.hotkeys = Some(hotkeys);
         self.create_tray();
+        #[cfg(windows)]
+        if needs_focus_watch(&self.config) {
+            match FocusWatch::new(self.proxy.clone()) {
+                Ok(watch) => self.focus_watch = Some(watch),
+                Err(error) => self.status.warnings.push(format!("Quake focus: {error}")),
+            }
+        }
         if self.config.autostart
             && let Err(e) = autostart::set(true, &self.executable)
         {
@@ -450,6 +581,10 @@ impl ApplicationHandler<Event> for App {
     }
 
     fn window_event(&mut self, _: &ActiveEventLoop, _: WindowId, _: WindowEvent) {}
+
+    fn exiting(&mut self, _: &ActiveEventLoop) {
+        self.stop_window_worker();
+    }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: Event) {
         match event {
@@ -532,7 +667,105 @@ impl ApplicationHandler<Event> for App {
                 }
             }
             Event::Warning(warning) => self.status.warnings.push(warning),
+            #[cfg(windows)]
+            Event::ForegroundChanged(generation) => {
+                if self
+                    .focus_watch
+                    .as_ref()
+                    .is_some_and(|watch| watch.acknowledge(generation))
+                {
+                    self.focus_queue.changed();
+                }
+            }
+            #[cfg(windows)]
+            Event::ForegroundChecked(result) => {
+                self.focus_queue.completed();
+                self.status
+                    .warnings
+                    .retain(|warning| !warning.starts_with("Quake focus:"));
+                if let Err(error) = result {
+                    self.status.warnings.push(format!("Quake focus: {error}"));
+                }
+            }
             Event::Quit => event_loop.exit(),
         }
+        #[cfg(windows)]
+        if !event_loop.exiting() {
+            self.dispatch_focus_check();
+        }
+    }
+}
+
+impl Drop for App {
+    fn drop(&mut self) {
+        self.stop_window_worker();
+    }
+}
+
+#[cfg(windows)]
+fn needs_focus_watch(config: &Config) -> bool {
+    config.windows_enabled
+        && config.profiles.iter().any(|profile| {
+            profile.enabled
+                && profile.platform == Platform::Windows
+                && profile.quake.enabled
+                && profile.quake.hide_on_focus_loss
+        })
+}
+
+/// Validate the queued snapshot again on the window worker. The host already
+/// rejects saves while a toggle is busy; this boundary additionally prevents an
+/// old queued profile from reapplying styles after a configuration change.
+/// The boolean requires immediate cleanup if a change occurred during the call.
+fn toggle_at_revision(
+    revision: u64,
+    current: &AtomicU64,
+    toggle: impl FnOnce() -> Result<String, String>,
+) -> (Result<String, String>, bool) {
+    let changed = || {
+        Err("应用配置已更新，请再次使用快捷键 / Application settings changed; trigger the shortcut again".into())
+    };
+    if current.load(Ordering::Acquire) != revision {
+        return (changed(), false);
+    }
+    let result = toggle();
+    if current.load(Ordering::Acquire) != revision {
+        (changed(), true)
+    } else {
+        (result, false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AtomicU64, Ordering, toggle_at_revision};
+
+    #[test]
+    fn queued_profile_cannot_run_after_configuration_is_replaced() {
+        let revision = AtomicU64::new(8);
+        let (result, cleanup) = toggle_at_revision(7, &revision, || {
+            panic!("the disabled profile must never reach the desktop")
+        });
+        assert!(result.is_err());
+        assert!(!cleanup, "a rejected task did not change window styles");
+    }
+
+    #[test]
+    fn configuration_change_during_toggle_requires_cleanup_before_idle() {
+        let revision = AtomicU64::new(7);
+        let (result, cleanup) = toggle_at_revision(7, &revision, || {
+            revision.store(8, Ordering::Release);
+            Ok("window shown with the old profile".into())
+        });
+        assert!(result.is_err());
+        assert!(cleanup, "temporary styles must be restored before replying");
+    }
+
+    #[test]
+    fn unchanged_profile_returns_the_actual_window_error() {
+        let revision = AtomicU64::new(7);
+        let (result, cleanup) = toggle_at_revision(7, &revision, || Err("focus denied".into()));
+        assert_eq!(result, Err("focus denied".into()));
+        assert!(!cleanup);
     }
 }

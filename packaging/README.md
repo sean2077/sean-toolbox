@@ -35,3 +35,27 @@ GitHub Actions 对 Windows x64、macOS Apple 芯片/Intel、Linux x64 分别原�
 发布文件是便携 ZIP、包含 `.app` 的 ZIP 或 Linux tar.gz。当前没有 Windows
 Authenticode、macOS Developer ID 签名或 Apple 公证。构建成功只说明编译/测试通过，
 不能代替实际桌面上的快捷键、托盘、多显示器、焦点与系统权限验收。
+
+## 应用图标
+
+图标的唯一绘图源是 `packaging/sean-toolbox.svg`。同一图形用于管理窗口、项目面板、
+系统托盘和桌面入口；macOS 菜单栏使用去除背景色的模板图标，跟随系统明暗外观。
+`packaging/icons/` 中的 PNG、ICO、ICNS 和托盘 RGBA 导出文件一并提交，普通 Rust
+构建和最终应用均不需要图像转换工具。
+
+- Windows 的两个 EXE 都通过共享构建脚本嵌入 ICO，包含 16、24、32、48、64、128、256 像素。
+  MSVC 构建使用 Windows SDK 的 `rc.exe`，自动从 Visual Studio/SDK 安装位置查找；
+  GNU 构建使用 MinGW `windres`。可用 `RC` 指定资源编译器的完整路径。
+- macOS 包将 ICNS 放入 `.app/Contents/Resources/`，由 `CFBundleIconFile` 引用。
+- Linux 包同时提供可缩放 SVG 和 256 像素 PNG，桌面入口使用 `sean-toolbox` 图标名。
+
+修改绘图源后，使用 **Python 3.11+、Pillow 和 Inkscape** 重新导出：
+
+```sh
+python scripts/generate_icons.py
+python scripts/generate_icons.py --check
+```
+
+导出器隔离 Inkscape 的配置和缓存，使用固定尺寸的透明 RGBA，去除图片时间戳和元数据。
+`--check` 在内存中重新生成并逐字节比较；不同 Inkscape/Pillow 版本的抗锯齿可能不同，
+应在同一工具版本下检查。当前导出使用 Inkscape 1.2.2。

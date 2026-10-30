@@ -23,6 +23,26 @@ and Ctrl/Cmd+, or the settings button to open the management window. Showing or
 using the launcher preserves an existing management page and its drafts. Saved
 configuration controls project availability and execution.
 
+## Appearance and application editing
+
+Settings offer System, Light and Dark choices with immediate previews on both
+surfaces. The shared semantic palette follows Slint's resolved Fluent palette;
+native controls and application colors change together. System mode reacts to
+the platform's theme notifications. Native window decorations receive the same
+preference. Saving persists the choice; discarding settings restores the saved
+palette without discarding an application draft.
+
+The app and both native windows share `packaging/sean-toolbox.svg`. Platform
+icon exports and executable/bundle integration are documented in the packaging
+README. The UI embeds its vector icon at compile time.
+
+Each application editor has an optional Quake section with a live layout
+preview, top-half/right-side/work-area presets, edge, alignment, width/height
+percentages, display choice and supported focus/topmost options. Unavailable
+platform options are disabled and explained. Ordinary cycle/maximize options
+are retained and are shown when Quake is off. See the window module README for
+the native behavior contract.
+
 ## Responsibilities
 
 - The Slint event loop owns widgets and editable drafts. Filesystem operations,
@@ -50,11 +70,16 @@ configuration controls project availability and execution.
   replaces profiles with the same case-insensitive ID and preserves settings.
   JSON replacement also restores settings. Import never launches an application.
   Export asks the host for the current saved configuration and writes atomically.
-- Idle release starts only after both surfaces are hidden and no draft or
-  operation needs the process; reopening either surface stops the timer. A
-  timeout of zero exits immediately when eligible. Normal exit wakes the
+- Idle release starts only after both surfaces are hidden and no draft, dialog or
+  operation needs the process; reopening either surface stops the timer. New
+  configurations default to zero, so the UI process exits immediately when
+  eligible. An optional nonzero cache applies to automatic focus-loss/open-result
+  dismissal. Explicit Close or Escape bypasses that cache for the last surface.
+  Eligibility is rechecked on the event loop before exit, so a queued activation
+  cannot be closed by an obsolete timer. Normal exit wakes the
   activation listener so it can remove its own Unix socket. The UI performs no
-  periodic project, focus, or status polling.
+  periodic project, focus, or status polling. The small host remains available
+  for shortcuts, and starts a fresh UI process on the next summon.
 - Native file dialogs use the active window as their parent. On Linux, install
   a working XDG desktop portal file-chooser backend or `zenity`. Actual backend
   errors reported by `rfd` are displayed in the UI.

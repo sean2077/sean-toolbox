@@ -1,13 +1,16 @@
-import { CheckBox, ComboBox, LineEdit, ScrollView, TextEdit, AboutSlint, Switch, Spinner } from "std-widgets.slint";
-import { Theme, Icon, Caption, FieldLabel, SectionLabel, Divider, Card, Keycap, ActionButton, NavButton, SearchInput, SettingRow, CapabilityCard } from "components.slint";
+import { CheckBox, ComboBox, LineEdit, ScrollView, TextEdit, AboutSlint, Switch, Spinner, SpinBox } from "std-widgets.slint";
+import { Theme, Icon, Caption, FieldLabel, SectionLabel, Divider, Card, Keycap, ActionButton, NavButton, SearchInput, SettingRow, CapabilityCard, ThemeChoice, QuakePreview } from "components.slint";
 import { ProjectRow } from "project-types.slint";
 
+export { Palette } from "std-widgets.slint";
+export { Theme } from "components.slint";
 export { ProjectRow } from "project-types.slint";
 export { LauncherWindow } from "launcher.slint";
 export struct ProfileRow { name: string, detail: string, hotkey: string, platform: string, enabled: bool, available: bool }
 
 export component AppWindow inherits Window {
     title: "Sean Toolbox";
+    icon: @image-url("../../../packaging/sean-toolbox.svg");
     preferred-width: 1120px;
     preferred-height: 780px;
     min-width: 900px;
@@ -41,6 +44,14 @@ export component AppWindow inherits Window {
     in-out property <bool> form-enabled;
     in-out property <bool> form-maximize;
     in-out property <bool> form-cycle;
+    in-out property <bool> form-quake-enabled;
+    in-out property <int> form-quake-edge: 0;
+    in-out property <int> form-quake-alignment: 1;
+    in-out property <int> form-quake-width: 100;
+    in-out property <int> form-quake-height: 50;
+    in-out property <int> form-quake-monitor: 0;
+    in-out property <bool> form-quake-topmost;
+    in-out property <bool> form-quake-auto-hide;
     in-out property <[string]> candidate-labels;
     in-out property <int> candidate-index: 0;
     in-out property <string> launch-executable;
@@ -48,11 +59,12 @@ export component AppWindow inherits Window {
     in-out property <string> launch-cwd;
     in-out property <string> profile-help;
     in-out property <int> setting-language: 0;
+    in-out property <int> setting-theme: 0;
     in-out property <string> setting-hotkey;
     in-out property <bool> setting-autostart;
     in-out property <bool> setting-projects;
     in-out property <bool> setting-windows;
-    in-out property <string> setting-idle: "60";
+    in-out property <string> setting-idle: "0";
     in-out property <string> setting-code-path;
     in-out property <bool> import-visible: false;
     in-out property <bool> import-is-json: false;
@@ -186,10 +198,7 @@ export component AppWindow inherits Window {
                         spacing: 11px;
                         VerticalLayout {
                             width: 36px; alignment: center;
-                            Rectangle {
-                                height: 36px; border-radius: 10px; background: #233557;
-                                Icon { x: 8px; y: 8px; height: 20px; source: @image-url("icons/box.svg"); colorize: white; }
-                            }
+                            Image { height: 36px; source: @image-url("../../../packaging/sean-toolbox.svg"); image-fit: contain; }
                         }
                         VerticalLayout {
                             alignment: center; spacing: 3px;
@@ -232,7 +241,7 @@ export component AppWindow inherits Window {
                             Text { text: root.page-title; color: Theme.text; font-size: 26px; font-weight: 700; }
                             Caption { text: root.page-description; font-size: 13px; }
                         }
-                        ActionButton { text: root.english ? "Hide · Esc" : "收起 · Esc"; subtle: true; icon: @image-url("icons/minus.svg"); with-icon: true; clicked => { root.dismiss(); } }
+                        ActionButton { text: root.english ? "Close UI · Esc" : "关闭界面 · Esc"; subtle: true; icon: @image-url("icons/close.svg"); with-icon: true; clicked => { root.dismiss(); } }
                     }
                     Rectangle {
                         vertical-stretch: 1;
@@ -270,7 +279,7 @@ export component AppWindow inherits Window {
                                                 for item[index] in root.projects: Rectangle {
                                                     height: 72px;
                                                     border-radius: 7px;
-                                                    background: index == root.selected-project ? Theme.accent-soft : project-touch.has-hover ? #f6f8fb : transparent;
+                                                    background: index == root.selected-project ? Theme.accent-soft : project-touch.has-hover ? Theme.hover : transparent;
                                                     Rectangle { x: 0px; width: 3px; height: 28px; y: 22px; border-radius: 1.5px; background: index == root.selected-project ? Theme.accent : transparent; }
                                                     accessible-role: button;
                                                     accessible-label: item.name + " " + item.location;
@@ -281,8 +290,8 @@ export component AppWindow inherits Window {
                                                             width: 38px; alignment: center;
                                                             Rectangle {
                                                                 height: 38px; border-radius: 9px;
-                                                                background: index == root.selected-project ? #dce7fc : #f0f3f8;
-                                                                Icon { x: 9px; y: 9px; height: 20px; source: @image-url("icons/folder.svg"); colorize: index == root.selected-project ? Theme.accent : #778aa7; }
+                                                                background: index == root.selected-project ? Theme.selection : Theme.raised;
+                                                                Icon { x: 9px; y: 9px; height: 20px; source: @image-url("icons/folder.svg"); colorize: index == root.selected-project ? Theme.accent : Theme.muted; }
                                                             }
                                                         }
                                                         VerticalLayout {
@@ -291,7 +300,7 @@ export component AppWindow inherits Window {
                                                             Text { text: item.location; color: Theme.muted; font-size: 11px; overflow: elide; min-width: 0px; }
                                                         }
                                                         Text { text: item.source; font-size: 10px; color: Theme.muted; width: 48px; vertical-alignment: center; }
-                                                        Icon { width: 15px; source: @image-url("icons/arrow-right.svg"); colorize: index == root.selected-project ? Theme.accent : #bac3cf; }
+                                                        Icon { width: 15px; source: @image-url("icons/arrow-right.svg"); colorize: index == root.selected-project ? Theme.accent : Theme.disabled; }
                                                     }
                                                     project-touch := TouchArea {
                                                         enabled: !root.project-opening && !root.project-loading;
@@ -315,8 +324,8 @@ export component AppWindow inherits Window {
                                                 alignment: center;
                                                 Rectangle {
                                                     width: 64px; height: 64px; border-radius: 18px;
-                                                    background: root.project-error ? #fff2ed : #edf2fb;
-                                                    Icon { width: 30px; height: 30px; x: 17px; y: 17px; source: root.project-error ? @image-url("icons/warning.svg") : @image-url("icons/folder.svg"); colorize: root.project-error ? Theme.warning : #6b86b4; }
+                                                    background: root.project-error ? Theme.warning-soft : Theme.accent-soft;
+                                                    Icon { width: 30px; height: 30px; x: 17px; y: 17px; source: root.project-error ? @image-url("icons/warning.svg") : @image-url("icons/folder.svg"); colorize: root.project-error ? Theme.warning : Theme.accent; }
                                                 }
                                             }
                                             Text {
@@ -376,7 +385,7 @@ export component AppWindow inherits Window {
                             visible: root.page == 1;
                             spacing: 14px;
                             if !root.windows-enabled: Card {
-                                height: 46px; background: #fffaee;
+                                height: 46px; background: Theme.warning-soft;
                                 HorizontalLayout {
                                     padding: 12px; spacing: 10px;
                                     Icon { source: @image-url("icons/info.svg"); colorize: Theme.warning; width: 17px; }
@@ -403,15 +412,15 @@ export component AppWindow inherits Window {
                                             spacing: 8px;
                                             for item[index] in root.profiles: Card {
                                                 height: 110px;
-                                                border-color: root.selected-profile == index ? #98b3eb : Theme.border;
-                                                background: root.selected-profile == index ? #f0f5ff : Theme.surface;
+                                                border-color: root.selected-profile == index ? Theme.accent-border : Theme.border;
+                                                background: root.selected-profile == index ? Theme.accent-soft : Theme.surface;
                                                 VerticalLayout {
                                                     padding: 13px; spacing: 8px;
                                                     HorizontalLayout {
                                                         spacing: 9px;
                                                         Icon { source: @image-url("icons/windows.svg"); width: 17px; colorize: root.selected-profile == index ? Theme.accent : Theme.muted; }
                                                         Text { text: item.name; color: item.enabled ? Theme.text : Theme.muted; font-weight: 600; font-size: 13px; horizontal-stretch: 1; overflow: elide; min-width: 0px; }
-                                                        VerticalLayout { width: 6px; alignment: center; Rectangle { height: 6px; border-radius: 3px; background: item.enabled && item.available ? Theme.success : #b5bdc9; } }
+                                                        VerticalLayout { width: 6px; alignment: center; Rectangle { height: 6px; border-radius: 3px; background: item.enabled && item.available ? Theme.success : Theme.disabled; } }
                                                     }
                                                     HorizontalLayout {
                                                         Text { text: item.platform + (item.available ? "" : (root.english ? " · other OS" : " · 其他系统")); font-size: 10px; color: Theme.muted; horizontal-stretch: 1; }
@@ -435,7 +444,7 @@ export component AppWindow inherits Window {
                                         padding: 28px; alignment: center; spacing: 16px;
                                         HorizontalLayout {
                                             alignment: center;
-                                            Rectangle { width: 64px; height: 64px; border-radius: 18px; background: #eef3fc; Icon { x: 17px; y: 17px; width: 30px; height: 30px; source: @image-url("icons/keyboard.svg"); colorize: #6b86b4; } }
+                                            Rectangle { width: 64px; height: 64px; border-radius: 18px; background: Theme.accent-soft; Icon { x: 17px; y: 17px; width: 30px; height: 30px; source: @image-url("icons/keyboard.svg"); colorize: Theme.accent; } }
                                         }
                                         Text { text: root.english ? "Less searching. More doing." : "常用应用，一键即达"; font-size: 19px; font-weight: 600; color: Theme.text; horizontal-alignment: center; wrap: word-wrap; }
                                         Caption { text: root.english ? "Edit an app to set its shortcut and launch options, or add a new one." : "选择左侧应用，编辑快捷键和启动方式；也可以添加新的应用。"; horizontal-alignment: center; }
@@ -454,6 +463,7 @@ export component AppWindow inherits Window {
                                         Divider {}
                                         ScrollView {
                                             horizontal-scrollbar-policy: always-off;
+                                            content-width: self.visible-width;
                                             vertical-stretch: 1;
                                             VerticalLayout {
                                                 padding-right: 8px;
@@ -480,8 +490,54 @@ export component AppWindow inherits Window {
                                                 FieldLabel { text: root.english ? "Shortcut · optional" : "快捷键 · 可留空"; }
                                                 LineEdit { height: 34px; text <=> root.form-hotkey; placeholder-text: "F3 / Ctrl+Alt+T"; enabled: !root.saving; edited => { root.profile-changed(); } }
                                                 CheckBox { text: root.english ? "Enable this application" : "启用此应用"; checked <=> root.form-enabled; enabled: !root.saving; toggled => { root.profile-changed(); } }
-                                                CheckBox { text: root.english ? "Maximize newly launched windows only" : "仅最大化新启动的窗口"; checked <=> root.form-maximize; enabled: !root.saving; toggled => { root.profile-changed(); } }
-                                                CheckBox { text: root.english ? "Resume cycle after switching apps" : "切换应用后继续上次循环位置"; checked <=> root.form-cycle; enabled: !root.saving; toggled => { root.profile-changed(); } }
+                                                if !root.form-quake-enabled: CheckBox { text: root.english ? "Maximize newly launched windows only" : "仅最大化新启动的窗口"; checked <=> root.form-maximize; enabled: !root.saving; toggled => { root.profile-changed(); } }
+                                                if !root.form-quake-enabled: CheckBox { text: root.english ? "Resume cycle after switching apps" : "切换应用后继续上次循环位置"; checked <=> root.form-cycle; enabled: !root.saving; toggled => { root.profile-changed(); } }
+                                                Rectangle { height: 5px; }
+                                                Divider {}
+                                                SectionLabel { text: root.english ? "QUAKE MODE" : "QUAKE 停靠模式"; height: 23px; }
+                                                CheckBox { text: root.english ? "Dock one window to the screen edge" : "将一个应用窗口停靠到屏幕边缘"; checked <=> root.form-quake-enabled; enabled: !root.saving; toggled => { root.profile-changed(); } }
+                                                Caption { text: root.english ? "Summon the same window with your shortcut. Press again while it is active to minimize it." : "快捷键唤回同一个窗口；窗口在前台时再按一次即可收起。"; font-size: 11px; }
+                                                if root.form-quake-enabled: VerticalLayout {
+                                                    spacing: 10px;
+                                                    QuakePreview { edge: root.form-quake-edge; alignment: root.form-quake-alignment; width-percent: root.form-quake-width; height-percent: root.form-quake-height; }
+                                                    HorizontalLayout {
+                                                        spacing: 5px;
+                                                        ActionButton { text: root.english ? "Top half" : "顶部半屏"; enabled: !root.saving; clicked => { root.form-quake-edge = 0; root.form-quake-alignment = 1; root.form-quake-width = 100; root.form-quake-height = 50; root.profile-changed(); } }
+                                                        ActionButton { text: root.english ? "Right side" : "右侧边栏"; enabled: !root.saving; clicked => { root.form-quake-edge = 3; root.form-quake-alignment = 1; root.form-quake-width = 40; root.form-quake-height = 100; root.profile-changed(); } }
+                                                        ActionButton { text: root.english ? "Fill screen" : "铺满工作区"; enabled: !root.saving; clicked => { root.form-quake-edge = 0; root.form-quake-alignment = 1; root.form-quake-width = 100; root.form-quake-height = 100; root.profile-changed(); } }
+                                                    }
+                                                    HorizontalLayout {
+                                                        spacing: 10px;
+                                                        VerticalLayout {
+                                                            spacing: 6px;
+                                                            FieldLabel { text: root.english ? "Screen edge" : "停靠边缘"; }
+                                                            ComboBox { height: 34px; model: root.english ? ["Top", "Bottom", "Left", "Right"] : ["顶部", "底部", "左侧", "右侧"]; current-index <=> root.form-quake-edge; enabled: !root.saving; selected => { root.profile-changed(); } }
+                                                        }
+                                                        VerticalLayout {
+                                                            spacing: 6px;
+                                                            FieldLabel { text: root.english ? "Alignment" : "对齐位置"; }
+                                                            ComboBox { height: 34px; model: root.form-quake-edge < 2 ? (root.english ? ["Left", "Center", "Right"] : ["靠左", "居中", "靠右"]) : (root.english ? ["Top", "Center", "Bottom"] : ["靠上", "居中", "靠下"]); current-index <=> root.form-quake-alignment; enabled: !root.saving; selected => { root.profile-changed(); } }
+                                                        }
+                                                    }
+                                                    HorizontalLayout {
+                                                        spacing: 10px;
+                                                        VerticalLayout {
+                                                            spacing: 6px;
+                                                            FieldLabel { text: root.english ? "Width · % of work area" : "宽度 · 工作区百分比"; }
+                                                            SpinBox { height: 34px; minimum: 10; maximum: 100; step-size: 5; value <=> root.form-quake-width; enabled: !root.saving; edited => { root.profile-changed(); } }
+                                                        }
+                                                        VerticalLayout {
+                                                            spacing: 6px;
+                                                            FieldLabel { text: root.english ? "Height · % of work area" : "高度 · 工作区百分比"; }
+                                                            SpinBox { height: 34px; minimum: 10; maximum: 100; step-size: 5; value <=> root.form-quake-height; enabled: !root.saving; edited => { root.profile-changed(); } }
+                                                        }
+                                                    }
+                                                    FieldLabel { text: root.english ? "Show on display" : "唤出位置"; }
+                                                    ComboBox { height: 34px; model: root.english ? ["At mouse pointer", "With foreground window", "Primary display"] : ["鼠标所在显示器", "当前前台窗口所在显示器", "主显示器"]; current-index <=> root.form-quake-monitor; enabled: !root.saving; selected => { root.profile-changed(); } }
+                                                    CheckBox { text: root.english ? "Keep on top while shown" : "显示时保持置顶"; checked <=> root.form-quake-topmost; enabled: !root.saving && root.form-platform != 1; toggled => { root.profile-changed(); } }
+                                                    CheckBox { text: root.english ? "Hide when focus leaves · Windows" : "失去焦点时自动收起 · Windows"; checked <=> root.form-quake-auto-hide; enabled: !root.saving && root.form-platform == 0; toggled => { root.profile-changed(); } }
+                                                    Caption { text: root.form-platform == 1 ? (root.english ? "macOS supports placement through Accessibility. Keep-on-top and auto-hide are unavailable." : "macOS 通过辅助功能定位窗口；暂不支持置顶和失焦收起。") : root.form-platform == 2 ? (root.english ? "Requires an X11 / EWMH desktop. Auto-hide is currently available on Windows only." : "需要 X11 / EWMH 桌面。失焦自动收起目前仅支持 Windows。") : (root.english ? "Uses the display work area, leaving room for the taskbar. Esc stays available to your app." : "按显示器可用工作区定位，避开任务栏；Esc 保留给目标应用。"); font-size: 11px; }
+                                                }
                                                 Rectangle { height: 5px; }
                                                 Divider {}
                                                 SectionLabel { text: root.english ? "LAUNCH OPTIONS" : "启动方式"; height: 23px; }
@@ -531,6 +587,20 @@ export component AppWindow inherits Window {
                                 VerticalLayout {
                                     padding-right: 8px;
                                     spacing: 13px;
+                                    SectionLabel { text: root.english ? "APPEARANCE" : "外观"; height: 18px; }
+                                    Card {
+                                        VerticalLayout {
+                                            padding: 18px; spacing: 12px;
+                                            FieldLabel { text: root.english ? "Choose your theme" : "选择界面主题"; }
+                                            Caption { text: root.english ? "Preview instantly in the manager and project launcher. Save to keep your choice." : "管理窗口与最近项目面板同步预览，保存后保留。"; }
+                                            HorizontalLayout {
+                                                spacing: 12px;
+                                                ThemeChoice { text: root.english ? "System" : "跟随系统"; scheme: 0; selected: root.setting-theme == 0; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 0; root.settings-changed(); } }
+                                                ThemeChoice { text: root.english ? "Light" : "浅色"; scheme: 1; selected: root.setting-theme == 1; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 1; root.settings-changed(); } }
+                                                ThemeChoice { text: root.english ? "Dark" : "深色"; scheme: 2; selected: root.setting-theme == 2; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 2; root.settings-changed(); } }
+                                            }
+                                        }
+                                    }
                                     SectionLabel { text: root.english ? "GENERAL" : "通用"; height: 18px; }
                                     Card {
                                         VerticalLayout {
@@ -554,8 +624,8 @@ export component AppWindow inherits Window {
                                             }
                                             Divider {}
                                             SettingRow {
-                                                title: root.english ? "Release hidden interface" : "隐藏后释放界面";
-                                                description: root.english ? "Delay in seconds, 0–3600. Shortcuts stay active." : "延迟 0–3600 秒回收界面内存，快捷键保持可用。";
+                                                title: root.english ? "Automatic-hide cache · seconds" : "自动收起后缓存 · 秒";
+                                                description: root.english ? "0 releases memory immediately; up to 3600 keeps reopening fast. Close or Esc always releases the last UI." : "0 立即释放内存；设为 1–3600 可加快再次唤起。手动关闭或 Esc 始终释放最后一个界面。";
                                                 LineEdit { height: 34px; width: 100px; text <=> root.setting-idle; input-type: number; enabled: root.loaded && !root.saving; edited => { root.settings-changed(); } }
                                             }
                                         }
@@ -610,7 +680,7 @@ export component AppWindow inherits Window {
                             Divider {}
                             HorizontalLayout {
                                 height: 40px; spacing: 10px;
-                                VerticalLayout { width: 6px; alignment: center; Rectangle { height: 6px; border-radius: 3px; background: root.settings-dirty ? #d79b38 : Theme.success; } }
+                                VerticalLayout { width: 6px; alignment: center; Rectangle { height: 6px; border-radius: 3px; background: root.settings-dirty ? Theme.warning : Theme.success; } }
                                 Caption { text: root.settings-dirty ? (root.english ? "You have unsaved changes" : "有尚未保存的修改") : (root.english ? "All changes saved" : "设置已保存"); horizontal-stretch: 1; }
                                 ActionButton { text: root.english ? "Discard" : "撤销修改"; subtle: true; enabled: root.settings-dirty && !root.saving; clicked => { root.reset-settings(); } }
                                 ActionButton { text: root.saving ? (root.english ? "Saving…" : "保存中…") : (root.english ? "Save settings" : "保存设置"); enabled: root.loaded && root.settings-dirty && !root.saving; primary: true; clicked => { root.save-settings(); } }
@@ -645,7 +715,7 @@ export component AppWindow inherits Window {
                                         }
                                     }
                                     if root.diagnostic-warnings != "": Card {
-                                        background: #fffbf2; border-color: #eee0bf;
+                                        background: Theme.warning-soft; border-color: Theme.warning-border;
                                         VerticalLayout {
                                             padding: 18px; spacing: 10px;
                                             FieldLabel { text: root.english ? "Needs your attention" : "需要留意"; color: Theme.warning; }
@@ -653,7 +723,7 @@ export component AppWindow inherits Window {
                                         }
                                     }
                                     if root.diagnostic-error != "": Card {
-                                        background: #fff5f3; border-color: #f0d9d4;
+                                        background: Theme.danger-soft; border-color: Theme.danger-border;
                                         VerticalLayout {
                                             padding: 18px; spacing: 10px;
                                             FieldLabel { text: root.english ? "Last interface error" : "最近一次界面错误"; color: Theme.danger; }
@@ -696,7 +766,7 @@ export component AppWindow inherits Window {
                     Rectangle {
                         height: root.status-error ? 62px : 24px;
                         border-radius: 7px;
-                        background: root.status-error ? #fff0ed : transparent;
+                        background: root.status-error ? Theme.danger-soft : transparent;
                         HorizontalLayout {
                             padding: root.status-error ? 10px : 0px;
                             spacing: 8px;
@@ -710,7 +780,7 @@ export component AppWindow inherits Window {
         }
         Rectangle {
             visible: root.import-visible;
-            background: #17243b65;
+            background: Theme.scrim;
             TouchArea {}
             Card {
                 x: (parent.width - self.width) / 2;
@@ -738,7 +808,7 @@ export component AppWindow inherits Window {
         }
         Rectangle {
             visible: root.confirm-visible;
-            background: #17243b65;
+            background: Theme.scrim;
             TouchArea {}
             Card {
                 x: (parent.width - self.width) / 2;
@@ -764,7 +834,7 @@ export component AppWindow inherits Window {
             }
         }
         if root.dialog-busy: Rectangle {
-            background: #f7f8facc;
+            background: Theme.busy-scrim;
             TouchArea {}
             VerticalLayout {
                 alignment: center; spacing: 18px;

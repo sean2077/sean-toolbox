@@ -1,10 +1,11 @@
 //! macOS Accessibility + AppKit FFI. No AppleScript/osascript helper process,
 //! JavaScript engine, or keyboard injection is used.
-use crate::backend::{Desktop, Window};
+use crate::backend::{Desktop, Window, WindowRect};
 use std::collections::{HashMap, HashSet};
 use std::ffi::{CStr, c_char, c_void};
 use std::ptr;
 use std::time::{Duration, Instant};
+use toolbox_core::{QuakeConfig, QuakeMonitor};
 
 type Ref = *const c_void;
 type Obj = *mut c_void;
@@ -139,6 +140,24 @@ unsafe fn screen_rect(screen: Obj, selector: &CStr) -> Rect {
         let f: unsafe extern "C" fn(Obj, Obj) -> Rect =
             std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
         f(screen, sel_registerName(selector.as_ptr()))
+    }
+}
+
+fn cursor_position() -> Option<Point> {
+    unsafe {
+        let array = send_ptr(objc_getClass(c"NSScreen".as_ptr()), c"screens");
+        if send_integer(array, c"count") == 0 {
+            return None;
+        }
+        let primary = screen_rect(send_index(array, c"objectAtIndex:", 0), c"frame");
+        let f: unsafe extern "C" fn(Obj, Obj) -> Point =
+            std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        let mut point = f(
+            objc_getClass(c"NSEvent".as_ptr()),
+            sel_registerName(c"mouseLocation".as_ptr()),
+        );
+        point.y = primary.origin.y + primary.size.height - point.y;
+        (point.x.is_finite() && point.y.is_finite()).then_some(point)
     }
 }
 
@@ -339,20 +358,34 @@ fn target_screen(frame: Option<Rect>, screens: &[Rect]) -> Option<Rect> {
     let Some(frame) = frame else {
         return screens.first().copied();
     };
-    screens.iter().copied().max_by(|a, b| {
-        let area = |screen: &Rect| {
-            (f64::min(
-                frame.origin.x + frame.size.width,
-                screen.origin.x + screen.size.width,
-            ) - f64::max(frame.origin.x, screen.origin.x))
+    let area = |screen: &Rect| {
+        (f64::min(
+            frame.origin.x + frame.size.width,
+            screen.origin.x + screen.size.width,
+        ) - f64::max(frame.origin.x, screen.origin.x))
+        .max(0.0)
+            * (f64::min(
+                frame.origin.y + frame.size.height,
+                screen.origin.y + screen.size.height,
+            ) - f64::max(frame.origin.y, screen.origin.y))
             .max(0.0)
-                * (f64::min(
-                    frame.origin.y + frame.size.height,
-                    screen.origin.y + screen.size.height,
-                ) - f64::max(frame.origin.y, screen.origin.y))
-                .max(0.0)
-        };
-        area(a).total_cmp(&area(b))
+    };
+    let distance = |screen: &Rect| {
+        let x = frame.origin.x + frame.size.width / 2.0;
+        let y = frame.origin.y + frame.size.height / 2.0;
+        (x - x.clamp(screen.origin.x, screen.origin.x + screen.size.width)).powi(2)
+            + (y - y.clamp(screen.origin.y, screen.origin.y + screen.size.height)).powi(2)
+    };
+    // Prefer greatest overlap, then nearest work area for cursor positions in
+    // menu bars, docks or display gaps. Equal candidates keep primary order.
+    screens.iter().copied().reduce(|best, candidate| {
+        if area(&candidate) > area(&best)
+            || (area(&candidate) == area(&best) && distance(&candidate) < distance(&best))
+        {
+            candidate
+        } else {
+            best
+        }
     })
 }
 
@@ -702,6 +735,95 @@ impl Desktop for MacDesktop {
             std::thread::sleep(Duration::from_millis(25));
         }
     }
+    fn check_quake(&mut self, config: &QuakeConfig) -> Result<(), String> {
+        self.check_available()?;
+        if config.always_on_top {
+            return Err("macOS 不支持为其他应用设置置顶，请关闭此选项 / macOS cannot set always-on-top for another application".into());
+        }
+        if config.hide_on_focus_loss {
+            return Err("失焦自动收起目前仅支持 Windows / Hide on focus loss is currently supported on Windows only".into());
+        }
+        Ok(())
+    }
+    fn quake_work_area(&mut self, monitor: QuakeMonitor) -> Result<WindowRect, String> {
+        let _pool = Pool::new();
+        let screens = screens();
+        let reference = match monitor {
+            QuakeMonitor::Primary => None,
+            QuakeMonitor::Cursor => cursor_position().map(|origin| Rect {
+                origin,
+                size: Size {
+                    width: 1.0,
+                    height: 1.0,
+                },
+            }),
+            QuakeMonitor::Foreground => {
+                let id = self.foreground()?;
+                match id.and_then(|id| self.entries.get(&id)) {
+                    Some(entry) => frame(entry.window.0)?,
+                    None => None,
+                }
+            }
+        };
+        let target =
+            target_screen(reference, &screens).ok_or("No macOS display work area is available")?;
+        Ok(WindowRect {
+            x: target.origin.x.round() as i32,
+            y: target.origin.y.round() as i32,
+            width: target.size.width.round() as u32,
+            height: target.size.height.round() as u32,
+        })
+    }
+    fn place_quake(
+        &mut self,
+        id: &str,
+        bounds: WindowRect,
+        always_on_top: bool,
+    ) -> Result<(), String> {
+        let _pool = Pool::new();
+        if always_on_top {
+            return Err("macOS cannot set always-on-top for another application / macOS 不支持为其他应用设置置顶".into());
+        }
+        let (window, _) = self.validate(id)?;
+        if boolean(window.0, c"AXFullScreen")? {
+            return Err("请先退出应用全屏，再启用下拉窗口 / Leave application fullscreen before using Quake docking".into());
+        }
+        require_settable(window.0, c"AXPosition")?;
+        require_settable(window.0, c"AXSize")?;
+        self.restore(id)?;
+        let target = Rect {
+            origin: Point {
+                x: f64::from(bounds.x),
+                y: f64::from(bounds.y),
+            },
+            size: Size {
+                width: f64::from(bounds.width),
+                height: f64::from(bounds.height),
+            },
+        };
+        let position =
+            Cf::owned(unsafe { AXValueCreate(1, (&target.origin as *const Point).cast()) })?;
+        let size = Cf::owned(unsafe { AXValueCreate(2, (&target.size as *const Size).cast()) })?;
+        set(window.0, c"AXPosition", position.0)?;
+        set(window.0, c"AXSize", size.0)?;
+        set(window.0, c"AXPosition", position.0)?;
+        let deadline = Instant::now() + Duration::from_millis(800);
+        loop {
+            let (window, _) = self.validate(id)?;
+            if frame(window.0)?.is_some_and(|r| same_frame(r, target)) {
+                if let Some(entry) = self.entries.get_mut(id) {
+                    entry.maximized = false;
+                }
+                return Ok(());
+            }
+            if Instant::now() >= deadline {
+                return Err(
+                    "应用未接受下拉窗口尺寸 / This application did not accept Quake bounds".into(),
+                );
+            }
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -736,6 +858,45 @@ mod tests {
         assert!(same_frame(
             target_screen(Some(window), &[primary, left]).unwrap(),
             left
+        ));
+    }
+
+    #[test]
+    fn cursor_in_menu_bar_or_display_gap_uses_nearest_screen() {
+        let primary = Rect {
+            origin: Point { x: 0.0, y: 24.0 },
+            size: Size {
+                width: 1600.0,
+                height: 876.0,
+            },
+        };
+        let secondary = Rect {
+            origin: Point { x: 1600.0, y: 24.0 },
+            size: Size {
+                width: 1920.0,
+                height: 1056.0,
+            },
+        };
+        let point = |x, y| {
+            Some(Rect {
+                origin: Point { x, y },
+                size: Size {
+                    width: 1.0,
+                    height: 1.0,
+                },
+            })
+        };
+        assert!(same_frame(
+            target_screen(point(200.0, 8.0), &[primary, secondary]).unwrap(),
+            primary
+        ));
+        assert!(same_frame(
+            target_screen(point(2000.0, 8.0), &[primary, secondary]).unwrap(),
+            secondary
+        ));
+        assert!(same_frame(
+            target_screen(None, &[primary, secondary]).unwrap(),
+            primary
         ));
     }
 }

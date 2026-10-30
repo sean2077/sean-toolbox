@@ -89,6 +89,9 @@ jobs:
       - name: Linux host and UI lifecycle smoke
         if: runner.os == 'Linux'
         run: python scripts/smoke_host.py --binary target/release/sean-toolbox
+      - name: Linux appearance and UI memory lifecycle smoke
+        if: runner.os == 'Linux'
+        run: python scripts/smoke_appearance.py --binary target/release/sean-toolbox
       - name: Collect dependency license texts
         run: python scripts/collect_licenses.py
       - name: Package native binaries

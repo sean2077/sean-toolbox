@@ -189,6 +189,7 @@ pub fn parse_ini(text: &str) -> Result<ImportPreview, String> {
             enabled,
             maximize: parse_bool(get("maximize"), false, name)?,
             cycle_continuous: parse_bool(get("cyclecontinuous"), true, name)?,
+            quake: Default::default(),
             launch,
         });
     }

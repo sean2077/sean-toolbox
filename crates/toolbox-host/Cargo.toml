@@ -19,8 +19,11 @@ global-hotkey = "=0.9.0"
 winit = { version = "=0.30.13", default-features = false, features = ["x11", "wayland", "wayland-dlopen", "rwh_06"] }
 tray-icon = { version = "=0.26.1", default-features = false, features = ["ksni"] }
 
+[build-dependencies]
+cc = "=1.10.0"
+
 [target.'cfg(windows)'.dependencies]
-windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_Registry", "Win32_System_Console", "Win32_UI_WindowsAndMessaging", "Win32_Security"] }
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_Registry", "Win32_System_Console", "Win32_UI_WindowsAndMessaging", "Win32_UI_Accessibility", "Win32_Security"] }
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
