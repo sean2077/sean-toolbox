@@ -4,8 +4,8 @@ mod model;
 mod worker;
 
 use model::{
-    ImportedConfig, launch_command, page_from_index, page_index, platform_from_index,
-    platform_index, platform_name,
+    ImportedConfig, launch_command, next_profile_id, page_from_index, page_index,
+    platform_from_index, platform_index, platform_name,
 };
 use slint::{
     ComponentHandle, Model, ModelRc, SharedString, Timer, TimerMode, VecModel,
@@ -21,7 +21,7 @@ use std::{
     },
     time::Duration,
 };
-use toolbox_core::{AppProfile, Config, LaunchCommand, Platform, Response, UiPage};
+use toolbox_core::{AppProfile, Config, HostStatus, LaunchCommand, Platform, Response, UiPage};
 use worker::{DialogKind, Event, SaveKind, Work};
 
 slint::include_modules!();
@@ -47,6 +47,7 @@ enum ConfirmAction {
     Edit(i32),
     New,
     CancelEdit,
+    ResetSettings,
     Delete,
     Reload,
     Import,
@@ -65,6 +66,7 @@ struct State {
     toggling: bool,
     rendered_generation: u64,
     host_pid: u32,
+    host_status: Option<HostStatus>,
     last_error: String,
 }
 
@@ -85,6 +87,19 @@ impl Controller {
 
     fn send(&self, work: Work) {
         if self.work.send(work).is_err() {
+            let ui = self.ui();
+            ui.set_loaded(false);
+            ui.set_saving(false);
+            ui.set_project_loading(false);
+            ui.set_project_opening(false);
+            ui.set_dialog_busy(false);
+            ui.set_diagnostic_loading(false);
+            ui.set_diagnostic_loaded(false);
+            {
+                let mut state = self.state.borrow_mut();
+                state.dialog_open = false;
+                state.toggling = false;
+            }
             self.error(
                 "后台任务已停止，请重新打开工具箱 / Background worker stopped; reopen the toolbox",
             );
@@ -103,6 +118,7 @@ impl Controller {
         let ui = self.ui();
         ui.set_status_message(message.into());
         ui.set_status_error(true);
+        self.sync_diagnostics();
     }
 
     fn dirty(&self) -> bool {
@@ -114,13 +130,20 @@ impl Controller {
         self.idle_timer.stop();
         self.state.borrow_mut().visible = true;
         let ui = self.ui();
-        ui.set_page(page_index(page));
+        // Activation must not move the page underneath an open modal dialog.
+        let modal = ui.get_confirm_visible() || ui.get_import_visible() || ui.get_dialog_busy();
+        if !modal {
+            ui.set_page(page_index(page));
+        }
         ui.window().set_minimized(false);
         ui.show().map_err(|e| e.to_string())?;
         ui.window()
             .with_winit_window(|window| window.focus_window());
         ui.invoke_focus_page();
-        if page == UiPage::Projects {
+        if modal {
+            return Ok(());
+        }
+        if ui.get_page() == page_index(UiPage::Projects) {
             ui.set_query("".into());
             ui.set_selected_project(-1);
             self.query_generation.fetch_add(1, Ordering::Relaxed);
@@ -132,26 +155,30 @@ impl Controller {
             self.send(Work::Load { force: false });
         }
         if page == UiPage::Diagnostics {
-            self.send(Work::Status);
+            self.refresh_status();
         }
         Ok(())
     }
 
     fn navigate(&self, page: i32) {
         let ui = self.ui();
-        if ui.get_confirm_visible() || ui.get_import_visible() {
+        if ui.get_confirm_visible() || ui.get_import_visible() || ui.get_dialog_busy() {
             return;
         }
-        ui.set_page(page_index(page_from_index(page)));
+        let target = page_index(page_from_index(page));
+        let changed = target != ui.get_page();
+        ui.set_page(target);
         ui.invoke_focus_page();
-        if page == 3 {
-            self.send(Work::Status);
+        if changed && target == 0 && ui.get_loaded() {
+            self.refresh_projects();
+        } else if changed && target == 3 {
+            self.refresh_status();
         }
     }
 
     fn dismiss(&self) {
         let ui = self.ui();
-        if ui.get_saving() || self.state.borrow().dialog_open {
+        if ui.get_saving() || ui.get_project_opening() || self.state.borrow().dialog_open {
             self.say(
                 "请等待当前操作完成。",
                 "Wait for the current operation to finish.",
@@ -184,7 +211,7 @@ impl Controller {
 
     fn schedule_unload(&self) {
         let state = self.state.borrow();
-        if state.visible || state.toggling {
+        if state.visible || state.toggling || self.ui().get_project_opening() {
             return;
         }
         let delay = state.config.ui_idle_seconds;
@@ -218,9 +245,15 @@ impl Controller {
                 .into(),
         );
         ui.set_settings_dirty(false);
+        self.update_match_help();
+        self.sync_candidate_labels();
+        self.sync_diagnostics();
     }
 
     fn sync_profiles(&self) {
+        let ui = self.ui();
+        ui.set_projects_enabled(self.state.borrow().config.projects_enabled);
+        ui.set_windows_enabled(self.state.borrow().config.windows_enabled);
         let rows = self
             .state
             .borrow()
@@ -229,6 +262,8 @@ impl Controller {
             .iter()
             .map(|profile| ProfileRow {
                 name: profile.name.clone().into(),
+                hotkey: profile.hotkey.clone().into(),
+                platform: platform_name(profile.platform).into(),
                 detail: format!(
                     "{}  ·  {}",
                     platform_name(profile.platform),
@@ -243,17 +278,22 @@ impl Controller {
                 available: profile.platform == Platform::current(),
             })
             .collect::<Vec<_>>();
-        self.ui().set_profiles(ModelRc::new(VecModel::from(rows)));
+        ui.set_profiles(ModelRc::new(VecModel::from(rows)));
     }
 
     fn refresh_projects(&self) {
         let ui = self.ui();
+        if !ui.get_loaded() {
+            return;
+        }
         let state = self.state.borrow();
         let generation = self.query_generation.fetch_add(1, Ordering::Relaxed) + 1;
+        ui.set_project_error(false);
         if !state.config.projects_enabled {
             ui.set_projects(ModelRc::default());
             ui.set_selected_project(-1);
             ui.set_project_loading(false);
+            ui.set_project_total(0);
             ui.set_project_message(
                 if ui.get_english() {
                     "Projects are disabled. Enable this module in Settings."
@@ -284,18 +324,21 @@ impl Controller {
     }
 
     fn query_changed(&self, query: String) {
-        if !self.state.borrow().config.projects_enabled {
+        if !self.ui().get_loaded() || !self.state.borrow().config.projects_enabled {
             return;
         }
         let generation = self.query_generation.fetch_add(1, Ordering::Relaxed) + 1;
-        self.ui().set_selected_project(-1);
+        let ui = self.ui();
+        ui.set_selected_project(-1);
+        ui.set_project_loading(true);
+        ui.set_project_error(false);
         self.send(Work::Search { generation, query });
     }
 
     fn move_project(&self, delta: i32) {
         let ui = self.ui();
         let count = ui.get_projects().row_count() as i32;
-        if count == 0 {
+        if count == 0 || ui.get_project_loading() {
             return;
         }
         ui.set_selected_project((ui.get_selected_project() + delta).clamp(0, count - 1));
@@ -312,6 +355,11 @@ impl Controller {
             return;
         }
         if ui.get_project_opening()
+            || !ui.get_loaded()
+            || ui.get_saving()
+            || ui.get_confirm_visible()
+            || ui.get_import_visible()
+            || ui.get_dialog_busy()
             || index < 0
             || !self.state.borrow().config.projects_enabled
             || self.state.borrow().rendered_generation
@@ -336,6 +384,23 @@ impl Controller {
         ui.set_settings_dirty(true);
         ui.set_english(ui.get_setting_language() == 1);
         self.update_match_help();
+        self.sync_candidate_labels();
+        self.sync_diagnostics();
+    }
+
+    fn reset_settings(&self) {
+        if self.ui().get_saving() || self.state.borrow().dialog_open {
+            return;
+        }
+        if self.ui().get_settings_dirty() {
+            self.ask(
+                ConfirmAction::ResetSettings,
+                "放弃设置的修改？",
+                "Discard settings changes?",
+                "将恢复已保存的设置，应用配置的修改会保留。",
+                "Restore saved settings. Application profile edits will be kept.",
+            );
+        }
     }
 
     fn settings_config(&self) -> Result<Config, String> {
@@ -415,6 +480,9 @@ impl Controller {
         if self.ui().get_saving() || self.state.borrow().dialog_open {
             return;
         }
+        if self.ui().get_editing() && self.ui().get_selected_profile() == index {
+            return;
+        }
         if self.ui().get_profile_dirty() {
             self.ask(
                 ConfirmAction::Edit(index),
@@ -431,17 +499,8 @@ impl Controller {
     fn begin_edit(&self, index: i32) {
         let profile = if index < 0 {
             let state = self.state.borrow();
-            let mut serial = 1;
-            while state
-                .config
-                .profiles
-                .iter()
-                .any(|p| p.id == format!("app-{serial}"))
-            {
-                serial += 1;
-            }
             AppProfile {
-                id: format!("app-{serial}"),
+                id: next_profile_id(&state.config.profiles),
                 name: String::new(),
                 platform: Platform::current(),
                 matcher: String::new(),
@@ -518,6 +577,24 @@ impl Controller {
     }
 
     fn sync_candidate(&self) {
+        self.sync_candidate_labels();
+        let ui = self.ui();
+        let state = self.state.borrow();
+        let Some(editor) = &state.editor else {
+            return;
+        };
+        ui.set_candidate_index(state.candidate as i32);
+        let command = &editor.launch[state.candidate];
+        ui.set_launch_executable(command.executable.clone().into());
+        ui.set_launch_args(
+            serde_json::to_string(&command.args)
+                .unwrap_or_else(|_| "[]".into())
+                .into(),
+        );
+        ui.set_launch_cwd(command.cwd.clone().unwrap_or_default().into());
+    }
+
+    fn sync_candidate_labels(&self) {
         let ui = self.ui();
         let state = self.state.borrow();
         let Some(editor) = &state.editor else {
@@ -540,15 +617,6 @@ impl Controller {
             })
             .collect::<Vec<_>>();
         ui.set_candidate_labels(ModelRc::new(VecModel::from(labels)));
-        ui.set_candidate_index(state.candidate as i32);
-        let command = &editor.launch[state.candidate];
-        ui.set_launch_executable(command.executable.clone().into());
-        ui.set_launch_args(
-            serde_json::to_string(&command.args)
-                .unwrap_or_else(|_| "[]".into())
-                .into(),
-        );
-        ui.set_launch_cwd(command.cwd.clone().unwrap_or_default().into());
     }
 
     fn select_candidate(&self, index: i32) {
@@ -687,12 +755,15 @@ impl Controller {
     fn toggle_profile(&self, index: i32) {
         let id = {
             let state = self.state.borrow();
-            if state.toggling {
+            if state.toggling || !state.config.windows_enabled {
                 return;
             }
             let Some(profile) = state.config.profiles.get(index as usize) else {
                 return;
             };
+            if !profile.enabled || profile.platform != Platform::current() {
+                return;
+            }
             profile.id.clone()
         };
         // A saved draft may not be lost just because the UI later unloads.
@@ -753,6 +824,10 @@ impl Controller {
             Some(ConfirmAction::Edit(index)) => self.begin_edit(index),
             Some(ConfirmAction::New) => self.begin_edit(-1),
             Some(ConfirmAction::CancelEdit) => self.cancel_editor(),
+            Some(ConfirmAction::ResetSettings) => {
+                self.sync_settings();
+                self.ui().invoke_focus_page();
+            }
             Some(ConfirmAction::Delete) => {
                 let index = self.state.borrow().editor_index;
                 if let Some(index) = index {
@@ -763,7 +838,7 @@ impl Controller {
             }
             Some(ConfirmAction::Reload) => {
                 self.cancel_editor();
-                self.ui().set_settings_dirty(false);
+                self.sync_settings();
                 self.send(Work::Load { force: true });
             }
             Some(ConfirmAction::Import) => {
@@ -838,15 +913,87 @@ impl Controller {
         }
     }
 
+    fn refresh_status(&self) {
+        if self.ui().get_diagnostic_loading() {
+            return;
+        }
+        self.ui().set_diagnostic_loading(true);
+        self.send(Work::Status);
+    }
+
+    fn receive_status(&self, status: HostStatus) {
+        {
+            let mut state = self.state.borrow_mut();
+            state.host_pid = status.process_id;
+            state.host_status = Some(status);
+        }
+        self.ui().set_diagnostic_loaded(true);
+        self.sync_diagnostics();
+    }
+
+    fn sync_diagnostics(&self) {
+        let ui = self.ui();
+        let state = self.state.borrow();
+        ui.set_diagnostic_error(state.last_error.clone().into());
+        let Some(status) = &state.host_status else {
+            return;
+        };
+        ui.set_diagnostic_window_control(status.window_control);
+        ui.set_diagnostic_hotkeys(status.hotkeys);
+        ui.set_diagnostic_tray(status.tray);
+        ui.set_diagnostic_backend(status.backend.clone().into());
+        ui.set_diagnostic_platform(platform_name(Platform::current()).into());
+        ui.set_diagnostic_last_action(status.last_action.clone().into());
+        ui.set_diagnostic_warnings(status.warnings.join("\n").into());
+        let availability = |value| match (ui.get_english(), value) {
+            (true, true) => "Available",
+            (true, false) => "Unavailable",
+            (false, true) => "可用",
+            (false, false) => "不可用",
+        };
+        let text = if ui.get_english() {
+            format!(
+                "System: {}\nBackend: {}\nHost process: {}\nWindow control: {}\nGlobal shortcuts: {}\nSystem tray: {}\nConfiguration revision: {}\n\nLast action:\n{}\n\nNotes:\n{}\n\nLast UI error:\n{}",
+                platform_name(Platform::current()),
+                status.backend,
+                state.host_pid,
+                availability(status.window_control),
+                availability(status.hotkeys),
+                availability(status.tray),
+                state.revision,
+                status.last_action,
+                status.warnings.join("\n"),
+                state.last_error
+            )
+        } else {
+            format!(
+                "系统：{}\n窗口后端：{}\n常驻进程：{}\n窗口控制：{}\n全局快捷键：{}\n系统托盘：{}\n配置修订号：{}\n\n最近操作：\n{}\n\n提示：\n{}\n\n最近的界面错误：\n{}",
+                platform_name(Platform::current()),
+                status.backend,
+                state.host_pid,
+                availability(status.window_control),
+                availability(status.hotkeys),
+                availability(status.tray),
+                state.revision,
+                status.last_action,
+                status.warnings.join("\n"),
+                state.last_error
+            )
+        };
+        ui.set_diagnostics(text.into());
+    }
+
     fn handle(&self, event: Event) {
         let ui = self.ui();
         match event {
             Event::Loaded { response, force } => match response {
                 Ok(response) => {
-                    if let Some(status) = &response.status { self.state.borrow_mut().host_pid = status.process_id; }
+                    if let Some(status) = response.status { self.receive_status(status); }
                     let Some(config) = response.config else { self.error("宿主未返回配置 / Host returned no configuration"); return; };
                     if ui.get_saving() { return; }
-                    if !force && self.dirty() {
+                    // A forced reload discards the old draft before dispatch.
+                    // Never discard a new draft entered while IPC was in flight.
+                    if self.dirty() {
                         if response.revision != self.state.borrow().revision { self.error("配置已在外部更改，请重新载入后再保存 / Configuration changed externally; reload before saving"); }
                         if ui.get_page() == 0 { self.refresh_projects(); }
                         return;
@@ -872,12 +1019,12 @@ impl Controller {
                             let mut state = self.state.borrow_mut();
                             state.config = response.config.unwrap_or(config); state.revision = response.revision;
                         }
+                        if let Some(status) = response.status { self.receive_status(status); }
                         if matches!(kind, SaveKind::Settings | SaveKind::Import) || !ui.get_settings_dirty() { self.sync_settings(); }
                         self.sync_profiles();
                         if matches!(kind, SaveKind::Profile | SaveKind::Delete | SaveKind::Import) { self.cancel_editor(); }
                         if kind == SaveKind::Import { self.cancel_import(); }
                         self.say("配置已保存并应用。", "Configuration saved and applied.");
-                        if !response.message.is_empty() { ui.set_status_message(response.message.into()); }
                         if kind == SaveKind::Settings || kind == SaveKind::Import { self.refresh_projects(); }
                     }
                     Err(error) => self.error(error),
@@ -887,8 +1034,10 @@ impl Controller {
                 if generation != self.query_generation.load(Ordering::Relaxed) { return; }
                 self.state.borrow_mut().rendered_generation = generation;
                 ui.set_project_loading(false);
+                ui.set_project_total(total.min(i32::MAX as usize) as i32);
                 match result {
                     Ok(items) => {
+                        ui.set_project_error(false);
                         let count = items.len();
                         let rows = items.into_iter().map(|item| ProjectRow { id: item.id.into(), name: item.name.into(), location: item.location.into(), source: item.source.into() }).collect::<Vec<_>>();
                         ui.set_projects(ModelRc::new(VecModel::from(rows)));
@@ -901,12 +1050,23 @@ impl Controller {
                         } else if ui.get_english() { format!("{count} shown · {total} recent projects") } else { format!("显示 {count} 项 · 共 {total} 个最近项目") };
                         ui.set_project_message(message.into());
                     }
-                    Err(error) => { ui.set_projects(ModelRc::default()); ui.set_selected_project(-1); ui.set_project_message(error.clone().into()); self.error(error); }
+                    Err(error) => { ui.set_project_error(true); ui.set_projects(ModelRc::default()); ui.set_selected_project(-1); ui.set_project_message(error.clone().into()); self.error(error); }
                 }
             }
             Event::Opened(result) => {
                 ui.set_project_opening(false);
-                match result { Ok(()) => { self.say("已发送项目打开请求。", "Project open request sent."); self.hide(); }, Err(error) => self.error(error) }
+                match result {
+                    Ok(()) => {
+                        self.say("已发送项目打开请求。", "Project open request sent.");
+                        // Opening may be slow. Do not hide a different page or
+                        // unload a draft the user started while waiting.
+                        if ui.get_page() == 0 && !self.dirty() && !ui.get_confirm_visible()
+                            && !ui.get_import_visible() && !ui.get_dialog_busy() && !ui.get_saving() {
+                            self.hide();
+                        }
+                    },
+                    Err(error) => self.error(error),
+                }
             }
             Event::Toggled(result) => {
                 self.state.borrow_mut().toggling = false;
@@ -915,22 +1075,22 @@ impl Controller {
                     Err(error) => { let _ = self.show(UiPage::Windows, false); self.error(error); }
                 }
             }
-            Event::Status(result) => match result {
-                Ok(response) => {
-                    if let Some(status) = response.status {
-                        self.state.borrow_mut().host_pid = status.process_id;
-                        let state = self.state.borrow();
-                        let text = if ui.get_english() {
-                            format!("System: {}\nBackend: {}\nHost process: {}\nWindow control: {}\nGlobal shortcuts: {}\nSystem tray: {}\nConfiguration revision: {}\n\nLast action:\n{}\n\nNotes:\n{}\n\nLast UI error:\n{}", platform_name(Platform::current()), status.backend, state.host_pid, status.window_control, status.hotkeys, status.tray, state.revision, status.last_action, status.warnings.join("\n"), state.last_error)
-                        } else {
-                            let yes = |value| if value { "可用" } else { "不可用" };
-                            format!("系统：{}\n窗口后端：{}\n常驻进程：{}\n窗口控制：{}\n全局快捷键：{}\n系统托盘：{}\n配置修订号：{}\n\n最近操作：\n{}\n\n提示：\n{}\n\n最近的界面错误：\n{}", platform_name(Platform::current()), status.backend, state.host_pid, yes(status.window_control), yes(status.hotkeys), yes(status.tray), state.revision, status.last_action, status.warnings.join("\n"), state.last_error)
-                        };
-                        ui.set_diagnostics(text.into());
-                    } else { self.error("宿主未返回状态 / Host returned no status"); }
+            Event::Status(result) => {
+                ui.set_diagnostic_loading(false);
+                match result {
+                    Ok(response) => {
+                        if let Some(status) = response.status { self.receive_status(status); }
+                        else {
+                            ui.set_diagnostic_loaded(false);
+                            self.error("宿主未返回状态 / Host returned no status");
+                        }
+                    }
+                    Err(error) => {
+                        ui.set_diagnostic_loaded(false);
+                        self.error(error);
+                    }
                 }
-                Err(error) => { ui.set_diagnostics(error.clone().into()); self.error(error); }
-            },
+            }
             Event::PathPicked { kind, path } => {
                 self.state.borrow_mut().dialog_open = false;
                 ui.set_dialog_busy(false);
@@ -1030,6 +1190,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             toggling: false,
             rendered_generation: 0,
             host_pid: 0,
+            host_status: None,
             last_error: String::new(),
         }),
     });
@@ -1053,12 +1214,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.on_browse_path(|kind| with_controller(|c| c.start_dialog(DialogKind::Browse(kind))));
     ui.on_settings_changed(|| with_controller(Controller::settings_changed));
     ui.on_save_settings(|| with_controller(Controller::save_settings));
+    ui.on_reset_settings(|| with_controller(Controller::reset_settings));
     ui.on_reload_config(|| with_controller(Controller::reload_config));
     ui.on_import_config(|| with_controller(Controller::import_config));
     ui.on_export_config(|| with_controller(|c| c.start_dialog(DialogKind::Export)));
     ui.on_apply_import(|replace| with_controller(|c| c.apply_import(replace)));
     ui.on_cancel_import(|| with_controller(Controller::cancel_import));
-    ui.on_refresh_status(|| with_controller(|c| c.send(Work::Status)));
+    ui.on_refresh_status(|| with_controller(Controller::refresh_status));
     ui.on_confirm_action(|yes| with_controller(|c| c.confirm(yes)));
     ui.on_open_link(|index| with_controller(|c| c.send(Work::Link(index))));
     ui.window().on_close_requested(|| {
@@ -1085,4 +1247,253 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let _ = cleanup.join();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+
+    thread_local! {
+        static TEST_WINDOW: Rc<MinimalSoftwareWindow> =
+            MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
+    }
+
+    struct TestPlatform;
+
+    impl slint::platform::Platform for TestPlatform {
+        fn create_window_adapter(
+            &self,
+        ) -> Result<Rc<dyn slint::platform::WindowAdapter>, slint::PlatformError> {
+            Ok(TEST_WINDOW.with(Clone::clone))
+        }
+    }
+
+    fn with_test_ui(
+        test: impl FnOnce(&AppWindow, &Controller, &mpsc::Receiver<Work>) + Send + 'static,
+    ) {
+        // Each test owns a Slint context, software window and disconnected worker.
+        // No native desktop, host process, configuration or user data is accessed.
+        std::thread::spawn(move || {
+            slint::platform::set_platform(Box::new(TestPlatform)).unwrap();
+            let ui = AppWindow::new().unwrap();
+            let (send, receive) = mpsc::channel();
+            let controller = Controller {
+                ui: ui.as_weak(),
+                work: send,
+                query_generation: Arc::new(AtomicU64::new(0)),
+                idle_timer: Timer::default(),
+                state: RefCell::new(State {
+                    config: Config::default(),
+                    revision: 1,
+                    editor: None,
+                    editor_index: None,
+                    candidate: 0,
+                    imported: None,
+                    confirmation: None,
+                    dialog_open: false,
+                    visible: true,
+                    toggling: false,
+                    rendered_generation: 0,
+                    host_pid: 0,
+                    host_status: None,
+                    last_error: String::new(),
+                }),
+            };
+            ui.set_loaded(true);
+            controller.sync_settings();
+            controller.sync_profiles();
+            test(&ui, &controller, &receive);
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn navigating_from_another_start_page_discovers_projects() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_page(1);
+            controller.navigate(0);
+            assert_eq!(ui.get_page(), 0);
+            assert!(ui.get_project_loading());
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Discover { generation: 1, query, .. } if query.is_empty()
+            ));
+            controller.handle(Event::Projects {
+                generation: 1,
+                result: Ok(vec![]),
+                total: 0,
+            });
+            assert!(!ui.get_project_loading());
+            assert!(!ui.get_project_error());
+            assert_eq!(ui.get_selected_project(), -1);
+        });
+    }
+
+    #[test]
+    fn late_project_open_does_not_hide_new_drafts_or_other_pages() {
+        with_test_ui(|ui, controller, _| {
+            ui.set_page(0);
+            ui.set_project_opening(true);
+            ui.set_setting_hotkey("Ctrl+Alt+P".into());
+            controller.settings_changed();
+            controller.handle(Event::Opened(Ok(())));
+            assert!(controller.state.borrow().visible);
+            assert!(ui.get_settings_dirty());
+            assert_eq!(ui.get_setting_hotkey(), "Ctrl+Alt+P");
+            assert!(!ui.get_project_opening());
+
+            controller.sync_settings();
+            ui.set_page(1);
+            ui.set_project_opening(true);
+            controller.handle(Event::Opened(Ok(())));
+            assert!(controller.state.borrow().visible);
+            assert_eq!(ui.get_page(), 1);
+        });
+    }
+
+    #[test]
+    fn reload_does_not_erase_edits_started_while_the_request_is_pending() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_page(2);
+            controller.reload_config();
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Load { force: true }
+            ));
+            ui.set_setting_idle("120".into());
+            controller.settings_changed();
+            controller.handle(Event::Loaded {
+                response: Ok(Response {
+                    ok: true,
+                    config: Some(Config {
+                        ui_idle_seconds: 30,
+                        ..Config::default()
+                    }),
+                    revision: 2,
+                    ..Response::default()
+                }),
+                force: true,
+            });
+            assert_eq!(ui.get_setting_idle(), "120");
+            assert!(ui.get_settings_dirty());
+            assert!(ui.get_status_error());
+            assert_eq!(controller.state.borrow().revision, 1);
+        });
+    }
+
+    #[test]
+    fn resetting_settings_preserves_an_application_and_its_unparsed_candidate() {
+        with_test_ui(|ui, controller, _| {
+            ui.set_page(1);
+            controller.begin_edit(0);
+            ui.set_form_name("My terminal draft".into());
+            ui.set_launch_args("[".into());
+            controller.profile_changed();
+            ui.set_setting_language(1);
+            ui.set_setting_windows(false);
+            controller.settings_changed();
+            assert!(ui.get_windows_enabled());
+            assert!(!ui.get_setting_windows());
+            controller.reset_settings();
+            assert!(ui.get_confirm_visible());
+            controller.confirm(true);
+            assert!(!ui.get_settings_dirty());
+            assert!(ui.get_setting_windows());
+            assert!(!ui.get_english());
+            assert!(ui.get_profile_dirty());
+            assert_eq!(ui.get_form_name(), "My terminal draft");
+            assert_eq!(ui.get_launch_args(), "[");
+            assert!(ui.get_editing());
+
+            controller.edit_profile(0);
+            assert!(!ui.get_confirm_visible());
+            assert_eq!(ui.get_form_name(), "My terminal draft");
+        });
+    }
+
+    #[test]
+    fn failed_status_refresh_invalidates_previous_capabilities() {
+        with_test_ui(|ui, controller, receive| {
+            controller.receive_status(HostStatus {
+                process_id: 42,
+                backend: "test backend".into(),
+                window_control: true,
+                hotkeys: true,
+                tray: true,
+                ..HostStatus::default()
+            });
+            assert!(ui.get_diagnostic_loaded());
+            assert!(ui.get_diagnostic_hotkeys());
+            controller.refresh_status();
+            controller.refresh_status();
+            assert!(matches!(receive.try_recv().unwrap(), Work::Status));
+            assert!(receive.try_recv().is_err());
+            assert!(ui.get_diagnostic_loading());
+            controller.handle(Event::Status(Err("Host disconnected".into())));
+            assert!(!ui.get_diagnostic_loaded());
+            assert!(!ui.get_diagnostic_loading());
+            assert_eq!(ui.get_diagnostic_error(), "Host disconnected");
+        });
+    }
+
+    #[test]
+    fn action_and_navigation_buttons_accept_the_first_pointer_click() {
+        with_test_ui(|ui, _, _| {
+            use slint::platform::{PointerEventButton, WindowEvent};
+            use std::cell::Cell;
+
+            ui.set_english(true);
+            ui.set_page(1);
+            ui.window().set_size(slint::LogicalSize::new(1120.0, 780.0));
+            ui.show().unwrap();
+
+            let added = Rc::new(Cell::new(0));
+            let additions = added.clone();
+            ui.on_new_profile(move || additions.set(additions.get() + 1));
+            let edited = Rc::new(Cell::new(-1));
+            let edits = edited.clone();
+            ui.on_edit_profile(move |index| edits.set(index));
+            let navigated = Rc::new(Cell::new(-1));
+            let navigation = navigated.clone();
+            ui.on_navigate(move |page| navigation.set(page));
+
+            let render = || {
+                TEST_WINDOW.with(|window| {
+                    let mut pixels = slint::SharedPixelBuffer::<slint::Rgb8Pixel>::new(1120, 780);
+                    window.draw_if_needed(|renderer| {
+                        renderer.render(pixels.make_mut_slice(), 1120);
+                    });
+                });
+            };
+            let click = |x, y| {
+                let position = slint::LogicalPosition::new(x, y);
+                ui.window().dispatch_event(WindowEvent::PointerPressed {
+                    position,
+                    button: PointerEventButton::Left,
+                });
+                ui.window().dispatch_event(WindowEvent::PointerReleased {
+                    position,
+                    button: PointerEventButton::Left,
+                });
+            };
+
+            // Centers observed in native UI acceptance at the default content size:
+            // Add application, first profile's Edit, and the Settings navigation row.
+            // Rendering first exercises real hit testing, not direct callback invocation.
+            render();
+            click(336.0, 129.0);
+            assert_eq!(added.get(), 1, "the first mouse click must activate Add");
+            click(288.0, 274.0);
+            assert_eq!(edited.get(), 0, "the first mouse click must activate Edit");
+            click(100.0, 621.0);
+            assert_eq!(navigated.get(), 2, "navigation must accept its first click");
+
+            ui.set_saving(true);
+            render();
+            click(336.0, 129.0);
+            assert_eq!(added.get(), 1, "a disabled action must not fire");
+        });
+    }
 }

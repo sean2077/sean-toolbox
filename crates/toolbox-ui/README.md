@@ -12,11 +12,21 @@ and the persisted configuration. The host does not depend on this crate.
   `slint::invoke_from_event_loop`.
 - Search requests have monotonic generations. Both the worker and UI reject
   obsolete results; stale displayed rows cannot launch a project while a newer
-  query is pending. Up/Down/Enter act on the search field, preserving ordinary
-  keyboard behavior for buttons and dialogs.
+  query is pending. Entering the project page discovers history even when the
+  interface was first opened on a different page. Single-click selects a row;
+  double-click or Enter opens it. Up/Down/Enter act on the search field and list,
+  preserving ordinary keyboard behavior for buttons and dialogs.
 - Application and general-setting drafts are separate. Saves include the host's
   expected revision. Validation, shortcut conflicts, concurrent updates, and
-  native failures leave the draft available for correction.
+  native failures leave the draft available for correction. Resetting settings
+  preserves the application draft; in-flight reload/open results cannot discard
+  newly entered drafts. Live language previews do not change saved module state.
+- Ctrl/Cmd+K or F focuses project search, Ctrl/Cmd+S saves the current editor,
+  and Ctrl/Cmd+1 through 4 changes pages. Modal dialogs keep keyboard focus and
+  block these shortcuts. Icon actions retain accessible names and focus rings.
+- Diagnostics use capability cards and separate activity, warnings and errors.
+  A failed status refresh invalidates the previous capability snapshot. Raw
+  technical details remain available on demand without periodic status polling.
 - INI/JSON imports are bounded to 1 MiB and previewed before application. Merge
   replaces profiles with the same case-insensitive ID and preserves settings.
   JSON replacement also restores settings. Import never launches an application.
@@ -36,7 +46,9 @@ cargo test -p toolbox-ui
 cargo clippy -p toolbox-ui --all-targets -- -D warnings
 ```
 
-The generated bindings come from `ui/main.slint`. The frontend accepts
+The generated bindings come from `ui/main.slint`; `ui/components.slint` owns
+shared visual primitives and the small `ui/icons/` SVGs are embedded at build
+time. The frontend accepts
 `--page projects|windows|settings|diagnostics` and `--endpoint <identifier>`.
 The endpoint is a current-user identifier, never an arbitrary socket path.
 

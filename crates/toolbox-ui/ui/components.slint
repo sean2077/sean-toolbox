@@ -1,0 +1,274 @@
+// Shared visual primitives. All icons are original, embedded vector assets.
+export global Theme {
+    out property <color> canvas: #f7f8fa;
+    out property <color> sidebar: #f0f2f5;
+    out property <color> surface: #ffffff;
+    out property <color> text: #202b3d;
+    out property <color> secondary: #536176;
+    out property <color> muted: #717e90;
+    out property <color> border: #e2e7ee;
+    out property <color> accent: #3264d6;
+    out property <color> accent-soft: #eaf0fd;
+    out property <color> success: #23815c;
+    out property <color> danger: #bd3d3d;
+    out property <color> warning: #94651c;
+}
+
+export component Icon inherits Rectangle {
+    in property <image> source;
+    in property <brush> colorize: Theme.secondary;
+    width: 20px;
+    min-height: 20px;
+    accessible-role: none;
+    Image {
+        x: 0px;
+        y: (parent.height - self.height) / 2;
+        width: parent.width;
+        height: parent.width;
+        source: root.source;
+        colorize: root.colorize;
+        image-fit: contain;
+    }
+}
+
+export component Caption inherits Text {
+    color: Theme.muted;
+    font-size: 12px;
+    wrap: word-wrap;
+    vertical-alignment: center;
+}
+
+export component FieldLabel inherits Text {
+    color: Theme.secondary;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+export component SectionLabel inherits Text {
+    color: Theme.muted;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    vertical-alignment: center;
+}
+
+export component Divider inherits Rectangle {
+    height: 1px;
+    background: Theme.border;
+}
+
+export component Card inherits Rectangle {
+    background: Theme.surface;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: Theme.border;
+}
+
+export component Keycap inherits Rectangle {
+    in property <string> text;
+    in property <bool> accent: false;
+    height: 24px;
+    min-width: key.preferred-width + 14px;
+    horizontal-stretch: 0;
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: root.accent ? #cfdbf6 : Theme.border;
+    background: root.accent ? #f4f7ff : #f9fafb;
+    key := Text {
+        text: root.text;
+        color: root.accent ? Theme.accent : Theme.secondary;
+        font-size: 11px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+export component ActionButton inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> with-icon: false;
+    in property <bool> icon-only: false;
+    in property <bool> primary: false;
+    in property <bool> subtle: false;
+    in property <bool> danger: false;
+    in property <bool> enabled: true;
+    out property <bool> has-focus: focus-scope.has-focus;
+    callback clicked;
+    height: 36px;
+    min-width: root.icon-only ? 36px : label.preferred-width + (root.with-icon ? 48px : 28px);
+    horizontal-stretch: 0;
+    border-radius: 7px;
+    opacity: root.enabled ? 1 : 0.45;
+    border-width: focus-scope.has-focus ? 2px : root.subtle || root.primary ? 0px : 1px;
+    border-color: focus-scope.has-focus ? #7a9dee : Theme.border;
+    background: root.primary ? (touch.pressed ? #214da9 : touch.has-hover ? #2859c5 : Theme.accent)
+        : touch.pressed ? #e7ebf1 : touch.has-hover ? #eef1f6 : root.subtle ? transparent : Theme.surface;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+    forward-focus: focus-scope;
+    HorizontalLayout {
+        alignment: center;
+        padding-left: root.icon-only ? 8px : 12px;
+        padding-right: root.icon-only ? 8px : 12px;
+        spacing: 7px;
+        if root.with-icon: Icon {
+            width: 16px;
+            source: root.icon;
+            colorize: root.primary ? white : root.danger ? Theme.danger : Theme.secondary;
+        }
+        label := Text {
+            visible: !root.icon-only;
+            text: root.icon-only ? "" : root.text;
+            font-size: 12px;
+            font-weight: 600;
+            color: root.primary ? white : root.danger ? Theme.danger : Theme.secondary;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { focus-scope.focus(); root.clicked(); }
+    }
+    focus-scope := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == Key.Return || event.text == Key.Space { root.clicked(); return accept; }
+            reject
+        }
+    }
+}
+
+export component NavButton inherits Rectangle {
+    in property <string> text;
+    in property <image> icon;
+    in property <bool> selected;
+    in property <bool> dirty: false;
+    callback clicked;
+    height: 44px;
+    border-radius: 8px;
+    background: root.selected ? Theme.surface : touch.has-hover ? #e7ebf1 : transparent;
+    border-width: focus-scope.has-focus ? 2px : root.selected ? 1px : 0px;
+    border-color: focus-scope.has-focus ? #7a9dee : #e3e7ee;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+    forward-focus: focus-scope;
+    HorizontalLayout {
+        padding-left: 13px;
+        padding-right: 12px;
+        spacing: 11px;
+        Icon { source: root.icon; colorize: root.selected ? Theme.accent : Theme.muted; width: 18px; }
+        Text { text: root.text; font-size: 13px; font-weight: root.selected ? 600 : 400; color: root.selected ? Theme.text : Theme.secondary; horizontal-stretch: 1; vertical-alignment: center; }
+        if root.dirty: VerticalLayout { width: 6px; alignment: center; Rectangle { height: 6px; border-radius: 3px; background: #d79b38; } }
+    }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    focus-scope := FocusScope {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == Key.Return || event.text == Key.Space { root.clicked(); return accept; }
+            reject
+        }
+    }
+}
+
+export component SearchInput inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder-text;
+    in property <string> clear-label;
+    in property <bool> enabled: true;
+    out property <bool> has-focus: input.has-focus;
+    callback edited(string);
+    height: 54px;
+    border-radius: 9px;
+    border-width: input.has-focus ? 2px : 1px;
+    border-color: input.has-focus ? #83a3ee : Theme.border;
+    background: Theme.surface;
+    forward-focus: input;
+    Icon { source: @image-url("icons/search.svg"); x: 17px; y: 17px; colorize: input.has-focus ? Theme.accent : Theme.muted;  height: 20px; }
+    Text {
+        x: 48px; y: 0px; height: parent.height; width: parent.width - 104px;
+        visible: root.text == "";
+        text: root.placeholder-text;
+        font-size: 15px;
+        color: Theme.muted;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    input := TextInput {
+        x: 48px; y: 1px; width: parent.width - 104px; height: parent.height - 2px;
+        text <=> root.text;
+        enabled: root.enabled;
+        single-line: true;
+        font-size: 15px;
+        color: Theme.text;
+        selection-background-color: #dce7ff;
+        selection-foreground-color: Theme.text;
+        vertical-alignment: center;
+        accessible-label: root.placeholder-text;
+        edited => { root.edited(self.text); }
+    }
+    if root.text != "": ActionButton {
+        x: parent.width - 44px; y: 9px;
+        width: 36px;
+        text: root.clear-label;
+        with-icon: true; icon-only: true; subtle: true;
+        icon: @image-url("icons/close.svg");
+        clicked => { root.text = ""; root.edited(""); input.focus(); }
+    }
+}
+
+export component SettingRow inherits Rectangle {
+    in property <string> title;
+    in property <string> description;
+    in property <length> control-width: 200px;
+    min-height: 80px;
+    HorizontalLayout {
+        padding: 18px;
+        spacing: 22px;
+        VerticalLayout {
+            alignment: center;
+            spacing: 5px;
+            horizontal-stretch: 1;
+            Text { text: root.title; font-size: 13px; font-weight: 600; color: Theme.text; wrap: word-wrap; }
+            Caption { text: root.description; }
+        }
+        VerticalLayout {
+            width: root.control-width;
+            alignment: center;
+            HorizontalLayout {
+                alignment: end;
+                @children
+            }
+        }
+    }
+}
+
+export component CapabilityCard inherits Card {
+    in property <string> title;
+    in property <string> value;
+    in property <image> icon;
+    in property <bool> ready;
+    in property <bool> available;
+    height: 112px;
+    HorizontalLayout {
+        padding: 18px; spacing: 12px;
+        VerticalLayout {
+            width: 36px; alignment: center;
+            Rectangle {
+                height: 36px; border-radius: 9px;
+                background: Theme.canvas;
+                Icon { x: 8px; y: 8px; width: 20px; height: 20px; source: root.icon; }
+            }
+        }
+        VerticalLayout {
+            alignment: center; spacing: 8px;
+            Text { text: root.title; font-size: 12px; color: Theme.secondary; overflow: elide; }
+            Text { text: root.value; font-size: 14px; font-weight: 600; color: !root.ready ? Theme.muted : root.available ? Theme.success : Theme.warning; }
+        }
+    }
+}

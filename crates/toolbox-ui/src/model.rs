@@ -140,6 +140,21 @@ pub fn launch_command(
     })
 }
 
+pub fn next_profile_id(profiles: &[AppProfile]) -> String {
+    // Config identity is case-insensitive, including IDs imported from INI/JSON.
+    let mut serial = 1;
+    loop {
+        let id = format!("app-{serial}");
+        if !profiles
+            .iter()
+            .any(|profile| profile.id.eq_ignore_ascii_case(&id))
+        {
+            return id;
+        }
+        serial += 1;
+    }
+}
+
 pub fn platform_name(platform: Platform) -> &'static str {
     match platform {
         Platform::Windows => "Windows",
@@ -181,6 +196,17 @@ pub fn page_from_index(index: i32) -> UiPage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_profile_ids_respect_case_insensitive_imported_ids() {
+        let mut profiles = Config::default().profiles;
+        profiles[0].id = "APP-1".into();
+        profiles[1].id = "app-3".into();
+        assert_eq!(next_profile_id(&profiles), "app-2");
+        profiles[2].id = "App-2".into();
+        assert_eq!(next_profile_id(&profiles), "app-4");
+        assert_eq!(next_profile_id(&[]), "app-1");
+    }
 
     #[test]
     fn arguments_preserve_boundaries_and_literal_shell_characters() {
