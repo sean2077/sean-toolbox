@@ -1,0 +1,288 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme, Icon } from "components.slint";
+import { ProjectRow } from "project-types.slint";
+
+// Render paths as plain text; punctuation in a URI must not become Markdown.
+component HoverHint inherits Rectangle {
+    in property <string> text;
+    max-width: 620px;
+    border-radius: 5px;
+    background: #263349;
+    VerticalLayout {
+        padding: 10px;
+        Text { text: root.text; color: white; font-size: 12px; wrap: word-wrap; }
+    }
+}
+
+component PanelAction inherits Rectangle {
+    in property <string> label;
+    in property <image> icon;
+    in property <bool> enabled: true;
+    callback clicked;
+    width: 28px;
+    height: 28px;
+    border-radius: 5px;
+    background: touch.has-hover ? #e9edf4 : transparent;
+    border-width: keys.has-focus ? 1px : 0px;
+    border-color: Theme.accent;
+    opacity: root.enabled ? 1 : 0.4;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+    forward-focus: keys;
+    Icon { x: 7px; y: 7px; width: 14px; height: 14px; min-height: 14px; source: root.icon; colorize: Theme.muted; }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+    keys := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == Key.Return || event.text == Key.Space { root.clicked(); return accept; }
+            reject
+        }
+    }
+    Tooltip { HoverHint { text: root.label; } }
+}
+
+// A transient search surface. Configuration stays in the separate AppWindow.
+export component LauncherWindow inherits Window {
+    title: "Sean Toolbox · Recent Projects";
+    in property <length> panel-width: 760px;
+    in property <length> panel-height: 408px;
+    preferred-width: root.panel-width;
+    preferred-height: root.panel-height;
+    min-width: 480px;
+    min-height: 244px;
+    max-width: root.panel-width;
+    max-height: root.panel-height;
+    no-frame: true;
+    always-on-top: true;
+    background: Theme.surface;
+    default-font-size: 13px;
+
+    in-out property <bool> english: false;
+    in-out property <bool> loaded: false;
+    in-out property <bool> projects-enabled: true;
+    in-out property <[ProjectRow]> projects;
+    in-out property <string> query;
+    in-out property <int> selected-project: -1;
+    in-out property <string> project-message;
+    in-out property <bool> project-loading: false;
+    in-out property <bool> project-opening: false;
+    in-out property <bool> project-error: false;
+    in-out property <int> project-total: 0;
+    in-out property <string> status-message;
+    in-out property <bool> status-error: false;
+    callback query-changed(string);
+    callback move-project(int);
+    callback select-project(int);
+    callback open-project(int);
+    callback refresh-projects;
+    callback dismiss;
+    callback open-settings;
+
+    public function focus-search() { search.focus(); }
+    public function reveal-selection() {
+        if root.selected-project < 0 { return; }
+        if root.selected-project * 26px + results.content-y < 0px {
+            results.content-y = -root.selected-project * 26px;
+        }
+        if (root.selected-project + 1) * 26px + results.content-y > results.visible-height {
+            results.content-y = results.visible-height - (root.selected-project + 1) * 26px;
+        }
+    }
+
+    forward-focus: keys;
+    keys := FocusScope {
+        capture-key-pressed(event) => {
+            if event.text == Key.Escape { root.dismiss(); return accept; }
+            if event.text == Key.DownArrow { root.move-project(1); return accept; }
+            if event.text == Key.UpArrow { root.move-project(-1); return accept; }
+            if event.text == Key.Return && search.has-focus { root.open-project(root.selected-project); return accept; }
+            if event.modifiers.control || event.modifiers.meta {
+                if event.text == "k" || event.text == "f" { search.focus(); search.select-all(); return accept; }
+                if event.text == "r" { root.refresh-projects(); return accept; }
+                if event.text == "," { root.open-settings(); return accept; }
+            }
+            reject
+        }
+        Rectangle {
+            border-width: 1px;
+            border-color: #cfd7e4;
+            VerticalLayout {
+                padding: 1px;
+                spacing: 0px;
+                Rectangle {
+                    height: 54px;
+                    background: #fafbfe;
+                    HorizontalLayout {
+                        padding-left: 16px;
+                        padding-right: 12px;
+                        spacing: 10px;
+                        Icon { source: @image-url("icons/code.svg"); width: 17px; colorize: Theme.accent; }
+                        Text { text: "VS Code"; color: Theme.secondary; font-size: 12px; font-weight: 600; vertical-alignment: center; }
+                        Text { text: "›"; color: #99a5b6; font-size: 22px; vertical-alignment: center; }
+                        Rectangle {
+                            horizontal-stretch: 1;
+                            Text {
+                                x: 0px;
+                                y: 0px;
+                                width: 100%;
+                                height: 100%;
+                                visible: root.query == "";
+                                text: root.english ? "Search recent projects…" : "搜索最近项目…";
+                                color: Theme.muted;
+                                font-size: 14px;
+                                vertical-alignment: center;
+                                horizontal-alignment: left;
+                                overflow: elide;
+                            }
+                            search := TextInput {
+                                text <=> root.query;
+                                enabled: !root.loaded || root.projects-enabled;
+                                single-line: true;
+                                color: Theme.text;
+                                font-size: 14px;
+                                vertical-alignment: center;
+                                selection-background-color: #dce7ff;
+                                selection-foreground-color: Theme.text;
+                                accessible-label: root.english ? "Search recent projects by name or path" : "按名称或路径搜索最近项目";
+                                edited => { root.query-changed(self.text); }
+                            }
+                        }
+                        Text {
+                            text: (root.selected-project >= 0 ? root.selected-project + 1 : 0) + " / " + root.projects.length;
+                            width: 56px;
+                            horizontal-alignment: right;
+                            vertical-alignment: center;
+                            font-size: 11px;
+                            color: Theme.muted;
+                            accessible-label: root.english ? "Selected result and match count" : "当前选择与匹配数量";
+                        }
+                        VerticalLayout {
+                            width: 28px;
+                            alignment: center;
+                            PanelAction {
+                                label: root.english ? "Settings · Ctrl+," : "设置 · Ctrl+,";
+                                icon: @image-url("icons/settings.svg");
+                                clicked => { root.open-settings(); }
+                            }
+                        }
+                    }
+                }
+                Rectangle { height: 1px; background: Theme.border; }
+                Rectangle {
+                    vertical-stretch: 1;
+                    results := ScrollView {
+                        visible: root.projects.length > 0;
+                        horizontal-scrollbar-policy: always-off;
+                        opacity: root.project-loading ? 0.45 : 1;
+                        VerticalLayout {
+                            spacing: 0px;
+                            for item[index] in root.projects: Rectangle {
+                                height: 26px;
+                                background: index == root.selected-project ? Theme.accent : row-touch.has-hover ? #f0f4fb : Theme.surface;
+                                accessible-role: button;
+                                accessible-label: item.name + " " + item.location;
+                                accessible-action-default => { root.open-project(index); }
+                                HorizontalLayout {
+                                    padding-left: 14px;
+                                    padding-right: 14px;
+                                    spacing: 12px;
+                                    Text {
+                                        text: "[VSCode]";
+                                        width: 60px;
+                                        font-size: 11px;
+                                        color: index == root.selected-project ? #e7efff : Theme.accent;
+                                        vertical-alignment: center;
+                                    }
+                                    Text {
+                                        text: item.name;
+                                        width: root.width < 600px ? 142px : 205px;
+                                        font-size: 12px;
+                                        font-weight: 500;
+                                        color: index == root.selected-project ? white : Theme.text;
+                                        overflow: elide;
+                                        vertical-alignment: center;
+                                    }
+                                    Text {
+                                        text: item.location;
+                                        horizontal-stretch: 1;
+                                        min-width: 0px;
+                                        font-size: 12px;
+                                        color: index == root.selected-project ? #e7efff : Theme.muted;
+                                        overflow: elide;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                                row-touch := TouchArea {
+                                    enabled: root.loaded && !root.project-loading && !root.project-opening;
+                                    mouse-cursor: pointer;
+                                    clicked => { root.select-project(index); search.focus(); }
+                                    double-clicked => { root.open-project(index); }
+                                }
+                                // The transparent hover observer must precede the
+                                // pointer target during front-to-back hit testing.
+                                Tooltip { HoverHint { text: item.name + "\n" + item.location; } }
+                            }
+                            Rectangle { min-height: 0px; vertical-stretch: 1; }
+                        }
+                    }
+                    if root.projects.length == 0: VerticalLayout {
+                        alignment: center;
+                        padding: 24px;
+                        spacing: 10px;
+                        Text {
+                            text: !root.loaded ? (root.english ? "Connecting…" : "正在连接…") : root.project-loading ? (root.english ? "Reading recent projects…" : "正在读取最近项目…") : !root.projects-enabled ? (root.english ? "Recent projects is turned off" : "最近项目已停用") : root.project-error ? (root.english ? "Couldn't read recent projects" : "暂时无法读取最近项目") : root.query != "" ? (root.english ? "No matching projects" : "没有匹配的项目") : (root.english ? "No recent projects yet" : "还没有最近项目");
+                            color: Theme.secondary;
+                            font-size: 14px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                        }
+                        Text {
+                            text: !root.loaded || root.project-loading ? "" : !root.projects-enabled ? (root.english ? "Open Settings to enable this module." : "点击右上角设置，启用最近项目。") : root.project-error ? root.project-message : root.query != "" ? (root.english ? "Try a project name or part of its path." : "试试项目名称，或路径中的一部分。") : (root.english ? "Open a folder or workspace in VS Code, then refresh." : "在 VS Code 中打开文件夹或工作区，然后刷新。 ");
+                            color: Theme.muted;
+                            font-size: 12px;
+                            horizontal-alignment: center;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+                Rectangle { height: 1px; background: Theme.border; }
+                Rectangle {
+                    height: 38px;
+                    background: #fafbfe;
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 10px;
+                        spacing: 10px;
+                        Text {
+                            text: root.project-opening ? (root.english ? "Opening in VS Code…" : "正在用 VS Code 打开…") : root.project-loading ? (root.english ? "Updating…" : "正在更新…") : root.status-error ? root.status-message : (root.english ? "↑ ↓  Select     Enter  Open     Esc  Dismiss" : "↑ ↓  选择     Enter  打开     Esc  收起");
+                            horizontal-stretch: 1;
+                            min-width: 0px;
+                            color: root.status-error ? Theme.danger : Theme.muted;
+                            font-size: 11px;
+                            vertical-alignment: center;
+                            overflow: elide;
+                            Tooltip { HoverHint { text: root.status-error ? root.status-message : (root.english ? "Type to search · Double-click to open · Full path on hover" : "输入即搜索 · 双击打开 · 悬停查看完整路径"); } }
+                        }
+                        VerticalLayout {
+                            width: 28px;
+                            alignment: center;
+                            PanelAction {
+                                label: root.english ? "Refresh projects · Ctrl+R" : "刷新项目 · Ctrl+R";
+                                icon: @image-url("icons/refresh.svg");
+                                enabled: root.loaded && root.projects-enabled && !root.project-loading && !root.project-opening;
+                                clicked => { root.refresh-projects(); search.focus(); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

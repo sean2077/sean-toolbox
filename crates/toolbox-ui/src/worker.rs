@@ -118,6 +118,9 @@ pub enum Event {
     Exported(Result<Option<PathBuf>, String>),
     LinkOpened(Result<(), String>),
     ServerError(String),
+    Ready {
+        reply: std::sync::mpsc::Sender<Response>,
+    },
     Show {
         page: UiPage,
         reply: std::sync::mpsc::Sender<Response>,
@@ -360,10 +363,14 @@ pub fn serve(endpoint_id: String, stopping: Arc<AtomicBool>) {
                 }
             };
             let (reply, receive) = std::sync::mpsc::channel();
-            crate::post(Event::Show {
-                page: request.page,
-                reply,
-            });
+            if request.readiness_only {
+                crate::post(Event::Ready { reply });
+            } else {
+                crate::post(Event::Show {
+                    page: request.page,
+                    reply,
+                });
+            }
             let response = receive
                 .recv_timeout(std::time::Duration::from_secs(3))
                 .unwrap_or_else(|_| Response::error("UI did not acknowledge activation"));

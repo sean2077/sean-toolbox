@@ -4,6 +4,25 @@
 `sean-toolbox` so the resident host owns the single UI instance, its endpoint,
 and the persisted configuration. The host does not depend on this crate.
 
+## Surfaces
+
+External `projects` activation (global shortcut, tray, default launch, or
+`sean-toolbox show projects`) opens a separate `LauncherWindow`. It is a compact,
+frameless, always-on-top search panel inspired by Recentry, with a default logical
+size of 760×408, one-line results, full-path hover hints, and a selected/matched
+counter. The larger `AppWindow` retains the four management pages.
+
+Every summon refreshes history, clears the filter, and focuses search. Repeated
+summons reset the same panel rather than toggling it. Up/Down clamp at the ends;
+Enter or double-click opens, while single-click selects. Escape and focus loss
+hide only the panel. Focus-loss dismissal is armed after the panel owns focus.
+An open failure remains visible. An old open result cannot hide a new invocation.
+
+The launcher supports Ctrl/Cmd+K or F to focus/select search, Ctrl/Cmd+R to refresh,
+and Ctrl/Cmd+, or the settings button to open the management window. Showing or
+using the launcher preserves an existing management page and its drafts. Saved
+configuration controls project availability and execution.
+
 ## Responsibilities
 
 - The Slint event loop owns widgets and editable drafts. Filesystem operations,
@@ -31,9 +50,11 @@ and the persisted configuration. The host does not depend on this crate.
   replaces profiles with the same case-insensitive ID and preserves settings.
   JSON replacement also restores settings. Import never launches an application.
   Export asks the host for the current saved configuration and writes atomically.
-- Hiding starts one timer; reopening stops it. A timeout of zero exits
-  immediately. Normal exit wakes the activation listener so it can remove its
-  own Unix socket. The UI performs no periodic project or status polling.
+- Idle release starts only after both surfaces are hidden and no draft or
+  operation needs the process; reopening either surface stops the timer. A
+  timeout of zero exits immediately when eligible. Normal exit wakes the
+  activation listener so it can remove its own Unix socket. The UI performs no
+  periodic project, focus, or status polling.
 - Native file dialogs use the active window as their parent. On Linux, install
   a working XDG desktop portal file-chooser backend or `zenity`. Actual backend
   errors reported by `rfd` are displayed in the UI.
@@ -46,9 +67,10 @@ cargo test -p toolbox-ui
 cargo clippy -p toolbox-ui --all-targets -- -D warnings
 ```
 
-The generated bindings come from `ui/main.slint`; `ui/components.slint` owns
-shared visual primitives and the small `ui/icons/` SVGs are embedded at build
-time. The frontend accepts
+The generated bindings come from `ui/main.slint`, which also exports
+`ui/launcher.slint`. `ui/project-types.slint` owns the shared row schema,
+`ui/components.slint` owns shared visual primitives, and the small `ui/icons/`
+SVGs are embedded at build time. The frontend accepts
 `--page projects|windows|settings|diagnostics` and `--endpoint <identifier>`.
 The endpoint is a current-user identifier, never an arbitrary socket path.
 

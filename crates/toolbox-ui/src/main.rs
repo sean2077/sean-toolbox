@@ -9,7 +9,7 @@ use model::{
 };
 use slint::{
     ComponentHandle, Model, ModelRc, SharedString, Timer, TimerMode, VecModel,
-    winit_030::WinitWindowAccessor,
+    winit_030::{EventResult, WinitWindowAccessor, winit},
 };
 use std::{
     cell::RefCell,
@@ -32,6 +32,7 @@ fn with_controller(action: impl FnOnce(&Controller)) {
     let controller = APP.with(|app| app.borrow().clone());
     if let Some(controller) = controller {
         action(&controller);
+        controller.sync_launcher();
     }
 }
 
@@ -53,6 +54,98 @@ enum ConfirmAction {
     Import,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProjectOpenTarget {
+    Manager,
+    Launcher(u64),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DisplayArea {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    monitor_origin: (i32, i32),
+}
+
+fn centered_position(area: DisplayArea, width: u32, height: u32) -> (i32, i32) {
+    (
+        area.x + (area.width.saturating_sub(width) / 2) as i32,
+        area.y + (area.height.saturating_sub(height) / 2) as i32,
+    )
+}
+
+#[cfg(windows)]
+fn active_display_area() -> Option<DisplayArea> {
+    use windows_sys::Win32::{
+        Graphics::Gdi::{
+            GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+        },
+        UI::WindowsAndMessaging::GetForegroundWindow,
+    };
+    // Capture the user's foreground display before showing/focusing our popup.
+    let monitor = unsafe { MonitorFromWindow(GetForegroundWindow(), MONITOR_DEFAULTTONEAREST) };
+    let mut info = MONITORINFO {
+        cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+    };
+    if monitor.is_null() || unsafe { GetMonitorInfoW(monitor, &mut info) } == 0 {
+        return None;
+    }
+    Some(DisplayArea {
+        x: info.rcWork.left,
+        y: info.rcWork.top,
+        width: (info.rcWork.right - info.rcWork.left).max(0) as u32,
+        height: (info.rcWork.bottom - info.rcWork.top).max(0) as u32,
+        monitor_origin: (info.rcMonitor.left, info.rcMonitor.top),
+    })
+}
+
+#[cfg(not(windows))]
+fn active_display_area() -> Option<DisplayArea> {
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn x11_window_is_active(window: &winit::window::Window) -> Option<bool> {
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
+
+    let id = match window.window_handle().ok()?.as_raw() {
+        RawWindowHandle::Xlib(handle) => u32::try_from(handle.window).ok()?,
+        RawWindowHandle::Xcb(handle) => handle.window.get(),
+        _ => return None,
+    };
+    // Winit 0.30 also reports XI_FocusOut for a passive keyboard grab. A
+    // global shortcut does not change the WM's active window; distinguish it
+    // from real dismissal with a single read instead of a polling timer.
+    let (connection, _) = x11rb::connect(None).ok()?;
+    let root = connection.query_tree(id).ok()?.reply().ok()?.root;
+    let atom = connection
+        .intern_atom(true, b"_NET_ACTIVE_WINDOW")
+        .ok()?
+        .reply()
+        .ok()?
+        .atom;
+    if atom != 0 {
+        let property = connection
+            .get_property(false, root, atom, AtomEnum::WINDOW, 0, 1)
+            .ok()?
+            .reply()
+            .ok()?;
+        if let Some(active) = property.value32().and_then(|mut values| values.next()) {
+            return Some(active == id);
+        }
+    }
+    connection
+        .get_input_focus()
+        .ok()?
+        .reply()
+        .ok()
+        .map(|reply| reply.focus == id)
+}
+
 struct State {
     config: Config,
     revision: u64,
@@ -63,6 +156,12 @@ struct State {
     confirmation: Option<ConfirmAction>,
     dialog_open: bool,
     visible: bool,
+    launcher_visible: bool,
+    launcher_had_focus: bool,
+    launcher_session: u64,
+    launcher_placement_pending: bool,
+    launcher_display: Option<DisplayArea>,
+    project_open_target: Option<ProjectOpenTarget>,
     toggling: bool,
     rendered_generation: u64,
     host_pid: u32,
@@ -72,6 +171,7 @@ struct State {
 
 struct Controller {
     ui: slint::Weak<AppWindow>,
+    launcher: slint::Weak<LauncherWindow>,
     state: RefCell<State>,
     work: mpsc::Sender<Work>,
     query_generation: Arc<AtomicU64>,
@@ -83,6 +183,245 @@ impl Controller {
         self.ui
             .upgrade()
             .expect("UI exists while controller is installed")
+    }
+
+    fn launcher(&self) -> LauncherWindow {
+        self.launcher
+            .upgrade()
+            .expect("Launcher exists while controller is installed")
+    }
+
+    fn sync_launcher(&self) {
+        let ui = self.ui();
+        let launcher = self.launcher();
+        launcher.set_english(ui.get_english());
+        launcher.set_loaded(ui.get_loaded());
+        launcher.set_projects_enabled(ui.get_projects_enabled());
+        launcher.set_projects(ui.get_projects());
+        launcher.set_query(ui.get_query());
+        launcher.set_selected_project(ui.get_selected_project());
+        launcher.set_project_message(ui.get_project_message());
+        launcher.set_project_loading(ui.get_project_loading());
+        launcher.set_project_opening(ui.get_project_opening());
+        launcher.set_project_error(ui.get_project_error());
+        launcher.set_project_total(ui.get_project_total());
+        launcher.set_status_message(ui.get_status_message());
+        launcher.set_status_error(ui.get_status_error());
+        launcher.invoke_reveal_selection();
+    }
+
+    fn show_launcher(&self, refresh: bool) -> Result<(), String> {
+        self.idle_timer.stop();
+        let ui = self.ui();
+        {
+            let mut state = self.state.borrow_mut();
+            state.launcher_had_focus &= state.launcher_visible;
+            state.launcher_visible = true;
+            state.launcher_session = state.launcher_session.wrapping_add(1);
+            state.launcher_placement_pending = true;
+            state.launcher_display = active_display_area();
+        }
+        ui.set_query("".into());
+        ui.set_selected_project(-1);
+        ui.set_status_error(false);
+        self.query_generation.fetch_add(1, Ordering::Relaxed);
+        self.sync_launcher();
+        let launcher = self.launcher();
+        launcher.window().set_minimized(false);
+        if let Err(error) = launcher.show() {
+            self.state.borrow_mut().launcher_visible = false;
+            return Err(error.to_string());
+        }
+        self.activate_launcher();
+        // The native window may not exist until the first event-loop turn.
+        // A stale scheduled activation must never resurrect a dismissed popup.
+        let session = self.state.borrow().launcher_session;
+        Timer::single_shot(Duration::ZERO, move || {
+            with_controller(|controller| {
+                if controller.state.borrow().launcher_session == session {
+                    controller.activate_launcher();
+                }
+            });
+        });
+        if refresh {
+            self.send(Work::Load { force: false });
+        } else if ui.get_loaded() {
+            self.refresh_projects();
+        }
+        self.sync_launcher();
+        launcher.invoke_focus_search();
+        Ok(())
+    }
+
+    fn activate_launcher(&self) {
+        if !self.state.borrow().launcher_visible {
+            return;
+        }
+        self.place_launcher();
+        let launcher = self.launcher();
+        let focused = launcher
+            .window()
+            .with_winit_window(|window| {
+                window.set_resizable(false);
+                #[cfg(windows)]
+                {
+                    use winit::platform::windows::WindowExtWindows;
+                    window.set_skip_taskbar(true);
+                }
+                window.focus_window();
+                window.has_focus()
+            })
+            .unwrap_or(false);
+        if focused {
+            self.state.borrow_mut().launcher_had_focus = true;
+        }
+        launcher.invoke_focus_search();
+    }
+
+    fn place_launcher(&self) {
+        let (visible, pending, requested_area) = {
+            let state = self.state.borrow();
+            (
+                state.launcher_visible,
+                state.launcher_placement_pending,
+                state.launcher_display,
+            )
+        };
+        if !visible || !pending {
+            return;
+        }
+        let launcher = self.launcher();
+        let placed = launcher.window().with_winit_window(|window| {
+            let monitor = requested_area
+                .and_then(|area| {
+                    window.available_monitors().find(|monitor| {
+                        let position = monitor.position();
+                        (position.x, position.y) == area.monitor_origin
+                    })
+                })
+                .or_else(|| window.current_monitor())
+                .or_else(|| window.primary_monitor());
+            let Some(monitor) = monitor else {
+                return false;
+            };
+            let position = monitor.position();
+            let size = monitor.size();
+            let area = requested_area.unwrap_or(DisplayArea {
+                x: position.x,
+                y: position.y,
+                width: size.width,
+                height: size.height,
+                monitor_origin: (position.x, position.y),
+            });
+            let scale = if std::env::var_os("SLINT_SCALE_FACTOR").is_some() {
+                f64::from(launcher.window().scale_factor())
+            } else {
+                monitor.scale_factor()
+            };
+            let width =
+                ((f64::from(launcher.get_panel_width()) * scale).round() as u32).min(area.width);
+            let height =
+                ((f64::from(launcher.get_panel_height()) * scale).round() as u32).min(area.height);
+            let (x, y) = centered_position(area, width, height);
+            window.set_outer_position(winit::dpi::PhysicalPosition::new(x, y));
+            // Move before resizing: Windows rescales the old physical size in
+            // WM_DPICHANGED. Resizing on the old display would apply DPI twice.
+            if (window.scale_factor() - monitor.scale_factor()).abs() > f64::EPSILON {
+                return false;
+            }
+            let size = winit::dpi::PhysicalSize::new(width, height);
+            if window.inner_size() != size {
+                let _ = window.request_inner_size(size);
+            }
+            true
+        });
+        if placed == Some(true) {
+            self.state.borrow_mut().launcher_placement_pending = false;
+        }
+    }
+
+    fn queue_launcher_placement(&self) {
+        let session = {
+            let mut state = self.state.borrow_mut();
+            if !state.launcher_visible {
+                return;
+            }
+            state.launcher_placement_pending = true;
+            state.launcher_session
+        };
+        // Winit filters run before Slint processes DPI/size events. Apply the
+        // final logical size and centering after both backends finish the event.
+        Timer::single_shot(Duration::ZERO, move || {
+            with_controller(|controller| {
+                if controller.state.borrow().launcher_session == session {
+                    controller.place_launcher();
+                }
+            });
+        });
+    }
+
+    fn launcher_focus_changed(&self, focused: bool) {
+        let dismiss = {
+            let mut state = self.state.borrow_mut();
+            if !state.launcher_visible {
+                return;
+            }
+            if focused {
+                state.launcher_had_focus = true;
+                false
+            } else {
+                state.launcher_had_focus
+            }
+        };
+        if dismiss {
+            #[cfg(target_os = "linux")]
+            if self
+                .launcher()
+                .window()
+                .with_winit_window(x11_window_is_active)
+                .flatten()
+                == Some(true)
+            {
+                return;
+            }
+            self.hide_launcher();
+        }
+    }
+
+    fn queue_launcher_focus_loss(&self) {
+        let session = self.state.borrow().launcher_session;
+        Timer::single_shot(Duration::ZERO, move || {
+            with_controller(|controller| {
+                if controller.state.borrow().launcher_session != session {
+                    return;
+                }
+                let focused = controller
+                    .launcher()
+                    .window()
+                    .with_winit_window(|window| window.has_focus())
+                    .unwrap_or(false);
+                controller.launcher_focus_changed(focused);
+            });
+        });
+    }
+
+    fn hide_launcher(&self) {
+        {
+            let mut state = self.state.borrow_mut();
+            state.launcher_visible = false;
+            state.launcher_had_focus = false;
+            state.launcher_placement_pending = false;
+        }
+        if let Err(error) = self.launcher().hide() {
+            self.error(error.to_string());
+        }
+        self.schedule_unload();
+    }
+
+    fn open_launcher_settings(&self) {
+        if let Err(error) = self.show(UiPage::Settings, false) {
+            self.error(error);
+        }
     }
 
     fn send(&self, work: Work) {
@@ -127,11 +466,15 @@ impl Controller {
     }
 
     fn show(&self, page: UiPage, refresh: bool) -> Result<(), String> {
-        self.idle_timer.stop();
-        self.state.borrow_mut().visible = true;
         let ui = self.ui();
         // Activation must not move the page underneath an open modal dialog.
         let modal = ui.get_confirm_visible() || ui.get_import_visible() || ui.get_dialog_busy();
+        if page == UiPage::Projects && !modal {
+            return self.show_launcher(refresh);
+        }
+        self.idle_timer.stop();
+        self.state.borrow_mut().visible = true;
+        self.hide_launcher();
         if !modal {
             ui.set_page(page_index(page));
         }
@@ -211,7 +554,13 @@ impl Controller {
 
     fn schedule_unload(&self) {
         let state = self.state.borrow();
-        if state.visible || state.toggling || self.ui().get_project_opening() {
+        if state.visible
+            || state.launcher_visible
+            || state.toggling
+            || self.ui().get_project_opening()
+            || self.ui().get_saving()
+            || self.dirty()
+        {
             return;
         }
         let delay = state.config.ui_idle_seconds;
@@ -324,11 +673,14 @@ impl Controller {
     }
 
     fn query_changed(&self, query: String) {
+        let ui = self.ui();
+        // A cold launcher accepts typing while its saved configuration loads.
+        // Discovery will consume this exact query once the worker is ready.
+        ui.set_query(query.clone().into());
         if !self.ui().get_loaded() || !self.state.borrow().config.projects_enabled {
             return;
         }
         let generation = self.query_generation.fetch_add(1, Ordering::Relaxed) + 1;
-        let ui = self.ui();
         ui.set_selected_project(-1);
         ui.set_project_loading(true);
         ui.set_project_error(false);
@@ -346,8 +698,33 @@ impl Controller {
     }
 
     fn open_project(&self, index: i32) {
+        self.request_project_open(index, ProjectOpenTarget::Manager);
+    }
+
+    fn select_launcher_project(&self, index: i32) {
         let ui = self.ui();
-        if self.dirty() {
+        if !ui.get_project_loading()
+            && index >= 0
+            && (index as usize) < ui.get_projects().row_count()
+        {
+            ui.set_selected_project(index);
+            self.sync_launcher();
+        }
+    }
+
+    fn open_launcher_project(&self, index: i32) {
+        let state = self.state.borrow();
+        if !state.launcher_visible {
+            return;
+        }
+        let session = state.launcher_session;
+        drop(state);
+        self.request_project_open(index, ProjectOpenTarget::Launcher(session));
+    }
+
+    fn request_project_open(&self, index: i32, target: ProjectOpenTarget) {
+        let ui = self.ui();
+        if target == ProjectOpenTarget::Manager && self.dirty() {
             self.say(
                 "请先保存或取消修改，再打开项目。",
                 "Save or cancel your changes before opening a project.",
@@ -355,6 +732,7 @@ impl Controller {
             return;
         }
         if ui.get_project_opening()
+            || ui.get_project_loading()
             || !ui.get_loaded()
             || ui.get_saving()
             || ui.get_confirm_visible()
@@ -372,6 +750,7 @@ impl Controller {
         };
         ui.set_selected_project(index);
         ui.set_project_opening(true);
+        self.state.borrow_mut().project_open_target = Some(target);
         let code_path = self.state.borrow().config.vscode_path_override.clone();
         self.send(Work::Open {
             id: item.id.into(),
@@ -995,7 +1374,7 @@ impl Controller {
                     // Never discard a new draft entered while IPC was in flight.
                     if self.dirty() {
                         if response.revision != self.state.borrow().revision { self.error("配置已在外部更改，请重新载入后再保存 / Configuration changed externally; reload before saving"); }
-                        if ui.get_page() == 0 { self.refresh_projects(); }
+                        if ui.get_page() == 0 || self.state.borrow().launcher_visible { self.refresh_projects(); }
                         return;
                     }
                     let changed = response.revision != self.state.borrow().revision;
@@ -1007,7 +1386,9 @@ impl Controller {
                     self.sync_settings(); self.sync_profiles();
                     if force || changed { self.cancel_editor(); }
                     self.say("已连接常驻服务。", "Connected to the resident host.");
-                    if ui.get_page() == 0 { self.refresh_projects(); }
+                    if ui.get_page() == 0 || self.state.borrow().launcher_visible { self.refresh_projects(); }
+                    self.sync_launcher();
+                    if self.state.borrow().launcher_visible { self.launcher().invoke_focus_search(); }
                 }
                 Err(error) => self.error(format!("无法连接常驻服务，请先运行 sean-toolbox / Cannot connect to host; start sean-toolbox first. {error}")),
             },
@@ -1055,18 +1436,26 @@ impl Controller {
             }
             Event::Opened(result) => {
                 ui.set_project_opening(false);
+                let target = self.state.borrow_mut().project_open_target.take();
                 match result {
                     Ok(()) => {
                         self.say("已发送项目打开请求。", "Project open request sent.");
                         // Opening may be slow. Do not hide a different page or
-                        // unload a draft the user started while waiting.
-                        if ui.get_page() == 0 && !self.dirty() && !ui.get_confirm_visible()
+                        // a newer launcher session, or unload management drafts.
+                        if let Some(ProjectOpenTarget::Launcher(session)) = target {
+                            let state = self.state.borrow();
+                            let current = state.launcher_visible && state.launcher_session == session;
+                            drop(state);
+                            if current { self.hide_launcher(); }
+                        } else if target == Some(ProjectOpenTarget::Manager)
+                            && ui.get_page() == 0 && !self.dirty() && !ui.get_confirm_visible()
                             && !ui.get_import_visible() && !ui.get_dialog_busy() && !ui.get_saving() {
                             self.hide();
                         }
                     },
                     Err(error) => self.error(error),
                 }
+                self.schedule_unload();
             }
             Event::Toggled(result) => {
                 self.state.borrow_mut().toggling = false;
@@ -1125,11 +1514,15 @@ impl Controller {
             }
             Event::LinkOpened(result) => { if let Err(error) = result { self.error(error); } }
             Event::ServerError(error) => self.error(format!("界面唤起服务失败 / UI activation service failed: {error}")),
+            Event::Ready { reply } => {
+                let _ = reply.send(Response::success("ready"));
+            }
             Event::Show { page, reply } => {
                 let response = match self.show(page, true) { Ok(()) => Response::success("shown"), Err(error) => Response::error(error) };
                 let _ = reply.send(response);
             }
         }
+        self.sync_launcher();
     }
 }
 
@@ -1169,11 +1562,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .renderer_name("software".into())
         .select()?;
     let ui = AppWindow::new()?;
+    let launcher = LauncherWindow::new()?;
     ui.set_version_label(format!("v{}", env!("CARGO_PKG_VERSION")).into());
     let (send, receive) = mpsc::channel();
     let query_generation = Arc::new(AtomicU64::new(0));
     let controller = Rc::new(Controller {
         ui: ui.as_weak(),
+        launcher: launcher.as_weak(),
         work: send,
         query_generation: query_generation.clone(),
         idle_timer: Timer::default(),
@@ -1186,7 +1581,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             imported: None,
             confirmation: None,
             dialog_open: false,
-            visible: true,
+            visible: false,
+            launcher_visible: false,
+            launcher_had_focus: false,
+            launcher_session: 0,
+            launcher_placement_pending: false,
+            launcher_display: None,
+            project_open_target: None,
             toggling: false,
             rendered_generation: 0,
             host_pid: 0,
@@ -1227,6 +1628,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         with_controller(Controller::dismiss);
         slint::CloseRequestResponse::KeepWindowShown
     });
+    launcher.on_query_changed(|query| with_controller(|c| c.query_changed(query.into())));
+    launcher.on_refresh_projects(|| with_controller(Controller::refresh_projects));
+    launcher.on_select_project(|index| with_controller(|c| c.select_launcher_project(index)));
+    launcher.on_open_project(|index| with_controller(|c| c.open_launcher_project(index)));
+    launcher.on_move_project(|delta| with_controller(|c| c.move_project(delta)));
+    launcher.on_dismiss(|| with_controller(Controller::hide_launcher));
+    launcher.on_open_settings(|| with_controller(Controller::open_launcher_settings));
+    launcher.window().on_close_requested(|| {
+        with_controller(Controller::hide_launcher);
+        slint::CloseRequestResponse::KeepWindowShown
+    });
+    launcher.window().on_winit_window_event(|_window, event| {
+        match event {
+            winit::event::WindowEvent::Focused(focused) => {
+                // macOS can report a stale Focused payload (winit#4371).
+                // Use the same native state query as Slint's own backend there.
+                #[cfg(target_os = "macos")]
+                let focused = _window
+                    .with_winit_window(|window| window.has_focus())
+                    .unwrap_or(*focused);
+                #[cfg(not(target_os = "macos"))]
+                let focused = *focused;
+                if focused {
+                    with_controller(|c| c.launcher_focus_changed(true));
+                } else {
+                    // Let the window manager finish focus/property updates
+                    // before distinguishing an X11 shortcut grab from blur.
+                    with_controller(Controller::queue_launcher_focus_loss);
+                }
+            }
+            winit::event::WindowEvent::Resized(_) => {
+                with_controller(|controller| {
+                    if controller.state.borrow().launcher_placement_pending {
+                        controller.queue_launcher_placement();
+                    }
+                });
+            }
+            winit::event::WindowEvent::ScaleFactorChanged { .. } => {
+                with_controller(Controller::queue_launcher_placement);
+            }
+            _ => {}
+        }
+        EventResult::Propagate
+    });
     controller.show(page, false)?;
     std::thread::Builder::new()
         .name("toolbox-ui-worker".into())
@@ -1255,8 +1700,7 @@ mod tests {
     use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
 
     thread_local! {
-        static TEST_WINDOW: Rc<MinimalSoftwareWindow> =
-            MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
+        static TEST_WINDOWS: RefCell<Vec<Rc<MinimalSoftwareWindow>>> = const { RefCell::new(Vec::new()) };
     }
 
     struct TestPlatform;
@@ -1265,7 +1709,9 @@ mod tests {
         fn create_window_adapter(
             &self,
         ) -> Result<Rc<dyn slint::platform::WindowAdapter>, slint::PlatformError> {
-            Ok(TEST_WINDOW.with(Clone::clone))
+            let window = MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
+            TEST_WINDOWS.with(|windows| windows.borrow_mut().push(window.clone()));
+            Ok(window)
         }
     }
 
@@ -1277,9 +1723,11 @@ mod tests {
         std::thread::spawn(move || {
             slint::platform::set_platform(Box::new(TestPlatform)).unwrap();
             let ui = AppWindow::new().unwrap();
+            let launcher = LauncherWindow::new().unwrap();
             let (send, receive) = mpsc::channel();
             let controller = Controller {
                 ui: ui.as_weak(),
+                launcher: launcher.as_weak(),
                 work: send,
                 query_generation: Arc::new(AtomicU64::new(0)),
                 idle_timer: Timer::default(),
@@ -1293,6 +1741,12 @@ mod tests {
                     confirmation: None,
                     dialog_open: false,
                     visible: true,
+                    launcher_visible: false,
+                    launcher_had_focus: false,
+                    launcher_session: 0,
+                    launcher_placement_pending: false,
+                    launcher_display: None,
+                    project_open_target: None,
                     toggling: false,
                     rendered_generation: 0,
                     host_pid: 0,
@@ -1336,6 +1790,7 @@ mod tests {
         with_test_ui(|ui, controller, _| {
             ui.set_page(0);
             ui.set_project_opening(true);
+            controller.state.borrow_mut().project_open_target = Some(ProjectOpenTarget::Manager);
             ui.set_setting_hotkey("Ctrl+Alt+P".into());
             controller.settings_changed();
             controller.handle(Event::Opened(Ok(())));
@@ -1347,6 +1802,7 @@ mod tests {
             controller.sync_settings();
             ui.set_page(1);
             ui.set_project_opening(true);
+            controller.state.borrow_mut().project_open_target = Some(ProjectOpenTarget::Manager);
             controller.handle(Event::Opened(Ok(())));
             assert!(controller.state.borrow().visible);
             assert_eq!(ui.get_page(), 1);
@@ -1438,6 +1894,252 @@ mod tests {
         });
     }
 
+    fn receive_project(controller: &Controller, id: &str) {
+        use toolbox_projects::{ProjectId, ProjectKind, ProjectTarget, ProviderId, RecentProject};
+        controller.handle(Event::Projects {
+            generation: controller.query_generation.load(Ordering::Relaxed),
+            result: Ok(vec![
+                RecentProject {
+                    id: ProjectId(id.to_owned()),
+                    provider: ProviderId("vscode".into()),
+                    kind: ProjectKind::Folder,
+                    target: ProjectTarget::Uri(format!("vscode-remote://ssh-remote+dev/{id}")),
+                    name: id.to_owned(),
+                    detail: format!("dev/{id}"),
+                    recent_index: 0,
+                }
+                .into(),
+            ]),
+            total: 1,
+        });
+    }
+
+    #[test]
+    fn launcher_opens_projects_without_discarding_management_drafts() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_page(1);
+            controller.begin_edit(0);
+            ui.set_form_name("Keep this application draft".into());
+            ui.set_launch_args("[".into());
+            controller.profile_changed();
+            ui.set_setting_idle("120".into());
+            controller.settings_changed();
+            ui.set_query("old query".into());
+
+            controller.show(UiPage::Projects, false).unwrap();
+            assert!(
+                matches!(receive.try_recv().unwrap(), Work::Discover { query, .. } if query.is_empty())
+            );
+            assert_eq!(ui.get_page(), 1);
+            assert_eq!(controller.launcher().get_query(), "");
+            assert!(controller.state.borrow().visible);
+            assert!(controller.state.borrow().launcher_visible);
+            assert!(!ui.get_confirm_visible());
+
+            receive_project(controller, "api-service");
+            controller.open_launcher_project(0);
+            assert!(
+                matches!(receive.try_recv().unwrap(), Work::Open { id, .. } if id == "api-service")
+            );
+            controller.handle(Event::Opened(Ok(())));
+            assert!(!controller.state.borrow().launcher_visible);
+            assert!(controller.state.borrow().visible);
+            assert!(ui.get_profile_dirty());
+            assert!(ui.get_settings_dirty());
+            assert_eq!(ui.get_form_name(), "Keep this application draft");
+            assert_eq!(ui.get_launch_args(), "[");
+            assert_eq!(ui.get_setting_idle(), "120");
+            assert_eq!(ui.get_page(), 1);
+            assert!(!ui.get_confirm_visible());
+        });
+    }
+
+    #[test]
+    fn cold_typing_and_readiness_acknowledgements_preserve_the_launcher_query() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_loaded(false);
+            controller.show(UiPage::Projects, false).unwrap();
+            let session = controller.state.borrow().launcher_session;
+            controller.query_changed("pair room".into());
+            assert!(receive.try_recv().is_err());
+            let (reply, ready) = mpsc::channel();
+            controller.handle(Event::Ready { reply });
+            assert!(ready.recv().unwrap().ok);
+            assert_eq!(controller.state.borrow().launcher_session, session);
+            assert_eq!(controller.launcher().get_query(), "pair room");
+
+            controller.handle(Event::Loaded {
+                response: Ok(Response {
+                    ok: true,
+                    config: Some(Config::default()),
+                    revision: 1,
+                    ..Response::default()
+                }),
+                force: false,
+            });
+            assert!(
+                matches!(receive.try_recv().unwrap(), Work::Discover { query, .. } if query == "pair room")
+            );
+            receive_project(controller, "pair-room");
+            let (reply, ready) = mpsc::channel();
+            controller.handle(Event::Ready { reply });
+            assert!(ready.recv().unwrap().ok);
+            assert_eq!(controller.launcher().get_query(), "pair room");
+            assert_eq!(controller.launcher().get_selected_project(), 0);
+
+            let (reply, shown) = mpsc::channel();
+            controller.handle(Event::Show {
+                page: UiPage::Projects,
+                reply,
+            });
+            assert!(shown.recv().unwrap().ok);
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Load { force: false }
+            ));
+            assert_eq!(controller.launcher().get_query(), "");
+            assert_eq!(controller.state.borrow().launcher_session, session + 1);
+        });
+    }
+
+    #[test]
+    fn launcher_open_failure_remains_visible_and_can_be_retried() {
+        with_test_ui(|_, controller, receive| {
+            controller.show(UiPage::Projects, false).unwrap();
+            let _ = receive.try_recv().unwrap();
+            receive_project(controller, "missing-cli");
+            controller.open_launcher_project(0);
+            assert!(matches!(receive.try_recv().unwrap(), Work::Open { .. }));
+            controller.handle(Event::Opened(
+                Err("VS Code executable was not found".into()),
+            ));
+            assert!(controller.state.borrow().launcher_visible);
+            assert!(!controller.launcher().get_project_opening());
+            assert!(controller.launcher().get_status_error());
+            assert_eq!(
+                controller.launcher().get_status_message(),
+                "VS Code executable was not found"
+            );
+            controller.open_launcher_project(0);
+            assert!(matches!(receive.try_recv().unwrap(), Work::Open { .. }));
+        });
+    }
+
+    #[test]
+    fn old_project_open_completion_cannot_hide_a_new_launcher_session() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_page(2);
+            controller.show(UiPage::Projects, false).unwrap();
+            let _ = receive.try_recv().unwrap();
+            receive_project(controller, "first-project");
+            controller.open_launcher_project(0);
+            assert!(matches!(receive.try_recv().unwrap(), Work::Open { .. }));
+            controller.hide_launcher();
+            controller.show(UiPage::Projects, false).unwrap();
+            assert!(matches!(receive.try_recv().unwrap(), Work::Discover { .. }));
+            controller.handle(Event::Opened(Ok(())));
+            assert!(controller.state.borrow().launcher_visible);
+            assert!(controller.state.borrow().visible);
+            assert_eq!(ui.get_page(), 2);
+            assert!(!ui.get_project_opening());
+        });
+    }
+
+    #[test]
+    fn launcher_focus_loss_dismisses_only_after_focus_was_acquired() {
+        with_test_ui(|ui, controller, _| {
+            ui.set_page(2);
+            ui.set_setting_idle("180".into());
+            controller.settings_changed();
+            controller.show(UiPage::Projects, false).unwrap();
+            controller.launcher_focus_changed(false);
+            assert!(controller.state.borrow().launcher_visible);
+            controller.launcher_focus_changed(true);
+            controller.launcher_focus_changed(false);
+            assert!(!controller.state.borrow().launcher_visible);
+            assert!(controller.state.borrow().visible);
+            assert!(ui.get_settings_dirty());
+            assert_eq!(ui.get_setting_idle(), "180");
+            assert!(!ui.get_confirm_visible());
+        });
+    }
+
+    #[test]
+    fn repeating_summon_does_not_disarm_focus_loss_dismissal() {
+        with_test_ui(|_, controller, _| {
+            controller.show(UiPage::Projects, false).unwrap();
+            controller.launcher_focus_changed(true);
+            controller.show(UiPage::Projects, false).unwrap();
+            assert!(controller.state.borrow().launcher_visible);
+            assert!(controller.state.borrow().launcher_had_focus);
+            controller.launcher_focus_changed(false);
+            assert!(!controller.state.borrow().launcher_visible);
+        });
+    }
+
+    #[test]
+    fn launcher_does_not_open_stale_or_empty_search_results() {
+        with_test_ui(|ui, controller, receive| {
+            controller.show(UiPage::Projects, false).unwrap();
+            let _ = receive.try_recv().unwrap();
+            receive_project(controller, "old-project");
+            let stale_generation = controller.query_generation.load(Ordering::Relaxed);
+            controller.query_changed("nothing matches".into());
+            assert!(
+                matches!(receive.try_recv().unwrap(), Work::Search { query, .. } if query == "nothing matches")
+            );
+            controller.open_launcher_project(0);
+            assert!(receive.try_recv().is_err());
+            controller.handle(Event::Projects {
+                generation: stale_generation,
+                result: Ok(vec![]),
+                total: 0,
+            });
+            assert!(ui.get_project_loading());
+            controller.handle(Event::Projects {
+                generation: controller.query_generation.load(Ordering::Relaxed),
+                result: Ok(vec![]),
+                total: 1,
+            });
+            assert_eq!(controller.launcher().get_selected_project(), -1);
+            assert_eq!(controller.launcher().get_projects().row_count(), 0);
+            controller.open_launcher_project(0);
+            controller.open_launcher_project(-1);
+            assert!(receive.try_recv().is_err());
+        });
+    }
+
+    #[test]
+    fn launcher_does_not_replace_an_active_configuration_confirmation() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_page(1);
+            controller.begin_edit(0);
+            controller.profile_changed();
+            controller.cancel_profile();
+            assert!(ui.get_confirm_visible());
+            controller.show(UiPage::Projects, true).unwrap();
+            assert!(!controller.state.borrow().launcher_visible);
+            assert!(controller.state.borrow().visible);
+            assert_eq!(ui.get_page(), 1);
+            assert!(ui.get_confirm_visible());
+            assert!(receive.try_recv().is_err());
+        });
+    }
+
+    #[test]
+    fn launcher_centering_respects_negative_display_coordinates_and_work_area() {
+        let area = DisplayArea {
+            x: -1920,
+            y: 40,
+            width: 1920,
+            height: 1040,
+            monitor_origin: (-1920, 0),
+        };
+        assert_eq!(centered_position(area, 760, 408), (-1340, 356));
+        assert_eq!(centered_position(area, 1920, 1040), (-1920, 40));
+        assert_eq!(centered_position(area, 3000, 2000), (-1920, 40));
+    }
+
     #[test]
     fn action_and_navigation_buttons_accept_the_first_pointer_click() {
         with_test_ui(|ui, _, _| {
@@ -1460,7 +2162,9 @@ mod tests {
             ui.on_navigate(move |page| navigation.set(page));
 
             let render = || {
-                TEST_WINDOW.with(|window| {
+                TEST_WINDOWS.with(|windows| {
+                    let windows = windows.borrow();
+                    let window = &windows[0];
                     let mut pixels = slint::SharedPixelBuffer::<slint::Rgb8Pixel>::new(1120, 780);
                     window.draw_if_needed(|renderer| {
                         renderer.render(pixels.make_mut_slice(), 1120);

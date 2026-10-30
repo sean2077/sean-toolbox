@@ -76,4 +76,31 @@ impl Response {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UiRequest {
     pub page: UiPage,
+    /// A startup probe acknowledges the UI event loop without activating it again.
+    #[serde(default)]
+    pub readiness_only: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn existing_ui_requests_remain_normal_activations() {
+        let request: UiRequest = serde_json::from_str(r#"{"page":"projects"}"#).unwrap();
+        assert_eq!(request.page, UiPage::Projects);
+        assert!(!request.readiness_only);
+    }
+
+    #[test]
+    fn readiness_probe_is_distinct_from_an_activation() {
+        let request: UiRequest =
+            serde_json::from_str(r#"{"page":"settings","readiness_only":true}"#).unwrap();
+        assert_eq!(request.page, UiPage::Settings);
+        assert!(request.readiness_only);
+        assert_eq!(
+            serde_json::to_value(&request).unwrap(),
+            serde_json::json!({"page": "settings", "readiness_only": true})
+        );
+    }
 }

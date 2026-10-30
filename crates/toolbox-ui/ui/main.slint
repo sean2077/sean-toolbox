@@ -1,7 +1,9 @@
 import { CheckBox, ComboBox, LineEdit, ScrollView, TextEdit, AboutSlint, Switch, Spinner } from "std-widgets.slint";
 import { Theme, Icon, Caption, FieldLabel, SectionLabel, Divider, Card, Keycap, ActionButton, NavButton, SearchInput, SettingRow, CapabilityCard } from "components.slint";
+import { ProjectRow } from "project-types.slint";
 
-export struct ProjectRow { id: string, name: string, location: string, source: string }
+export { ProjectRow } from "project-types.slint";
+export { LauncherWindow } from "launcher.slint";
 export struct ProfileRow { name: string, detail: string, hotkey: string, platform: string, enabled: bool, available: bool }
 
 export component AppWindow inherits Window {

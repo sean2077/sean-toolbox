@@ -71,8 +71,14 @@ impl UiProcess {
                             );
                         }
                     }
-                    let response: Result<Response, _> =
-                        toolbox_ipc::request(&endpoint, &UiRequest { page }, 2_000);
+                    let response: Result<Response, _> = toolbox_ipc::request(
+                        &endpoint,
+                        &UiRequest {
+                            page,
+                            readiness_only: false,
+                        },
+                        2_000,
+                    );
                     match response {
                         Ok(response) if response.ok => {
                             notify(Ok(()));
@@ -141,8 +147,17 @@ impl UiProcess {
                         ));
                         break;
                     }
-                    if toolbox_ipc::request::<_, Response>(&endpoint, &UiRequest { page }, 150)
-                        .is_ok_and(|r| r.ok)
+                    // --page already presented the initial surface. Retried readiness
+                    // probes must not clear a query the user has started typing.
+                    if toolbox_ipc::request::<_, Response>(
+                        &endpoint,
+                        &UiRequest {
+                            page,
+                            readiness_only: true,
+                        },
+                        150,
+                    )
+                    .is_ok_and(|r| r.ok)
                     {
                         notify(Ok(()));
                         break;
