@@ -958,8 +958,8 @@ impl Controller {
         let platform = platform_from_index(ui.get_form_platform());
         let (zh, en) = match platform {
             Platform::Windows => (
-                "精确匹配进程文件名，例如 Code.exe；不支持 AHK 类名或标题规则。",
-                "Exact executable name, e.g. Code.exe. AHK class/title rules are not supported.",
+                "填写进程文件名，例如 Code.exe。",
+                "Enter the executable filename, e.g. Code.exe.",
             ),
             Platform::Macos => (
                 "匹配 bundle ID、应用名称或可执行文件名；需要辅助功能权限。",

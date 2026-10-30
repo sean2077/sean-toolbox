@@ -1,8 +1,8 @@
 //! Read-only import of WinGuake's INI configuration.
 //!
-//! Adapted from sean2077/winguake's MIT-licensed uTools importer, commit
-//! eaffe0312b1f266a27f6878545389eac4737e4b2. This module only parses data; it
-//! never runs a command, expands an AHK expression, or registers a shortcut.
+//! Adapted from sean2077/winguake's MIT-licensed INI importer, commit
+//! eaffe0312b1f266a27f6878545389eac4737e4b2. Parsing produces a preview for
+//! review before the host applies the imported configuration.
 
 use std::collections::{HashMap, HashSet};
 
@@ -166,7 +166,7 @@ pub fn parse_ini(text: &str) -> Result<ImportPreview, String> {
                 Ok(key) => key,
                 Err(_) => {
                     warnings.push(format!(
-                        "{name}: 无法等价转换 AHK 快捷键 {}，已留空，请手动设置。",
+                        "{name}: 无法转换原快捷键 {}，已留空，请手动设置。",
                         get("hotkey")
                     ));
                     String::new()
@@ -355,7 +355,7 @@ fn as_command(raw: &str, warnings: &mut Vec<String>, label: &str) -> Result<Laun
     }
     if raw.contains("A_") {
         warnings.push(format!(
-            "{label}: AHK 的 A_ 变量和表达式不会求值，请替换成实际路径或受支持的环境变量。"
+            "{label}: 请将旧配置中的 A_ 变量和表达式替换成实际路径或受支持的环境变量。"
         ));
     }
     Ok(LaunchCommand {
@@ -456,7 +456,12 @@ cycleContinuous=false
         }
         let preview = parse_ini("[App]\nexe=app.exe\nlaunchCmd=app.exe\nhotkey=~F3").unwrap();
         assert!(preview.profiles[0].hotkey.is_empty());
-        assert!(preview.warnings.iter().any(|w| w.contains("无法等价转换")));
+        assert!(
+            preview
+                .warnings
+                .iter()
+                .any(|w| w.contains("无法转换原快捷键"))
+        );
     }
 
     #[test]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package native release binaries. Build-time Python 3.11+, no app runtime needed."""
+"""Package native release binaries and documentation. Requires Python 3.11+."""
 
 from __future__ import annotations
 
@@ -51,7 +51,9 @@ def package(system: str, architecture: str, binary_dir: Path, output: Path) -> P
         for document in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
             copy_file(REPO / document, root / document)
         copy_file(REPO / "crates/toolbox-projects/LICENSE.recentry", root / "LICENSE.recentry")
-        copy_file(REPO / "docs/VALIDATION.md", root / "docs/VALIDATION.md")
+        for document in ("USAGE.md", "VALIDATION.md"):
+            copy_file(REPO / "docs" / document, root / "docs" / document)
+        shutil.copytree(REPO / "docs/images", root / "docs/images")
         copy_file(license_inventory, root / "THIRD_PARTY_LICENSES.txt")
         if (REPO / "licenses").is_dir():
             shutil.copytree(REPO / "licenses", root / "licenses")

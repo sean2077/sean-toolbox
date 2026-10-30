@@ -1,13 +1,15 @@
 # Windows 便携包
 
-解压整个目录后运行 `sean-toolbox.exe`。请将 `sean-toolbox-ui.exe` 保留在同一目录，
-主程序会在需要界面时启动它。默认使用 `Ctrl+Alt+Space` 打开工具箱。
+## 启动
 
-首次使用请检查设置中的程序路径、窗口匹配条件与快捷键是否适合你的电脑。
-配置保存于系统的用户配置目录，升级时可以替换这两个程序文件。
+完整解压后运行 `sean-toolbox.exe`，将 `sean-toolbox-ui.exe` 保留在同一目录。
+默认按 `Ctrl+Alt+Space` 打开最近项目面板，应用配置和设置可从托盘菜单打开。
+首次使用时，按本机安装情况调整应用路径、窗口匹配条件和快捷键。
 
-这是 Beta 版本的原生二进制包，没有 Authenticode 发布者签名。
-Windows 可能显示未知发布者或 SmartScreen 提示；请核对下载源和 SHA-256。
-AHK、uTools、Node.js 和 Python 都不是运行依赖。
+当前包未做 Authenticode 签名，Windows 可能显示未知发布者或 SmartScreen 提示。
+下载时核对来源，并使用归档旁的 `.sha256` 文件校验。
 
-从托盘菜单退出后再替换文件。不要在压缩包浏览窗口里直接运行单个 EXE。
+## 更新
+
+从托盘菜单选择“退出工具箱”，再用新版本替换两个程序。
+配置保存在 `%LOCALAPPDATA%\SeanToolbox\config.json`，更换程序后继续使用。

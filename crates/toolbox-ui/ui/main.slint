@@ -449,7 +449,7 @@ export component AppWindow inherits Window {
                                         Text { text: root.english ? "Less searching. More doing." : "常用应用，一键即达"; font-size: 19px; font-weight: 600; color: Theme.text; horizontal-alignment: center; wrap: word-wrap; }
                                         Caption { text: root.english ? "Edit an app to set its shortcut and launch options, or add a new one." : "选择左侧应用，编辑快捷键和启动方式；也可以添加新的应用。"; horizontal-alignment: center; }
                                         Divider {}
-                                        Caption { text: root.english ? "One window: focus or minimize.\nMultiple windows: cycle, then minimize all.\nNot running: launch the app." : "一个窗口：切回或收起\n多个窗口：依次循环，再全部收起\n尚未运行：自动启动应用"; horizontal-alignment: center; }
+                                        Caption { text: root.english ? "One window: focus or minimize.\nMultiple windows: cycle in the selected mode.\nNot running: launch the app." : "一个窗口：切回或收起\n多个窗口：依次切换，可设置末尾行为\n尚未运行：自动启动应用"; horizontal-alignment: center; }
                                     }
                                     VerticalLayout {
                                         visible: root.editing;
@@ -491,7 +491,7 @@ export component AppWindow inherits Window {
                                                 LineEdit { height: 34px; text <=> root.form-hotkey; placeholder-text: "F3 / Ctrl+Alt+T"; enabled: !root.saving; edited => { root.profile-changed(); } }
                                                 CheckBox { text: root.english ? "Enable this application" : "启用此应用"; checked <=> root.form-enabled; enabled: !root.saving; toggled => { root.profile-changed(); } }
                                                 if !root.form-quake-enabled: CheckBox { text: root.english ? "Maximize newly launched windows only" : "仅最大化新启动的窗口"; checked <=> root.form-maximize; enabled: !root.saving; toggled => { root.profile-changed(); } }
-                                                if !root.form-quake-enabled: CheckBox { text: root.english ? "Resume cycle after switching apps" : "切换应用后继续上次循环位置"; checked <=> root.form-cycle; enabled: !root.saving; toggled => { root.profile-changed(); } }
+                                                if !root.form-quake-enabled: CheckBox { text: root.english ? "Wrap to the first window at the end" : "循环到末尾后回到第一个窗口"; checked <=> root.form-cycle; enabled: !root.saving; toggled => { root.profile-changed(); } }
                                                 Rectangle { height: 5px; }
                                                 Divider {}
                                                 SectionLabel { text: root.english ? "QUAKE MODE" : "QUAKE 停靠模式"; height: 23px; }

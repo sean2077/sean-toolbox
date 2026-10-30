@@ -1,22 +1,28 @@
 # Linux 便携包
 
-在图形会话中运行 `./bin/sean-toolbox`。主程序与 `sean-toolbox-ui` 必须保留在同一目录。
-默认使用 `Ctrl+Alt+Space` 打开工具箱。
+## 运行环境
 
-包在 Ubuntu 22.04 上构建，面向 glibc 2.35 或更新的桌面系统。
-需要系统提供 X11/Wayland、xkbcommon、Fontconfig 等桌面运行库。
-托盘使用 StatusNotifierItem，需要桌面环境支持该协议；文件选择对话框需要
-`xdg-desktop-portal` 以及适合当前桌面的 portal 后端。
+发布工作流在 Ubuntu 22.04 上构建，面向 glibc 2.35 或更新的桌面系统。
 
-窗口显示/隐藏和全局快捷键的首版 Linux 支持面向 X11。
-Wayland 下的全局窗口操作受合成器限制，项目浏览/打开仍可使用；具体限制见主 README。
+- 系统运行库：X11/Wayland、xkbcommon、Fontconfig 等。
+- 托盘：桌面环境需要支持 StatusNotifierItem。
+- 文件导入和导出：需要 `xdg-desktop-portal` 及适合当前桌面的文件选择后端，或 `zenity`。
 
-## 可选：加入应用菜单
+X11 下支持窗口控制和全局快捷键。Wayland 下可使用最近项目、设置和托盘；
+外部窗口控制与全局快捷键暂未支持。
+
+## 启动
+
+在图形会话中运行 `./bin/sean-toolbox`，将 `sean-toolbox-ui` 保留在同一目录。
+X11 下默认按 `Ctrl+Alt+Space` 打开最近项目面板；也可从托盘菜单或命令行打开界面。
+
+## 加入应用菜单
 
 在解压后的目录执行以下命令。这会复制两个程序及桌面入口到当前用户目录：
 
 ```sh
-mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/scalable/apps" "$HOME/.local/share/icons/hicolor/256x256/apps"
+mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications" \
+  "$HOME/.local/share/icons/hicolor/scalable/apps" "$HOME/.local/share/icons/hicolor/256x256/apps"
 cp bin/sean-toolbox bin/sean-toolbox-ui "$HOME/.local/bin/"
 chmod +x "$HOME/.local/bin/sean-toolbox" "$HOME/.local/bin/sean-toolbox-ui"
 cp share/applications/sean-toolbox.desktop "$HOME/.local/share/applications/"
@@ -25,5 +31,10 @@ cp share/icons/hicolor/256x256/apps/sean-toolbox.png "$HOME/.local/share/icons/h
 ```
 
 桌面会话的 PATH 需要包含 `~/.local/bin`。若未包含，请将安装后 `.desktop` 文件的
-`Exec=` 改为程序的绝对路径，路径有空格时用双引号包围。此包不包含自更新程序。
-更新前从托盘退出，再替换两个二进制文件。AHK、uTools、Node.js 和 Python 都不是运行依赖。
+`Exec=` 改为程序的绝对路径，路径有空格时用双引号包围。
+
+## 更新
+
+从托盘退出工具箱，或运行 `./bin/sean-toolbox quit`，再替换两个程序。
+配置保存在 `$XDG_CONFIG_HOME/sean-toolbox/config.json`；未设置该变量时为
+`~/.config/sean-toolbox/config.json`。

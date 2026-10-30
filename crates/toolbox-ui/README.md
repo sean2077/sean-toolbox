@@ -1,113 +1,100 @@
-# Toolbox UI
+# toolbox-ui
 
-`sean-toolbox-ui` is the on-demand native Slint frontend. Start it through
-`sean-toolbox` so the resident host owns the single UI instance, its endpoint,
-and the persisted configuration. The host does not depend on this crate.
+`sean-toolbox-ui` is the Slint frontend. Launch it through `sean-toolbox`, which
+manages the UI process, its local endpoint and the saved configuration.
 
-## Surfaces
+## Windows and interaction
 
-External `projects` activation (global shortcut, tray, default launch, or
-`sean-toolbox show projects`) opens a separate `LauncherWindow`. It is a compact,
-frameless, always-on-top search panel inspired by Recentry, with a default logical
-size of 760×408, one-line results, full-path hover hints, and a selected/matched
-counter. The larger `AppWindow` retains the four management pages.
+The UI has two windows:
 
-Every summon refreshes history, clears the filter, and focuses search. Repeated
-summons reset the same panel rather than toggling it. Up/Down clamp at the ends;
-Enter or double-click opens, while single-click selects. Escape and focus loss
-hide only the panel. Focus-loss dismissal is armed after the panel owns focus.
-An open failure remains visible. An old open result cannot hide a new invocation.
+- `LauncherWindow`: a frameless, always-on-top recent-project search panel, with
+  a default size of 760×408 logical pixels, path tooltips and a selection counter.
+  The global shortcut, tray and `sean-toolbox show projects` open this panel.
+- `AppWindow`: the management window, with projects, application profiles,
+  settings and diagnostics pages.
 
-The launcher supports Ctrl/Cmd+K or F to focus/select search, Ctrl/Cmd+R to refresh,
-and Ctrl/Cmd+, or the settings button to open the management window. Showing or
-using the launcher preserves an existing management page and its drafts. Saved
-configuration controls project availability and execution.
+Each launcher activation refreshes history, clears the query and focuses search.
+Repeated activations reuse the panel. Up/Down selects a result; Enter or
+double-click opens it. Escape, focus loss or a successful open dismisses the
+panel. An open failure keeps the panel visible with the error. Focus-loss handling
+starts after the panel gains focus, and open results are tied to the launcher
+invocation that requested them.
 
-## Appearance and application editing
+Launcher use preserves the management window's current page and drafts.
+Keyboard shortcuts and editing instructions are in the
+[usage guide](../../docs/USAGE.md).
 
-Settings offer System, Light and Dark choices with immediate previews on both
-surfaces. The shared semantic palette follows Slint's resolved Fluent palette;
-native controls and application colors change together. System mode reacts to
-the platform's theme notifications. Native window decorations receive the same
-preference. Saving persists the choice; discarding settings restores the saved
-palette without discarding an application draft.
+## State and background work
 
-The app and both native windows share `packaging/sean-toolbox.svg`. Platform
-icon exports and executable/bundle integration are documented in the packaging
-README. The UI embeds its vector icon at compile time.
+The Slint event loop owns widgets and editable drafts. A blocking worker handles
+project discovery, process launching, file access, native dialogs and host
+requests. Results return through `slint::invoke_from_event_loop`.
 
-Each application editor has an optional Quake section with a live layout
-preview, top-half/right-side/work-area presets, edge, alignment, width/height
-percentages, display choice and supported focus/topmost options. Unavailable
-platform options are disabled and explained. Ordinary cycle/maximize options
-are retained and are shown when Quake is off. See the window module README for
-the native behavior contract.
+- Search requests carry increasing generation numbers. The worker and UI apply
+  results for the current generation; opening a row also checks its generation.
+- Application drafts and settings drafts are separate. Saves carry the host's
+  expected configuration revision. Failed validation, shortcut conflicts or
+  concurrent updates leave the draft available for correction.
+- Settings previews apply language and theme immediately. Discarding settings
+  restores their saved values and preserves any application draft.
+- Diagnostics refresh on request, showing capabilities, activity and errors.
+  A failed refresh clears the previous capability snapshot.
+- Imports accept INI or JSON up to 1 MiB and show a preview. Merge replaces
+  profiles with matching case-insensitive IDs while preserving settings. JSON
+  replacement restores settings as well. Export reads the host's saved
+  configuration and writes it atomically.
 
-## Responsibilities
+Native file dialogs use the active window as their parent. Linux file selection
+requires an XDG Desktop Portal file-chooser backend or `zenity`; dialog errors
+appear in the UI. Modal dialogs retain keyboard focus, including shortcuts.
 
-- The Slint event loop owns widgets and editable drafts. Filesystem operations,
-  recent-project discovery, process launching, native file dialogs, and host
-  requests run on a blocking worker. Results return through
-  `slint::invoke_from_event_loop`.
-- Search requests have monotonic generations. Both the worker and UI reject
-  obsolete results; stale displayed rows cannot launch a project while a newer
-  query is pending. Entering the project page discovers history even when the
-  interface was first opened on a different page. Single-click selects a row;
-  double-click or Enter opens it. Up/Down/Enter act on the search field and list,
-  preserving ordinary keyboard behavior for buttons and dialogs.
-- Application and general-setting drafts are separate. Saves include the host's
-  expected revision. Validation, shortcut conflicts, concurrent updates, and
-  native failures leave the draft available for correction. Resetting settings
-  preserves the application draft; in-flight reload/open results cannot discard
-  newly entered drafts. Live language previews do not change saved module state.
-- Ctrl/Cmd+K or F focuses project search, Ctrl/Cmd+S saves the current editor,
-  and Ctrl/Cmd+1 through 4 changes pages. Modal dialogs keep keyboard focus and
-  block these shortcuts. Icon actions retain accessible names and focus rings.
-- Diagnostics use capability cards and separate activity, warnings and errors.
-  A failed status refresh invalidates the previous capability snapshot. Raw
-  technical details remain available on demand without periodic status polling.
-- INI/JSON imports are bounded to 1 MiB and previewed before application. Merge
-  replaces profiles with the same case-insensitive ID and preserves settings.
-  JSON replacement also restores settings. Import never launches an application.
-  Export asks the host for the current saved configuration and writes atomically.
-- Idle release starts only after both surfaces are hidden and no draft, dialog or
-  operation needs the process; reopening either surface stops the timer. New
-  configurations default to zero, so the UI process exits immediately when
-  eligible. An optional nonzero cache applies to automatic focus-loss/open-result
-  dismissal. Explicit Close or Escape bypasses that cache for the last surface.
-  Eligibility is rechecked on the event loop before exit, so a queued activation
-  cannot be closed by an obsolete timer. Normal exit wakes the
-  activation listener so it can remove its own Unix socket. The UI performs no
-  periodic project, focus, or status polling. The small host remains available
-  for shortcuts, and starts a fresh UI process on the next summon.
-- Native file dialogs use the active window as their parent. On Linux, install
-  a working XDG desktop portal file-chooser backend or `zenity`. Actual backend
-  errors reported by `rfd` are displayed in the UI.
+## Appearance
+
+System, Light and Dark themes share Slint's Fluent palette across both windows,
+native controls and window decorations. System mode follows platform theme
+notifications. Each application profile has a Quake editor with a layout preview,
+presets and controls for the supported platform options. Native docking behavior
+is documented in the [window module](../toolbox-windows/README.md).
+
+The window icon is embedded from
+[`packaging/sean-toolbox.svg`](../../packaging/sean-toolbox.svg). Platform exports
+are described in the [packaging guide](../../packaging/README.md). The
+Diagnostics/About page includes Slint's `AboutSlint` attribution widget.
+
+## Process lifetime
+
+The UI can exit once both windows are hidden and there are no drafts, dialogs or
+operations in progress. New configurations use a zero-second idle timeout.
+A longer timeout caches the UI after automatic dismissal, such as losing focus
+or opening a project. Explicit Close or Escape releases the last window
+immediately once eligible.
+
+Reopening a window stops the idle timer. The timer checks eligibility again on
+the event loop before exiting. Shutdown wakes the activation listener to remove
+its Unix socket. The host remains available for shortcuts and starts the UI again
+when requested. Project discovery, focus handling and diagnostics are event-driven.
 
 ## Development
 
+Run from the repository root:
+
 ```sh
-cargo build -p toolbox-ui
-cargo test -p toolbox-ui
-cargo clippy -p toolbox-ui --all-targets -- -D warnings
+cargo build --locked -p toolbox-host -p toolbox-ui
+cargo test --locked -p toolbox-ui
+cargo clippy --locked -p toolbox-ui --all-targets -- -D warnings
 ```
 
-The generated bindings come from `ui/main.slint`, which also exports
-`ui/launcher.slint`. `ui/project-types.slint` owns the shared row schema,
-`ui/components.slint` owns shared visual primitives, and the small `ui/icons/`
-SVGs are embedded at build time. The frontend accepts
-`--page projects|windows|settings|diagnostics` and `--endpoint <identifier>`.
-The endpoint is a current-user identifier, never an arbitrary socket path.
+`ui/main.slint` generates the Rust bindings and exports `ui/launcher.slint`.
+Shared rows are defined in `ui/project-types.slint`, components in
+`ui/components.slint`, and embedded icons in `ui/icons/`. The frontend uses
+Slint's Winit backend and software renderer.
 
-Unit tests cover literal argv boundaries, import limits, unknown JSON fields,
-case-insensitive merge identity, hotkey conflicts, and the difference between
-JSON merge and replacement. Linux/X11 UI checks used Xvfb, the real host,
-temporary configuration/SQLite data, and a VS Code CLI fixture that records argv.
-They exercised keyboard search/open requests, settings and application saves,
-native failure recovery, native INI selection/preview/merge, JSON export,
-Chinese/English layouts, warm reuse, zero/timed unloading, and socket cleanup.
-These checks do not replace Windows/macOS desktop acceptance testing.
+The UI binary accepts `--page projects|windows|settings|diagnostics` and
+`--endpoint <identifier>`. The endpoint identifies a current-user IPC channel.
 
-Slint is pinned to 1.18.1 with the Winit backend and software renderer. The
-Diagnostics/About page contains the official `AboutSlint` attribution widget.
-See the repository's license notices for dependency terms.
+Unit tests cover drafts, themes, imports, launch arguments, request ordering and
+process lifetime. Linux integration checks are available in
+[`scripts/smoke_host.py`](../../scripts/smoke_host.py) and
+[`scripts/smoke_appearance.py`](../../scripts/smoke_appearance.py).
+See the [development guide](../../docs/DEVELOPMENT.md) for their prerequisites and
+commands, and the [validation record](../../docs/VALIDATION.md) for dated results.
