@@ -29,13 +29,16 @@ Sean Toolbox 使用 Rust + Slint，支持 Windows、macOS 和 Linux，优先面�
 
 ## 下载与开始使用
 
-当前构建从 [Actions](https://github.com/sean2077/sean-toolbox/actions/workflows/ci.yml) 下载：打开最近一次成功的运行记录，在 Artifacts 中选择对应系统的压缩包。版本发布后也可从 [Releases](https://github.com/sean2077/sean-toolbox/releases) 下载。
+正式版下载：[最新版本](https://github.com/sean2077/sean-toolbox/releases/latest) · [0.1.0](https://github.com/sean2077/sean-toolbox/releases/tag/v0.1.0)。
 
-| 系统 | 启动方式 |
-| --- | --- |
-| Windows | 完整解压后运行 `sean-toolbox.exe` |
-| macOS | 解压后将 `Sean Toolbox.app` 放到固定位置，再打开应用 |
-| Linux | 解压后运行 `bin/sean-toolbox`；桌面入口安装步骤见包内 `INSTALL.md` |
+按系统和处理器选择 Release 中的压缩包；开发构建仍可从 [Actions](https://github.com/sean2077/sean-toolbox/actions/workflows/ci.yml) 的成功运行记录中下载。
+
+| 系统与处理器 | 归档标识 | 启动方式 |
+| --- | --- | --- |
+| Windows x64 | `windows-x86_64.zip` | 完整解压后运行 `sean-toolbox.exe` |
+| macOS Apple 芯片 | `macos-aarch64.zip` | 将完整的 `Sean Toolbox.app` 放到固定位置后打开 |
+| macOS Intel | `macos-x86_64.zip` | 同上 |
+| Linux x64 | `linux-x86_64.tar.gz` | 运行 `bin/sean-toolbox`；桌面入口步骤见包内 `INSTALL.md` |
 
 保留压缩包的目录结构，主程序和界面程序配套使用。包内附有安装说明，压缩包旁提供 `.sha256` 校验文件。当前构建尚未进行 Windows 代码签名或 macOS 签名与公证。
 

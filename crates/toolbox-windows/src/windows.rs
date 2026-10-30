@@ -665,6 +665,7 @@ mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
     use windows_sys::Win32::Foundation::HINSTANCE;
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::System::Threading::GetCurrentThreadId;
 
     /// Test-owned native windows only; no terminal or user configuration is used.
     struct NativeWindows {
@@ -749,6 +750,37 @@ mod tests {
         }
     }
 
+    fn with_message_loop(test: impl FnOnce() + Send) {
+        // ShowWindowAsync posts to the HWND owner's queue. Run backend calls
+        // on another thread, just as the host worker controls an application's
+        // GUI thread; sleeping on the owner thread cannot acknowledge them.
+        let owner = unsafe { GetCurrentThreadId() };
+        std::thread::scope(|scope| {
+            let worker = scope.spawn(move || {
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(test));
+                // The fixtures have already created this thread's queue. Wake
+                // it on success or panic so failed assertions can unwind safely.
+                unsafe { PostThreadMessageW(owner, WM_QUIT, 0, 0) };
+                result
+            });
+            let mut message = MSG::default();
+            loop {
+                let status = unsafe { GetMessageW(&mut message, std::ptr::null_mut(), 0, 0) };
+                assert_ne!(status, -1, "{}", std::io::Error::last_os_error());
+                if status == 0 {
+                    break;
+                }
+                unsafe {
+                    TranslateMessage(&message);
+                    DispatchMessageW(&message);
+                }
+            }
+            if let Err(panic) = worker.join().unwrap() {
+                std::panic::resume_unwind(panic);
+            }
+        });
+    }
+
     #[test]
     fn dedicated_class_finds_hidden_empty_title_and_excludes_dialogs() {
         let mut native = NativeWindows::new(WEZTERM_QUAKE_CLASS_PREFIX);
@@ -784,39 +816,47 @@ mod tests {
     #[test]
     fn native_quake_hides_reuses_and_recovers_without_activation() {
         let mut native = NativeWindows::new(WEZTERM_QUAKE_CLASS_PREFIX);
-        let hwnd = native.create(std::ptr::null_mut(), WS_EX_APPWINDOW);
-        let id = WindowsDesktop::identity(hwnd).unwrap();
+        let handle = native.create(std::ptr::null_mut(), WS_EX_APPWINDOW) as usize;
         let matcher = format!("class:{}", native.name);
-        let mut desktop = desktop();
-        let bounds = WindowRect {
-            x: 80,
-            y: 80,
-            width: 640,
-            height: 360,
-        };
-        desktop.place_quake(&id, bounds, true).unwrap();
-        assert_ne!(unsafe { IsWindowVisible(hwnd) }, 0);
-        assert!(WindowsDesktop::topmost(hwnd));
-        assert_ne!(unsafe { GetForegroundWindow() }, hwnd);
+        with_message_loop(move || {
+            // The fixture owns this HWND until the worker and message loop end.
+            let hwnd = handle as HWND;
+            assert_ne!(
+                unsafe { GetWindowThreadProcessId(hwnd, std::ptr::null_mut()) },
+                unsafe { GetCurrentThreadId() }
+            );
+            let id = WindowsDesktop::identity(hwnd).unwrap();
+            let mut desktop = desktop();
+            let bounds = WindowRect {
+                x: 80,
+                y: 80,
+                width: 640,
+                height: 360,
+            };
+            desktop.place_quake(&id, bounds, true).unwrap();
+            assert_ne!(unsafe { IsWindowVisible(hwnd) }, 0);
+            assert!(WindowsDesktop::topmost(hwnd));
+            assert_ne!(unsafe { GetForegroundWindow() }, hwnd);
 
-        desktop.hide_quake(&id).unwrap();
-        desktop.release_quake(&id).unwrap();
-        assert_eq!(unsafe { IsWindowVisible(hwnd) }, 0);
-        assert_eq!(unsafe { IsIconic(hwnd) }, 0);
-        assert!(!WindowsDesktop::topmost(hwnd));
-        let windows = desktop.windows(&matcher).unwrap();
-        assert_eq!(windows.len(), 1);
-        assert_eq!(windows[0].id, id);
-        assert!(windows[0].hidden);
+            desktop.hide_quake(&id).unwrap();
+            desktop.release_quake(&id).unwrap();
+            assert_eq!(unsafe { IsWindowVisible(hwnd) }, 0);
+            assert_eq!(unsafe { IsIconic(hwnd) }, 0);
+            assert!(!WindowsDesktop::topmost(hwnd));
+            let windows = desktop.windows(&matcher).unwrap();
+            assert_eq!(windows.len(), 1);
+            assert_eq!(windows[0].id, id);
+            assert!(windows[0].hidden);
 
-        desktop.place_quake(&id, bounds, true).unwrap();
-        assert!(!desktop.quake_hidden.contains(&id));
-        desktop.hide_quake(&id).unwrap();
-        desktop.clear_quake().unwrap();
-        assert_ne!(unsafe { IsWindowVisible(hwnd) }, 0);
-        assert_eq!(unsafe { IsIconic(hwnd) }, 0);
-        assert!(!WindowsDesktop::topmost(hwnd));
-        assert!(desktop.quake_hidden.is_empty());
-        assert_ne!(unsafe { GetForegroundWindow() }, hwnd);
+            desktop.place_quake(&id, bounds, true).unwrap();
+            assert!(!desktop.quake_hidden.contains(&id));
+            desktop.hide_quake(&id).unwrap();
+            desktop.clear_quake().unwrap();
+            assert_ne!(unsafe { IsWindowVisible(hwnd) }, 0);
+            assert_eq!(unsafe { IsIconic(hwnd) }, 0);
+            assert!(!WindowsDesktop::topmost(hwnd));
+            assert!(desktop.quake_hidden.is_empty());
+            assert_ne!(unsafe { GetForegroundWindow() }, hwnd);
+        });
     }
 }

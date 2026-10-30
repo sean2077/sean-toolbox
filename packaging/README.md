@@ -51,9 +51,36 @@ python scripts/package.py
 上分别构建，执行格式检查、Clippy、测试和打包；Linux 另有窗口与界面集成测试。
 推送 `main`、提交 PR 或手动运行工作流后，可下载构建产物。
 
-版本标签使用 `v<version>`，与根 `Cargo.toml` 中的版本一致。标签构建全部成功后，
-工作流汇总各平台归档及校验文件，按 [发布说明](RELEASE_NOTES.md) 创建 GitHub Release。
-含 `-` 的版本标记为预发行版。
+### 发布入口
+
+版本权威是根 `Cargo.toml` 的 `[workspace.package].version`，版本标签为带注解的 `v<version>`。
+[RELEASE_NOTES.md](RELEASE_NOTES.md) 是发布说明正文，首行为 `# Sean Toolbox <version>`，每次发版与版本号一起更新；工作区锁文件中的包版本也应同步。
+
+| 触发方式 | 发布行为 |
+| --- | --- |
+| 推送 `main`，Cargo 版本发生变化 | 四平台构建与测试通过后，自动创建对应标签并发布 |
+| 推送 `v*` 标签 | 核对带注解的标签、Cargo 版本及提交属于 `main`，四平台通过后发布该标签 |
+| Actions 手动运行，`publish=false`（默认） | 仅验证和打包 |
+| Actions 在 `main` 手动运行，`publish=true` | 四平台通过后发布当前 Cargo 版本 |
+| Pull request 或版本未变化的普通提交 | 仅验证和打包 |
+
+常规发版只需更新 Cargo 版本、锁文件和发布说明，验证后推送 `main`。
+手动发布用于显式发版或补完未完成的草稿；已有正式发布保持原样。
+
+发布判定和资产校验由 `scripts/release.py` 维护。仓库根目录运行
+`python -m unittest discover -s scripts -p 'test_*.py' -v` 验证发布行为；测试只使用临时文件和模拟 API。
+CI 调用 `prepare` 子命令读取 Actions 事件并输出版本、提交和发布意图；
+四平台成功后调用 `publish --tag <tag> --sha <commit> --assets <directory>` 执行发布。
+只有发布任务获得 `contents: write`，使用本次运行的 `GITHUB_TOKEN`，无需额外 PAT。
+
+### 发布完整性
+
+发布任务汇总四份平台归档及各自的 `.sha256` 文件，共 **8 个资产**，先核对完整清单和 SHA-256。
+标签指向本次构建的提交；GitHub Release 先以草稿创建，资产上传并核对完整后再公开。
+已有公开发布的资产和标签不会被覆盖；中断的草稿可以重跑补齐。
+
+`0.1.0` 等无后缀版本发布为正式版；含 `-` 的版本标记为预发行版。
+发布完成以对应标签、成功的发布任务和 Release 中齐全的 8 个资产为准。
 
 当前 Windows 包未做 Authenticode 签名；macOS 包未做 Developer ID 签名及 Apple 公证。
 各平台的安装和权限步骤见包内 `INSTALL.md`，桌面测试结果见 [验证记录](../docs/VALIDATION.md)。

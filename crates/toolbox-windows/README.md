@@ -130,8 +130,10 @@ clients when finished.
 
 Windows unit tests create private HWND fixtures to check hidden/empty-title
 matching, owned/tool window exclusion, dedicated-instance isolation and
-show/hide/cleanup without activation. They do not start WezTerm or use user
-configuration.
+show/hide/cleanup without activation. The lifecycle fixture runs a normal
+message loop on the HWND owner thread while a separate worker calls the backend,
+so asynchronous window requests are processed through the native message queue.
+The tests do not start WezTerm or use user configuration.
 
 On Windows and macOS, check foreground policies, Accessibility permissions,
 multiple displays, Spaces and application-specific window behavior on the target
