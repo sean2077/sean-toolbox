@@ -63,6 +63,8 @@ export component LauncherWindow inherits Window {
     no-frame: true;
     always-on-top: true;
     background: Theme.surface;
+    in property <string> platform-font-family;
+    default-font-family: root.platform-font-family;
     default-font-size: 13px;
 
     in-out property <bool> english: false;

@@ -16,6 +16,8 @@ export component AppWindow inherits Window {
     min-width: 900px;
     min-height: 650px;
     background: Theme.canvas;
+    in property <string> platform-font-family;
+    default-font-family: root.platform-font-family;
     default-font-size: 14px;
     in-out property <bool> english: false;
     in-out property <int> page: 0;

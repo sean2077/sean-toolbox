@@ -1742,6 +1742,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .select()?;
     let ui = AppWindow::new()?;
     let launcher = LauncherWindow::new()?;
+    #[cfg(windows)]
+    {
+        // The software renderer's default font fallback can omit CJK glyphs.
+        ui.set_platform_font_family("Microsoft YaHei UI".into());
+        launcher.set_platform_font_family("Microsoft YaHei UI".into());
+    }
     ui.set_version_label(format!("v{}", env!("CARGO_PKG_VERSION")).into());
     let (send, receive) = mpsc::channel();
     let query_generation = Arc::new(AtomicU64::new(0));
