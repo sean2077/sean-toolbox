@@ -49,7 +49,12 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let temp = tempfile::tempdir().unwrap();
+        // SkillsService canonicalizes this root (a verbatim path on Windows).
+        // Keep spaces in it so the real Git/archive fixtures cover both cases.
+        let temp = tempfile::Builder::new()
+            .prefix("skills fixture ")
+            .tempdir()
+            .unwrap();
         let root = temp.path().join("configuration/skills");
         let home = temp.path().join("home");
         let origin = temp.path().join("origin");

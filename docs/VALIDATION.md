@@ -410,6 +410,12 @@ workspace 包的版本，没有升级依赖。发布说明覆盖首次发布的�
 相同内容的未知目录被接管、大清单与聚合错误超过 IPC 限额、无关应用链接目录阻止管理器启动、
 刷新后的旧发现条目、本机共享目录扫描及嵌套 Skill 示例边界。相应回归纳入测试。
 
+首轮 [CI](https://github.com/sean2077/sean-toolbox/actions/runs/42233480183) 的 Linux 与
+macOS ARM 全量测试通过；Windows 的真实 Git 测试发现 `git archive --output` 不接受
+canonicalize 后的 Win32 verbatim 路径。现改为在受控临时工作目录中使用相对仓库与归档
+参数，Rust 文件访问和限额监控仍保留完整路径，不剥离 UNC 或长路径前缀。既有 Git
+测试继续经过 canonicalize，且临时目录增加空格，直接覆盖这一回归。
+
 GitHub Actions 沿用 Windows x64、macOS ARM/Intel、Linux x64 的完整矩阵。IPC 与桌面
 集成检查的实际远端结果以本 PR 对应提交的 Actions 为准；未降低、跳过或修改既有测试来
 绕过本地 socket 限制。本次没有执行 Windows 实机的文件占用、junction、休眠恢复或文件

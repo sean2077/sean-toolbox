@@ -45,7 +45,10 @@ impl Fetcher for GitFetcher {
             .prefix("checkout-")
             .tempdir_in(root)
             .map_err(|e| e.to_string())?;
-        let bare = temporary.path().join("repository.git");
+        // Git for Windows does not accept verbatim Win32 paths consistently.
+        // Keep Git's paths relative to this controlled temporary working
+        // directory; Rust can retain canonical paths for filesystem access.
+        let bare = PathBuf::from("repository.git");
         let mut args: Vec<OsString> = [
             "clone",
             "--bare",
@@ -119,7 +122,7 @@ pub(crate) fn archive_repository(
             bare.as_os_str().to_owned(),
             OsString::from("archive"),
             OsString::from("--format=tar"),
-            OsString::from(format!("--output={}", archive.display())),
+            OsString::from("--output=source.tar"),
             OsString::from(&revision),
         ],
         cancel,
