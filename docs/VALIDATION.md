@@ -386,3 +386,31 @@ workspace 包的版本，没有升级依赖。发布说明覆盖首次发布的�
 发布脚本会在上传后下载全部 8 个资产，核对文件名、大小及 SHA-256，再公开草稿。
 实际四平台原生测试、打包与 GitHub Release 的结果以本次 Actions 发布运行及其资产为准；
 这些自动化检查仍不替代用户 Windows 桌面上的真实 WezTerm 多显示器与焦点体验验收。
+
+## 2026-11-06：Skills 管理与每日更新
+
+基于 `6f4a885` 实现 Skills 来源、发现、安装、本机导入、应用目录部署及宿主每日更新。
+本地环境为 Linux x86_64、固定 Rust 1.99.1、Slint 1.18.1；测试均使用独立临时数据。
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace --no-fail-fast` | 155 项通过；3 项既有 IPC 用例在 Unix socket bind 处被环境以 `Operation not permitted` 拒绝；1 项既有 X11 用例仍由独立脚本运行。全量命令因此退出 101，不能记为全通过 |
+| Skills 后端 | 19 项通过，包含真实临时 Git 仓库、更新、重启补跑、失败重试、本地修改保护和事务恢复 |
+| 宿主 | 15 项通过，含后台接收/持久化、调度到期计算、初始化失败、IPC 状态大小和 CLI 契约 |
+| UI | 39 项通过，含请求互斥、稳定 ID、草稿保留、操作确认、导入与关闭释放 |
+| Windows GNU 目标的 Skills / all-targets 严格 Clippy | 通过；包含挂起启动、Job 纳管、恢复线程与 reparse point 分支的编译检查，不是 Windows 实机验证 |
+| debug 宿主与 UI 构建 | 通过 |
+| Python 发布脚本测试 | 27 项通过 |
+| 中英文 Slint 布局 | 实际软件渲染器检查默认 1120×780 与最小 900×650、安装/发现/仓库视图；[截图](images/skills-manager.png)使用明确标注的示例数据 |
+| `scripts/smoke_host.py` | 已扩展 Skills 的 IPC 导入、部署、每日开关、关闭界面、冲突保护与卸载流程；本地 Xvfb 因无法创建监听 socket 而启动失败，流程未执行完成 |
+
+独立审查推动修复了未结束事务被后续空更新推进 generation、旧副本部分清理后恢复阻塞、
+相同内容的未知目录被接管、大清单与聚合错误超过 IPC 限额、无关应用链接目录阻止管理器启动、
+刷新后的旧发现条目、本机共享目录扫描及嵌套 Skill 示例边界。相应回归纳入测试。
+
+GitHub Actions 沿用 Windows x64、macOS ARM/Intel、Linux x64 的完整矩阵。IPC 与桌面
+集成检查的实际远端结果以本 PR 对应提交的 Actions 为准；未降低、跳过或修改既有测试来
+绕过本地 socket 限制。本次没有执行 Windows 实机的文件占用、junction、休眠恢复或文件
+选择器验收。

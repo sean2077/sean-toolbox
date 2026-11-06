@@ -1,0 +1,344 @@
+import { CheckBox, LineEdit, ScrollView, Spinner, Switch } from "std-widgets.slint";
+import { Theme, ActionButton, Caption, Card, Divider, FieldLabel, Icon, SectionLabel } from "components.slint";
+
+component SkillPathHint inherits Rectangle {
+    in property <string> text;
+    max-width: 620px;
+    border-radius: 5px;
+    background: Theme.tooltip;
+    VerticalLayout {
+        padding: 10px;
+        Text { text: root.text; color: Theme.on-accent; font-size: 12px; wrap: word-wrap; }
+    }
+}
+
+export struct SkillListRow {
+    id: string,
+    name: string,
+    detail: string,
+    description: string,
+    installed: bool,
+    problem: bool,
+}
+export struct SkillAppRow { index: int, name: string, path: string, enabled: bool }
+export struct SkillRepositoryRow { id: string, url: string, detail: string, error: string, removable: bool }
+
+export global SkillsState {
+    in-out property <bool> loaded: false;
+    in-out property <bool> loading: false;
+    in-out property <bool> submitting: false;
+    in-out property <bool> busy: false;
+    in-out property <bool> daily-update: false;
+    in-out property <int> view: 0;
+    in-out property <string> query;
+    in-out property <[SkillListRow]> rows;
+    in-out property <[SkillRepositoryRow]> repositories;
+    in-out property <[SkillAppRow]> apps;
+    in-out property <int> installed-count;
+    in-out property <string> selected-id;
+    in-out property <string> selected-name;
+    in-out property <string> selected-description;
+    in-out property <string> selected-source;
+    in-out property <string> selected-detail;
+    in-out property <string> selected-error;
+    in-out property <bool> selected-installed: false;
+    in-out property <bool> selected-updatable: false;
+    in-out property <string> repository-url;
+    in-out property <string> repository-branch;
+    in-out property <string> schedule-text;
+    in-out property <string> activity-text;
+    in-out property <string> error-text;
+    in-out property <string> notice-text;
+    in-out property <string> storage-path;
+    in-out property <string> empty-text;
+    callback change-view(int);
+    callback search(string);
+    callback select(string);
+    callback refresh;
+    callback update-all;
+    callback set-daily(bool);
+    callback add-repository;
+    callback remove-repository(string);
+    callback import-folder;
+    callback toggle-app(int, bool);
+    callback install;
+    callback update-selected;
+    callback uninstall;
+    callback show-details;
+}
+
+export component SkillsPage inherits Rectangle {
+    in property <bool> english;
+    in property <bool> enabled: true;
+    private property <bool> editable: root.enabled && SkillsState.loaded && !SkillsState.busy && !SkillsState.submitting;
+    public function focus-search() {
+        if SkillsState.view == 3 { repository-url.focus(); }
+        else { search.focus(); }
+    }
+
+    VerticalLayout {
+        spacing: 12px;
+        Card {
+            VerticalLayout {
+                padding: 14px;
+                spacing: 7px;
+                HorizontalLayout {
+                    spacing: 12px;
+                    FieldLabel { text: root.english ? "Daily auto-update" : "每日自动更新"; vertical-alignment: center; }
+                    Switch {
+                        checked <=> SkillsState.daily-update;
+                        enabled: root.editable;
+                        toggled => { SkillsState.set-daily(self.checked); }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    ActionButton {
+                        text: root.english ? "Update all" : "全部更新";
+                        with-icon: true;
+                        icon: @image-url("icons/download.svg");
+                        enabled: root.editable && SkillsState.installed-count > 0;
+                        clicked => { SkillsState.update-all(); }
+                    }
+                }
+                Caption {
+                    text: root.english ? "Updates every 24 hours while the toolbox is running in the tray; catches up at the next startup." : "工具箱在托盘运行时每 24 小时更新；错过的更新会在下次启动时补上。";
+                }
+                Text { text: SkillsState.schedule-text; color: Theme.muted; font-size: 11px; wrap: word-wrap; }
+            }
+        }
+
+        HorizontalLayout {
+            height: 36px;
+            spacing: 4px;
+            ActionButton { text: root.english ? "Installed" : "已安装"; primary: SkillsState.view == 0; subtle: SkillsState.view != 0; clicked => { SkillsState.change-view(0); } }
+            ActionButton { text: root.english ? "Discover" : "发现"; primary: SkillsState.view == 1; subtle: SkillsState.view != 1; clicked => { SkillsState.change-view(1); } }
+            ActionButton { text: root.english ? "On this device" : "本机技能"; primary: SkillsState.view == 2; subtle: SkillsState.view != 2; clicked => { SkillsState.change-view(2); } }
+            ActionButton { text: root.english ? "Repositories" : "仓库"; primary: SkillsState.view == 3; subtle: SkillsState.view != 3; clicked => { SkillsState.change-view(3); } }
+            Rectangle { horizontal-stretch: 1; }
+            ActionButton {
+                text: root.english ? "Import folder" : "导入文件夹";
+                with-icon: true;
+                icon: @image-url("icons/folder.svg");
+                enabled: root.editable;
+                clicked => { SkillsState.import-folder(); }
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            VerticalLayout {
+                visible: SkillsState.view != 3;
+                spacing: 10px;
+                HorizontalLayout {
+                    height: 34px;
+                    spacing: 10px;
+                    search := LineEdit {
+                        text <=> SkillsState.query;
+                        placeholder-text: root.english ? "Search skills or repositories…" : "搜索技能名称、描述或仓库…";
+                        enabled: root.enabled;
+                        edited => { SkillsState.search(self.text); }
+                    }
+                    ActionButton {
+                        text: SkillsState.view == 1 ? (root.english ? "Reload repositories" : "刷新仓库") : SkillsState.view == 2 ? (root.english ? "Scan this device" : "扫描本机") : (root.english ? "Refresh" : "刷新");
+                        with-icon: true;
+                        icon: @image-url("icons/refresh.svg");
+                        enabled: root.enabled && !SkillsState.loading && !SkillsState.submitting && (SkillsState.view == 0 || (SkillsState.loaded && !SkillsState.busy));
+                        clicked => { SkillsState.refresh(); }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 12px;
+                    vertical-stretch: 1;
+                    Card {
+                        horizontal-stretch: 1;
+                        min-width: 200px;
+                        clip: true;
+                        ScrollView {
+                            visible: SkillsState.rows.length > 0;
+                            horizontal-scrollbar-policy: always-off;
+                            VerticalLayout {
+                                padding: 6px;
+                                spacing: 3px;
+                                for item in SkillsState.rows: Rectangle {
+                                    height: 82px;
+                                    border-radius: 6px;
+                                    background: SkillsState.selected-id == item.id ? Theme.accent-soft : row-touch.has-hover ? Theme.hover : transparent;
+                                    border-width: row-keys.has-focus ? 2px : 0px;
+                                    border-color: Theme.focus;
+                                    accessible-role: button;
+                                    accessible-label: item.name + " " + item.detail;
+                                    accessible-action-default => { SkillsState.select(item.id); }
+                                    forward-focus: row-keys;
+                                    VerticalLayout {
+                                        padding: 12px;
+                                        spacing: 4px;
+                                        HorizontalLayout {
+                                            spacing: 6px;
+                                            Text { text: item.name; color: Theme.text; font-size: 13px; font-weight: 600; overflow: elide; min-width: 0px; horizontal-stretch: 1; }
+                                            if item.problem: Icon { source: @image-url("icons/warning.svg"); width: 14px; colorize: Theme.warning; }
+                                            if item.installed && SkillsState.view == 1: Icon { source: @image-url("icons/check.svg"); width: 14px; colorize: Theme.success; }
+                                        }
+                                        Text { text: item.description; color: Theme.secondary; font-size: 11px; overflow: elide; min-width: 0px; }
+                                        Text { text: item.detail; color: Theme.muted; font-size: 10px; overflow: elide; min-width: 0px; }
+                                    }
+                                    row-touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { row-keys.focus(); SkillsState.select(item.id); } }
+                                    row-keys := FocusScope {
+                                        enabled: root.enabled;
+                                        focus-on-click: false;
+                                        key-pressed(event) => {
+                                            if event.text == Key.Return || event.text == Key.Space { SkillsState.select(item.id); return accept; }
+                                            reject
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if SkillsState.rows.length == 0: VerticalLayout {
+                            padding: 24px;
+                            alignment: center;
+                            spacing: 12px;
+                            Icon { source: @image-url("icons/box.svg"); width: 28px; horizontal-stretch: 0; colorize: Theme.muted; }
+                            Caption { text: SkillsState.empty-text; }
+                        }
+                    }
+                    Card {
+                        width: 282px;
+                        clip: true;
+                        VerticalLayout {
+                            padding: 15px;
+                            spacing: 10px;
+                            ScrollView {
+                                vertical-stretch: 1;
+                                horizontal-scrollbar-policy: always-off;
+                                VerticalLayout {
+                                    padding-right: 4px;
+                                    spacing: 10px;
+                                    if SkillsState.selected-id == "": Caption { text: root.english ? "Select a skill to view details and choose deployment directories." : "选择一个技能，查看详情并管理部署目录。"; }
+                                    if SkillsState.selected-id != "": VerticalLayout {
+                                        spacing: 10px;
+                                        Text { text: SkillsState.selected-name; color: Theme.text; font-size: 16px; font-weight: 600; wrap: word-wrap; }
+                                        Caption { text: SkillsState.selected-source; font-size: 11px; }
+                                        if SkillsState.selected-error != "": Caption { text: SkillsState.selected-error; color: Theme.danger; font-size: 11px; }
+                                        Divider {}
+                                        SectionLabel { text: SkillsState.view == 0 ? (root.english ? "DEPLOY TO APP DIRECTORIES" : "应用目录部署") : (root.english ? "DEPLOY AFTER IMPORT" : "安装后部署到"); }
+                                        VerticalLayout {
+                                            spacing: 2px;
+                                            for app in SkillsState.apps: Rectangle {
+                                                height: 28px;
+                                                HorizontalLayout {
+                                                    spacing: 0px;
+                                                    CheckBox {
+                                                        text: app.name;
+                                                        checked <=> app.enabled;
+                                                        enabled: root.editable && (SkillsState.view == 0 || !SkillsState.selected-installed);
+                                                        toggled => { SkillsState.toggle-app(app.index, self.checked); }
+                                                    }
+                                                    Rectangle { horizontal-stretch: 1; }
+                                                }
+                                                Tooltip { SkillPathHint { text: app.name + "\n" + app.path; } }
+                                            }
+                                        }
+                                        Caption { text: root.english ? "Hover an app for its path. Switches manage only these directories; apps may also read Claude, project or other skills directories." : "悬停应用可查看路径。开关只管理这些目录；应用也可能读取 Claude 或项目等其他 Skills 目录。"; font-size: 11px; }
+                                        Divider {}
+                                        Caption { text: SkillsState.selected-description; color: Theme.secondary; }
+                                        if SkillsState.selected-detail != "": Caption { text: SkillsState.selected-detail; font-size: 11px; }
+                                        if SkillsState.view != 0: Caption { text: root.english ? "Leave all unchecked to keep only a managed copy." : "可不勾选应用，仅保存管理副本。"; font-size: 11px; }
+                                        if SkillsState.view == 2: Caption { text: root.english ? "The original folder is kept. Move it aside before deploying to the same directory." : "导入会保留原文件夹；部署到同名目录前，请先手动移开原目录。"; font-size: 11px; }
+                                        if SkillsState.view == 0 && !SkillsState.selected-updatable: Caption { text: root.english ? "Local imports have no remote update source." : "本机导入的技能没有远程更新来源。"; font-size: 11px; }
+                                    }
+                                    Rectangle { min-height: 0px; vertical-stretch: 1; }
+                                }
+                            }
+                            if SkillsState.selected-id != "" && SkillsState.view != 0: ActionButton {
+                                text: SkillsState.selected-installed ? (root.english ? "Already installed" : "已安装") : SkillsState.view == 2 ? (root.english ? "Import selected" : "导入所选技能") : (root.english ? "Install selected" : "安装所选技能");
+                                primary: true;
+                                enabled: root.editable && !SkillsState.selected-installed;
+                                clicked => { SkillsState.install(); }
+                            }
+                            if SkillsState.selected-id != "" && SkillsState.view == 0: HorizontalLayout {
+                                spacing: 8px;
+                                ActionButton { text: root.english ? "Update" : "更新"; enabled: root.editable && SkillsState.selected-updatable; clicked => { SkillsState.update-selected(); } }
+                                ActionButton { text: root.english ? "Uninstall" : "卸载"; danger: true; enabled: root.editable; clicked => { SkillsState.uninstall(); } }
+                                Rectangle { horizontal-stretch: 1; }
+                            }
+                        }
+                    }
+                }
+            }
+
+            VerticalLayout {
+                visible: SkillsState.view == 3;
+                spacing: 12px;
+                Card {
+                    VerticalLayout {
+                        padding: 15px;
+                        spacing: 9px;
+                        FieldLabel { text: root.english ? "GitHub skill repository" : "GitHub 技能仓库"; }
+                        repository-url := LineEdit { text <=> SkillsState.repository-url; placeholder-text: "owner/repo · https://github.com/owner/repo"; enabled: root.editable; }
+                        HorizontalLayout {
+                            spacing: 9px;
+                            LineEdit { text <=> SkillsState.repository-branch; placeholder-text: root.english ? "Branch (blank = default)" : "分支（留空使用默认分支）"; enabled: root.editable; }
+                            ActionButton { text: root.english ? "Add repository" : "添加仓库"; primary: true; enabled: root.editable && SkillsState.repository-url != ""; clicked => { SkillsState.add-repository(); } }
+                        }
+                        Caption { text: root.english ? "After adding a source, open Discover and reload repositories. Git must be installed." : "添加后前往「发现」刷新仓库，即可选择安装。需已安装 Git。"; font-size: 11px; }
+                    }
+                }
+                Card {
+                    vertical-stretch: 1;
+                    clip: true;
+                    ScrollView {
+                        horizontal-scrollbar-policy: always-off;
+                        VerticalLayout {
+                            padding: 12px;
+                            spacing: 8px;
+                            if SkillsState.repositories.length == 0: Caption { text: root.english ? "Add a repository above to discover its skills." : "在上方添加仓库，开始发现技能。"; }
+                            for repo in SkillsState.repositories: VerticalLayout {
+                                spacing: 6px;
+                                HorizontalLayout {
+                                    spacing: 10px;
+                                    VerticalLayout {
+                                        spacing: 4px;
+                                        horizontal-stretch: 1;
+                                        Text { text: repo.url; color: Theme.text; font-size: 12px; overflow: elide; min-width: 0px; }
+                                        Caption { text: repo.detail; font-size: 11px; }
+                                    }
+                                    ActionButton { text: root.english ? "Remove" : "移除"; subtle: true; danger: true; enabled: root.editable && repo.removable; clicked => { SkillsState.remove-repository(repo.id); } }
+                                }
+                                if repo.error != "": Caption { text: repo.error; color: Theme.danger; font-size: 11px; }
+                                Divider {}
+                            }
+                            Rectangle { min-height: 0px; vertical-stretch: 1; }
+                        }
+                    }
+                }
+                Caption { text: (root.english ? "Managed copies: " : "管理副本：") + SkillsState.storage-path; font-size: 11px; }
+            }
+        }
+
+        HorizontalLayout {
+            min-height: 22px;
+            spacing: 8px;
+            if SkillsState.busy || SkillsState.submitting || SkillsState.loading: Spinner { width: 17px; height: 17px; }
+            Caption {
+                text: SkillsState.error-text != "" ? SkillsState.error-text : SkillsState.activity-text;
+                color: SkillsState.error-text != "" ? Theme.danger : Theme.muted;
+                font-size: 11px;
+                max-height: 48px;
+                overflow: elide;
+                horizontal-stretch: 1;
+            }
+            if SkillsState.error-text != "" || SkillsState.notice-text != "": ActionButton {
+                text: root.english ? "Details" : "查看详情";
+                subtle: true;
+                clicked => { SkillsState.show-details(); }
+            }
+        }
+        if SkillsState.notice-text != "": Caption {
+            text: SkillsState.notice-text;
+            color: Theme.warning;
+            font-size: 11px;
+            max-height: 48px;
+            overflow: elide;
+            Tooltip { SkillPathHint { text: SkillsState.notice-text; } }
+        }
+    }
+}

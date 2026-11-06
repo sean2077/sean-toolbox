@@ -33,6 +33,17 @@ and monitor choices were informed by this project. Sean Toolbox implements them
 independently in its Rust desktop backends, using display work areas and native
 Windows foreground notifications.
 
+## CC Switch
+
+Source: <https://github.com/farion1231/cc-switch>, commit
+`cd15a1642c5b414c78b8afa24d9bc36da35f1c8c` (MIT, Copyright 2025 Jason Young).
+
+The centralized skills library, repository discovery, local import and per-app
+enable/disable workflows were informed by CC Switch's skills service and user
+manual. Sean Toolbox implements these independently in Rust and Slint, using
+copy deployments with ownership checks and a host-owned daily update scheduler.
+No CC Switch source code, frontend assets or runtime dependencies are bundled.
+
 ## Slint
 
 Source: <https://github.com/slint-ui/slint/tree/v1.18.1>.

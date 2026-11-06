@@ -3,6 +3,7 @@ use crate::focus_watch::{FocusQueue, FocusWatch};
 use crate::{
     autostart,
     hotkeys::{Binding, Hotkeys},
+    skills_worker::SkillsWorker,
     ui_process::UiProcess,
 };
 use global_hotkey::{GlobalHotKeyEvent, HotKeyState};
@@ -162,6 +163,7 @@ struct App {
     focus_queue: FocusQueue,
     busy: HashSet<String>,
     ui: UiProcess,
+    skills: SkillsWorker,
     initial: Option<UiPage>,
     executable: PathBuf,
     pressed: HashSet<u32>,
@@ -188,6 +190,7 @@ impl App {
         let ui = UiProcess::new(ui_executable, move |result| {
             let _ = sender.send_event(Event::Ui(result));
         });
+        let skills = SkillsWorker::new(store.path());
         let (window_tx, rx) = mpsc::sync_channel(16);
         let window_stopping = Arc::new(AtomicBool::new(false));
         let worker_stopping = window_stopping.clone();
@@ -269,6 +272,7 @@ impl App {
             focus_queue: FocusQueue::default(),
             busy: HashSet::new(),
             ui,
+            skills,
             initial,
             executable,
             pressed: HashSet::new(),
@@ -433,6 +437,7 @@ impl App {
             config: with_config.then(|| self.config.clone()),
             status: Some(self.status.clone()),
             revision: self.revision,
+            skills: None,
         }
     }
 
@@ -444,6 +449,17 @@ impl App {
         let response = match request.command {
             HostCommand::Ping => self.response("pong", false),
             HostCommand::GetConfig => self.response("Configuration", true),
+            HostCommand::GetSkills => Response {
+                skills: Some(self.skills.snapshot()),
+                ..Response::success("Skills status")
+            },
+            HostCommand::Skills(command) => match self.skills.submit(command) {
+                Ok(snapshot) => Response {
+                    skills: Some(snapshot),
+                    ..Response::success("Skills 操作已接受 / Skills operation accepted")
+                },
+                Err(error) => Response::error(error),
+            },
             HostCommand::Status => {
                 if self
                     .window_tx
@@ -501,6 +517,7 @@ impl App {
                         "Window shortcuts"
                     },
                 ),
+                ("skills", if zh { "Skills 管理" } else { "Skills" }),
                 ("settings", if zh { "设置" } else { "Settings" }),
                 (
                     "diagnostics",
@@ -583,6 +600,7 @@ impl ApplicationHandler<Event> for App {
     fn window_event(&mut self, _: &ActiveEventLoop, _: WindowId, _: WindowEvent) {}
 
     fn exiting(&mut self, _: &ActiveEventLoop) {
+        self.skills.stop();
         self.stop_window_worker();
     }
 
@@ -613,6 +631,7 @@ impl ApplicationHandler<Event> for App {
                     "windows" => UiPage::Windows,
                     "settings" => UiPage::Settings,
                     "diagnostics" => UiPage::Diagnostics,
+                    "skills" => UiPage::Skills,
                     "quit" => {
                         event_loop.exit();
                         return;

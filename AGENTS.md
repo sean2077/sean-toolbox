@@ -4,7 +4,7 @@
 
 Rust workspace + Slint 桌面工具箱，Windows 优先。[README](README.md) 介绍产品与下载，[使用指南](docs/USAGE.md) 说明当前行为和配置，[开发指南](docs/DEVELOPMENT.md) 说明构建、测试与模块结构。术语见 [CONTEXT.md](CONTEXT.md)。
 
-常驻宿主 `toolbox-host`（`sean-toolbox`）负责单实例、快捷键、托盘、配置保存和窗口 worker；Slint、SQLite 与项目查询位于按需启动的 `toolbox-ui`（`sean-toolbox-ui`）中。两个程序配套分发。
+常驻宿主 `toolbox-host`（`sean-toolbox`）负责单实例、快捷键、托盘、配置保存、窗口 worker 和 Skills 后台调度；Slint、SQLite 与项目查询位于按需启动的 `toolbox-ui`（`sean-toolbox-ui`）中。两个程序配套分发。
 
 ## 开发与验证
 

@@ -5,6 +5,7 @@ mod autostart;
 mod focus_watch;
 mod hotkeys;
 mod runtime;
+mod skills_worker;
 mod ui_process;
 
 use std::{
@@ -15,6 +16,7 @@ use std::{
 };
 use toolbox_core::{
     HostCommand, Response, UiPage,
+    skills::SkillsCommand,
     storage::{ConfigStore, default_config_path},
 };
 
@@ -53,7 +55,7 @@ fn start() -> Result<(), String> {
     let command = match args.first().map(String::as_str) {
         Some("--help" | "-h" | "help") => {
             println!(
-                "Sean Toolbox — 个人工具箱\n\nsean-toolbox                              打开最近项目\nsean-toolbox show [projects|windows|settings|diagnostics]\nsean-toolbox --background                 常驻托盘，不打开界面\nsean-toolbox toggle <profile-id>           切换应用窗口\nsean-toolbox status                       输出 JSON 诊断\nsean-toolbox config                       输出当前配置与版本\nsean-toolbox config-path                  输出配置路径\nsean-toolbox quit                         退出宿主与界面\nsean-toolbox --version\n\n首次默认热键：Ctrl+Alt+Space；WezTerm F3、VS Code F4、Chrome F5。\n配置可在界面修改。两份可执行文件必须保留在同一目录。"
+                "Sean Toolbox — 个人工具箱\n\nsean-toolbox                              打开最近项目\nsean-toolbox show [projects|windows|settings|diagnostics|skills]\nsean-toolbox --background                 常驻托盘，不打开界面\nsean-toolbox toggle <profile-id>           切换应用窗口\nsean-toolbox status                       输出 JSON 诊断\nsean-toolbox config                       输出当前配置与版本\nsean-toolbox config-path                  输出配置路径\nsean-toolbox skills [list|status|update|discover]\nsean-toolbox skills daily on|off           每日自动更新 Skills\nsean-toolbox quit                         退出宿主与界面\nsean-toolbox --version\n\n首次默认热键：Ctrl+Alt+Space；WezTerm F3、VS Code F4、Chrome F5。\n配置可在界面修改。两份可执行文件必须保留在同一目录。"
             );
             return Ok(());
         }
@@ -75,6 +77,7 @@ fn start() -> Result<(), String> {
         },
         Some("status") if args.len() == 1 => HostCommand::Status,
         Some("config") if args.len() == 1 => HostCommand::GetConfig,
+        Some("skills") if args.len() <= 3 => parse_skills_command(&args[1..])?,
         Some("quit") if args.len() == 1 => HostCommand::Quit,
         _ => return Err("Unknown arguments. Run sean-toolbox --help".into()),
     };
@@ -113,7 +116,28 @@ fn parse_page(page: &str) -> Result<UiPage, String> {
         "windows" => Ok(UiPage::Windows),
         "settings" => Ok(UiPage::Settings),
         "diagnostics" => Ok(UiPage::Diagnostics),
+        "skills" => Ok(UiPage::Skills),
         _ => Err(format!("Unknown page: {page}")),
+    }
+}
+
+fn parse_skills_command(args: &[String]) -> Result<HostCommand, String> {
+    match args.first().map(String::as_str) {
+        None | Some("list" | "status") if args.len() <= 1 => Ok(HostCommand::GetSkills),
+        Some("update") if args.len() == 1 => Ok(HostCommand::Skills(SkillsCommand::Update {
+            skill_id: None,
+        })),
+        Some("discover") if args.len() == 1 => Ok(HostCommand::Skills(SkillsCommand::Discover)),
+        Some("daily") if args.len() == 2 => match args[1].as_str() {
+            "on" => Ok(HostCommand::Skills(SkillsCommand::SetDailyUpdate {
+                enabled: true,
+            })),
+            "off" => Ok(HostCommand::Skills(SkillsCommand::SetDailyUpdate {
+                enabled: false,
+            })),
+            _ => Err("Usage: sean-toolbox skills daily on|off".into()),
+        },
+        _ => Err("Usage: sean-toolbox skills [list|status|update|discover|daily on|off]".into()),
     }
 }
 
@@ -238,4 +262,42 @@ fn quick_ping() -> bool {
                 response.ok
             })
         })
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).into()).collect()
+    }
+
+    #[test]
+    fn skills_cli_distinguishes_read_only_status_and_mutations() {
+        assert_eq!(parse_page("skills").unwrap(), UiPage::Skills);
+        assert!(matches!(
+            parse_skills_command(&[]).unwrap(),
+            HostCommand::GetSkills
+        ));
+        assert!(matches!(
+            parse_skills_command(&args(&["status"])).unwrap(),
+            HostCommand::GetSkills
+        ));
+        assert!(matches!(
+            parse_skills_command(&args(&["update"])).unwrap(),
+            HostCommand::Skills(SkillsCommand::Update { skill_id: None })
+        ));
+        assert!(matches!(
+            parse_skills_command(&args(&["daily", "off"])).unwrap(),
+            HostCommand::Skills(SkillsCommand::SetDailyUpdate { enabled: false })
+        ));
+        for invalid in [
+            args(&["daily"]),
+            args(&["daily", "yes"]),
+            args(&["update", "extra"]),
+            args(&["status", "extra"]),
+        ] {
+            assert!(parse_skills_command(&invalid).is_err());
+        }
+    }
 }

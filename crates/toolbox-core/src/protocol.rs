@@ -1,4 +1,5 @@
 use crate::Config;
+use crate::skills::{SkillsCommand, SkillsSnapshot};
 use serde::{Deserialize, Serialize};
 pub const PROTOCOL_VERSION: u32 = 1;
 pub const HOST_ENDPOINT: &str = "sean-toolbox-host-v1";
@@ -10,6 +11,7 @@ pub enum UiPage {
     Windows,
     Settings,
     Diagnostics,
+    Skills,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
@@ -17,6 +19,8 @@ pub enum HostCommand {
     Ping,
     Show(UiPage),
     GetConfig,
+    GetSkills,
+    Skills(SkillsCommand),
     SaveConfig {
         config: Config,
         expected_revision: u64,
@@ -57,6 +61,8 @@ pub struct Response {
     pub config: Option<Config>,
     pub status: Option<HostStatus>,
     pub revision: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skills: Option<SkillsSnapshot>,
 }
 impl Response {
     pub fn success(message: impl Into<String>) -> Self {
@@ -102,5 +108,39 @@ mod tests {
             serde_json::to_value(&request).unwrap(),
             serde_json::json!({"page": "settings", "readiness_only": true})
         );
+    }
+
+    #[test]
+    fn responses_without_skills_remain_compatible() {
+        let response: Response = serde_json::from_str(
+            r#"{"ok":true,"message":"pong","config":null,"status":null,"revision":42}"#,
+        )
+        .unwrap();
+        assert_eq!(response.revision, 42);
+        assert!(response.skills.is_none());
+        assert!(
+            serde_json::to_value(response)
+                .unwrap()
+                .get("skills")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn skills_commands_have_an_explicit_wire_contract() {
+        let request = Request::new(HostCommand::Skills(SkillsCommand::SetDailyUpdate {
+            enabled: true,
+        }));
+        assert_eq!(
+            serde_json::to_value(request).unwrap(),
+            serde_json::json!({
+                "version": 1,
+                "command": {"type": "skills", "data": {
+                    "type": "set_daily_update", "data": {"enabled": true}
+                }}
+            })
+        );
+        let page: UiRequest = serde_json::from_str(r#"{"page":"skills"}"#).unwrap();
+        assert_eq!(page.page, UiPage::Skills);
     }
 }

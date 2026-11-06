@@ -11,7 +11,7 @@ The UI has two windows:
   a default size of 760×408 logical pixels, path tooltips and a selection counter.
   The global shortcut, tray and `sean-toolbox show projects` open this panel.
 - `AppWindow`: the management window, with projects, application profiles,
-  settings and diagnostics pages.
+  skills, settings and diagnostics pages.
 
 Each launcher activation refreshes history, clears the query and focuses search.
 Repeated activations reuse the panel. Up/Down selects a result; Enter or
@@ -39,6 +39,15 @@ requests. Results return through `slint::invoke_from_event_loop`.
   restores their saved values and preserves any application draft.
 - Diagnostics refresh on request, showing capabilities, activity and errors.
   A failed refresh clears the previous capability snapshot.
+- Skills exposes installed skills, repository discovery, local imports and
+  repository settings. Commands run in the host; the UI worker only performs
+  IPC and folder selection. App selections are explicit and folder imports
+  initially keep only a managed copy. Daily updates and manual updates share
+  the host's serialized worker and persisted status.
+- While the Skills page is visible, a single outstanding request polls the
+  snapshot every 15 seconds, or every second while the host is busy. Navigation
+  and closing stop polling. The UI waits for a command acknowledgement before
+  releasing its memory; an accepted host job continues without the UI.
 - Imports accept INI or JSON up to 1 MiB and show a preview. Merge replaces
   profiles with matching case-insensitive IDs while preserving settings. JSON
   replacement restores settings as well. Export reads the host's saved
@@ -84,13 +93,16 @@ cargo test --locked -p toolbox-ui
 cargo clippy --locked -p toolbox-ui --all-targets -- -D warnings
 ```
 
-`ui/main.slint` generates the Rust bindings and exports `ui/launcher.slint`.
+`ui/main.slint` generates the Rust bindings and exports `ui/launcher.slint`
+and `ui/skills.slint`.
 Shared rows are defined in `ui/project-types.slint`, components in
 `ui/components.slint`, and embedded icons in `ui/icons/`. The frontend uses
 Slint's Winit backend and software renderer.
 
-The UI binary accepts `--page projects|windows|settings|diagnostics` and
+The UI binary accepts `--page projects|windows|settings|diagnostics|skills` and
 `--endpoint <identifier>`. The endpoint identifies a current-user IPC channel.
+Ctrl/Cmd+5 opens Skills; Ctrl/Cmd+F searches the current Skills view. Existing
+page shortcuts retain their assignments.
 
 Unit tests cover drafts, themes, imports, launch arguments, request ordering and
 process lifetime. Linux integration checks are available in

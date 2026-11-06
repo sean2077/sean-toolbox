@@ -11,7 +11,7 @@ use std::{
         mpsc::Receiver,
     },
 };
-use toolbox_core::{Config, HostCommand, Response, UiPage, UiRequest};
+use toolbox_core::{Config, HostCommand, Response, UiPage, UiRequest, skills::SkillsCommand};
 use toolbox_projects::ProjectItem;
 
 // rfd exposes Option for both cancel and backend errors. Preserve its actual
@@ -62,6 +62,7 @@ pub enum DialogKind {
     Browse(i32),
     Import,
     Export,
+    SkillImport,
 }
 
 pub enum Work {
@@ -88,6 +89,8 @@ pub enum Work {
     },
     Toggle(String),
     Status,
+    GetSkills,
+    Skills(SkillsCommand),
     Dialog(DialogKind, rfd::FileDialog),
     Link(i32),
 }
@@ -110,6 +113,9 @@ pub enum Event {
     Opened(Result<(), String>),
     Toggled(Result<Response, String>),
     Status(Result<Response, String>),
+    SkillsLoaded(Result<Response, String>),
+    SkillsSubmitted(Result<Response, String>),
+    SkillFolderPicked(Result<Option<String>, String>),
     PathPicked {
         kind: i32,
         path: Result<Option<String>, String>,
@@ -227,6 +233,12 @@ pub fn run(receiver: Receiver<Work>, latest_query: Arc<AtomicU64>) {
             Work::Status => {
                 Event::Status(toolbox_ipc::call(HostCommand::Status).and_then(successful))
             }
+            Work::GetSkills => {
+                Event::SkillsLoaded(toolbox_ipc::call(HostCommand::GetSkills).and_then(successful))
+            }
+            Work::Skills(command) => Event::SkillsSubmitted(
+                toolbox_ipc::call(HostCommand::Skills(command)).and_then(successful),
+            ),
             Work::Dialog(kind, dialog) => match kind {
                 DialogKind::Browse(kind) => {
                     let selected = native_dialog(|| {
@@ -249,6 +261,16 @@ pub fn run(receiver: Receiver<Work>, latest_query: Arc<AtomicU64>) {
                 }
                 DialogKind::Import => Event::Imported(import_file(dialog)),
                 DialogKind::Export => Event::Exported(export_file(dialog)),
+                DialogKind::SkillImport => Event::SkillFolderPicked(
+                    native_dialog(|| dialog.pick_folder()).and_then(|path| {
+                        path.map(|path| {
+                            path.into_os_string().into_string().map_err(|_| {
+                                "路径不是有效的 Unicode / Path is not valid Unicode".to_owned()
+                            })
+                        })
+                        .transpose()
+                    }),
+                ),
             },
             Work::Link(index) => Event::LinkOpened(open_link(index)),
         };

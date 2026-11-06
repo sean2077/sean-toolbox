@@ -1,0 +1,20 @@
+[package]
+name = "toolbox-skills"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+toolbox-core = { path = "../toolbox-core" }
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+sha2 = "0.10.9"
+tar = "=0.4.46"
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp", "Win32_Security"] }

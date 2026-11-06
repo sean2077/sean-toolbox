@@ -1,11 +1,13 @@
 import { CheckBox, ComboBox, LineEdit, ScrollView, TextEdit, AboutSlint, Switch, Spinner, SpinBox } from "std-widgets.slint";
 import { Theme, Icon, Caption, FieldLabel, SectionLabel, Divider, Card, Keycap, ActionButton, NavButton, SearchInput, SettingRow, CapabilityCard, ThemeChoice, QuakePreview } from "components.slint";
 import { ProjectRow } from "project-types.slint";
+import { SkillsPage } from "skills.slint";
 
 export { Palette } from "std-widgets.slint";
 export { Theme } from "components.slint";
 export { ProjectRow } from "project-types.slint";
 export { LauncherWindow } from "launcher.slint";
+export { SkillsState, SkillListRow, SkillAppRow, SkillRepositoryRow } from "skills.slint";
 export struct ProfileRow { name: string, detail: string, hotkey: string, platform: string, enabled: bool, available: bool }
 
 export component AppWindow inherits Window {
@@ -121,14 +123,15 @@ export component AppWindow inherits Window {
     private property <bool> diagnostics-expanded: false;
     callback reset-settings;
     private property <bool> blocked: root.confirm-visible || root.import-visible || root.dialog-busy;
-    private property <string> page-title: root.page == 0 ? (root.english ? "Recent projects" : "最近项目") : root.page == 1 ? (root.english ? "Window switcher" : "窗口切换") : root.page == 2 ? (root.english ? "Settings" : "设置") : (root.english ? "Status & about" : "运行状态");
-    private property <string> page-description: root.page == 0 ? (root.english ? "Pick up where you left off in VS Code." : "继续上次的工作，快速回到你的项目。") : root.page == 1 ? (root.english ? "Your everyday apps, one shortcut away." : "一个快捷键，启动、切回或收起常用应用。") : root.page == 2 ? (root.english ? "Make the toolbox work your way." : "按照你的习惯，调整工具箱。") : (root.english ? "Check what is available on this device." : "查看当前设备的可用能力与运行信息。");
+    private property <string> page-title: root.page == 0 ? (root.english ? "Recent projects" : "最近项目") : root.page == 1 ? (root.english ? "Window switcher" : "窗口切换") : root.page == 2 ? (root.english ? "Settings" : "设置") : root.page == 4 ? (root.english ? "Skills" : "技能管理") : (root.english ? "Status & about" : "运行状态");
+    private property <string> page-description: root.page == 0 ? (root.english ? "Pick up where you left off in VS Code." : "继续上次的工作，快速回到你的项目。") : root.page == 1 ? (root.english ? "Your everyday apps, one shortcut away." : "一个快捷键，启动、切回或收起常用应用。") : root.page == 2 ? (root.english ? "Make the toolbox work your way." : "按照你的习惯，调整工具箱。") : root.page == 4 ? (root.english ? "Manage skills across your agents and keep them up to date." : "统一管理各个 Agent 的技能，并保持每天更新。") : (root.english ? "Check what is available on this device." : "查看当前设备的可用能力与运行信息。");
 
     public function focus-page() {
         if root.confirm-visible { confirm-cancel.focus(); }
         else if root.import-visible { import-merge.focus(); }
         else if root.page == 0 { search.focus(); }
         else if root.page == 1 && root.editing { profile-name.focus(); }
+        else if root.page == 4 { skills-page.focus-search(); }
         else { keys.focus(); }
     }
     public function focus-profile-editor() { profile-name.focus(); }
@@ -165,6 +168,7 @@ export component AppWindow inherits Window {
                 return accept;
             }
             if !root.blocked && (event.modifiers.control || event.modifiers.meta) {
+                if event.text == "f" && root.page == 4 { skills-page.focus-search(); return accept; }
                 if event.text == "k" || event.text == "f" { root.navigate(0); search.focus(); return accept; }
                 if event.text == "s" {
                     if root.loaded && !root.saving {
@@ -177,6 +181,7 @@ export component AppWindow inherits Window {
                 if event.text == "2" { root.navigate(1); return accept; }
                 if event.text == "3" { root.navigate(2); return accept; }
                 if event.text == "4" { root.navigate(3); return accept; }
+                if event.text == "5" { root.navigate(4); return accept; }
             }
             if root.page == 0 && (search.has-focus || project-keys.has-focus) && !root.blocked {
                 if event.text == Key.DownArrow { root.move-project(1); return accept; }
@@ -213,6 +218,7 @@ export component AppWindow inherits Window {
                     SectionLabel { text: root.english ? "WORKSPACE" : "工作空间"; height: 24px; }
                     NavButton { text: root.english ? "Recent projects" : "最近项目"; icon: @image-url("icons/folder.svg"); selected: root.page == 0; clicked => { root.navigate(0); } }
                     NavButton { text: root.english ? "Window switcher" : "窗口切换"; icon: @image-url("icons/windows.svg"); selected: root.page == 1; dirty: root.profile-dirty; clicked => { root.navigate(1); } }
+                    NavButton { text: root.english ? "Skills" : "技能管理"; icon: @image-url("icons/code.svg"); selected: root.page == 4; clicked => { root.navigate(4); } }
                     Rectangle { vertical-stretch: 1; }
                     SectionLabel { text: root.english ? "PREFERENCES" : "工具箱"; height: 24px; }
                     NavButton { text: root.english ? "Settings" : "设置"; icon: @image-url("icons/settings.svg"); selected: root.page == 2; dirty: root.settings-dirty; clicked => { root.navigate(2); } }
@@ -688,6 +694,11 @@ export component AppWindow inherits Window {
                                 ActionButton { text: root.english ? "Discard" : "撤销修改"; subtle: true; enabled: root.settings-dirty && !root.saving; clicked => { root.reset-settings(); } }
                                 ActionButton { text: root.saving ? (root.english ? "Saving…" : "保存中…") : (root.english ? "Save settings" : "保存设置"); enabled: root.loaded && root.settings-dirty && !root.saving; primary: true; clicked => { root.save-settings(); } }
                             }
+                        }
+                        skills-page := SkillsPage {
+                            visible: root.page == 4;
+                            english: root.english;
+                            enabled: root.loaded && !root.blocked;
                         }
                         VerticalLayout {
                             visible: root.page == 3;

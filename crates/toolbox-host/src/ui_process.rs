@@ -133,6 +133,7 @@ impl UiProcess {
                     UiPage::Windows => "windows",
                     UiPage::Settings => "settings",
                     UiPage::Diagnostics => "diagnostics",
+                    UiPage::Skills => "skills",
                 };
                 let mut command = Command::new(&executable);
                 command
