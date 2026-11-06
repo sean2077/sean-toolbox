@@ -398,6 +398,13 @@ class Desktop:
 
         enabled = self.skills_command("set_daily_update", {"enabled": True})
         require(enabled["daily_update"], "Daily update setting was not applied with the UI closed")
+        def daily_check_completed() -> dict[str, Any] | None:
+            snapshot = self.skills_idle()
+            return snapshot if snapshot.get("last_success_at") is not None else None
+        # Setting acceptance can precede the immediate scheduled job. Wait for
+        # that job itself before submitting another mutation, rather than race
+        # the scheduler's reservation of the worker.
+        wait_for("immediate daily check with the UI closed", daily_check_completed)
         disabled = self.skills_command("set_daily_update", {"enabled": False})
         require(not disabled["daily_update"], "Daily update setting did not turn off")
         self.skills_command("update", {"skill_id": None})
