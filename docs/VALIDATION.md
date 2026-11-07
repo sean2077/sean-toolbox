@@ -386,3 +386,63 @@ workspace 包的版本，没有升级依赖。发布说明覆盖首次发布的�
 发布脚本会在上传后下载全部 8 个资产，核对文件名、大小及 SHA-256，再公开草稿。
 实际四平台原生测试、打包与 GitHub Release 的结果以本次 Actions 发布运行及其资产为准；
 这些自动化检查仍不替代用户 Windows 桌面上的真实 WezTerm 多显示器与焦点体验验收。
+
+## 2026-11-06：Skills 管理与每日更新
+
+基于 `6f4a885` 实现 Skills 来源、发现、安装、本机导入、应用目录部署及宿主每日更新。
+本地环境为 Linux x86_64、固定 Rust 1.99.1、Slint 1.18.1；测试均使用独立临时数据。
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace --no-fail-fast` | 155 项通过；3 项既有 IPC 用例在 Unix socket bind 处被环境以 `Operation not permitted` 拒绝；1 项既有 X11 用例仍由独立脚本运行。全量命令因此退出 101，不能记为全通过 |
+| Skills 后端 | 19 项通过，包含真实临时 Git 仓库、更新、重启补跑、失败重试、本地修改保护和事务恢复 |
+| 宿主 | 15 项通过，含后台接收/持久化、调度到期计算、初始化失败、IPC 状态大小和 CLI 契约 |
+| UI | 39 项通过，含请求互斥、稳定 ID、草稿保留、操作确认、导入与关闭释放 |
+| Windows GNU 目标的 Skills / all-targets 严格 Clippy | 通过；包含挂起启动、Job 纳管、恢复线程与 reparse point 分支的编译检查，不是 Windows 实机验证 |
+| debug 宿主与 UI 构建 | 通过 |
+| Python 发布脚本测试 | 27 项通过 |
+| 中英文 Slint 布局 | 实际软件渲染器检查默认 1120×780 与最小 900×650、安装/发现/仓库视图；[截图](images/skills-manager.png)使用明确标注的示例数据 |
+| `scripts/smoke_host.py` | 已扩展 Skills 的 IPC 导入、部署、每日开关、关闭界面、冲突保护与卸载流程；本地 Xvfb 因无法创建监听 socket 而启动失败，流程未执行完成 |
+
+独立审查推动修复了未结束事务被后续空更新推进 generation、旧副本部分清理后恢复阻塞、
+相同内容的未知目录被接管、大清单与聚合错误超过 IPC 限额、无关应用链接目录阻止管理器启动、
+刷新后的旧发现条目、本机共享目录扫描及嵌套 Skill 示例边界。相应回归纳入测试。
+
+首轮 [CI](https://github.com/sean2077/sean-toolbox/actions/runs/42233480183) 的 Linux 与
+macOS ARM 全量测试通过；Windows 的真实 Git 测试发现 `git archive --output` 不接受
+canonicalize 后的 Win32 verbatim 路径。现改为在受控临时工作目录中使用相对仓库与归档
+参数，Rust 文件访问和限额监控仍保留完整路径，不剥离 UNC 或长路径前缀。既有 Git
+测试继续经过 canonicalize，且临时目录增加空格，直接覆盖这一回归。
+
+GitHub Actions 沿用 Windows x64、macOS ARM/Intel、Linux x64 的完整矩阵。IPC 与桌面
+集成检查的实际远端结果以本 PR 对应提交的 Actions 为准；未降低、跳过或修改既有测试来
+绕过本地 socket 限制。本次没有执行 Windows 实机的文件占用、junction、休眠恢复或文件
+选择器验收。
+
+## 2026-11-07：Skills PR 复审修复
+
+对 PR #1 的复审修复了以下行为：显式开启每日更新不再被此前全量更新失败留下的重试回退
+延迟，宿主接受命令时返回预览状态而不再让界面先回退；仓库根目录的 Skill 不再因
+`git archive` 的 pax 全局头被判为阻塞；单个无法读取 `SKILL.md` 的条目会跳过并提示，
+不再使整个仓库发现失败；单个不可读的应用根目录不再中止本机扫描；中断事务的应用目录被
+删除后恢复会跳过该项并保留其余操作；删除或禁用不会重建用户移除的应用目录；启动时清理
+中断遗留的 `checkout-*`、`skill-*` 暂存目录并保留其他文件；Windows 显示路径去掉
+verbatim 前缀；来源标签去掉 `.git` 后缀；状态上限提高到 2 MiB；恢复日志容量按
+`SkillApp::ALL` 推导；发现和本机列表标记已管理的同名目录；Git 环境变量按大小写不敏感
+清理；frontmatter 中缩进的 `---` 不再提前结束；状态写入失败不再把已提交的操作误报为
+失败；发现缓存只保留解压树。文档补充预置的官方 `anthropics/skills` 来源及跳过条目说明。
+
+本地环境为 Windows 11、固定 Rust 1.99.1 MSVC 工具链，复用主工作树的 `target`：
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked -p toolbox-skills -p toolbox-host -p toolbox-ui` | 通过：Skills 29、宿主 15、UI 42 |
+| `cargo test --locked --workspace --no-fail-fast` | 除既有 `toolbox-windows` 原生窗口用例 `native_quake_hides_reuses_and_recovers_without_activation` 外全部通过；该用例在本机以“窗口未完成置顶”失败，在未修改的 `main` 上同样复现，属于本机桌面/会话限制，未记为 PR 回归，命令退出 101 |
+| 新增回归 | 仓库根 Skill；坏条目跳过；应用根不可读；删除目录后的恢复；删除/禁用不重建目录；重试回退与打开重试；接受状态预览；Windows 显示路径；暂存目录清理；状态上限与 2 MiB 保存；Git 环境变量大小写；缩进 `---`；普通扫描容错；来源标签与空状态；同名目录标记 |
+
+Linux/macOS 与桌面 smoke 的结果以本 PR 对应提交的 Actions 为准；本次没有执行 Windows
+实机的文件占用、junction、休眠恢复或文件选择器验收。

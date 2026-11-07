@@ -68,11 +68,51 @@ Windows 新配置默认使用 `F3` 唤出独立的 WezTerm 下拉窗口，显示
 
 macOS 的窗口定位需要辅助功能权限；Linux 需要 X11、EWMH 窗口管理器和 XRandR 1.5。Quake 模式使用自己的窗口和尺寸设置，普通模式的连续循环、启动最大化选项在关闭 Quake 后使用。
 
+## Skills 管理
+
+从托盘或管理窗口打开“Skills 管理”，也可以运行 `sean-toolbox show skills`。此功能参考 CC Switch 的集中管理方式，主副本保存在工具箱配置目录下的 `skills/`，分别复制到所选应用；不需要 Windows 开发者模式。
+
+### 添加、发现与安装
+
+1. 在仓库区域填写 `owner/repo` 或 `https://github.com/owner/repo`，例如 `sean2077/skills`。分支留空时跟随仓库默认分支，也可填写指定分支。首次使用会预置官方 `anthropics/skills` 来源，也可以移除后添加其他来源。
+2. 读取仓库后，在“发现”中搜索名称、描述或来源，选择需要启用的应用，然后安装。仓库中无法读取 `SKILL.md` 的条目会被跳过，并在页面提示中列出，不影响其他技能。
+3. 在“已安装”中调整各应用的启用状态，单独更新某个 Skill，或者更新全部。
+
+仓库下载需要 Git 可执行文件位于 `PATH`。程序不弹出交互式登录；私有仓库需要提前配置可用的 Git 凭据。网络错误或没有访问权限会显示在仓库和操作结果中，保留已安装版本。
+
+| 应用 | 默认部署目录 |
+| --- | --- |
+| Claude Code | `~/.claude/skills` |
+| Codex | `~/.codex/skills` |
+| Gemini CLI | `~/.gemini/skills` |
+| OpenCode | `~/.config/opencode/skills` |
+| Grok Build | `~/.grok/skills` |
+
+这里的 `~` 为当前用户主目录，目前使用这些默认路径，不读取 CC Switch 的自定义路径设置。Codex 使用自定义 `CODEX_HOME` 时，需要自行将目标保持在实际读取的位置；本版没有应用路径覆盖设置。
+
+开关控制工具箱在对应目录中的部署。共享的 `~/.agents/skills` 不作为主副本目录。OpenCode、Grok Build 还可能读取 `~/.claude/skills`，各工具也可能读取项目目录或其他兼容目录，因此关闭某个部署开关不保证应用从所有来源停用该 Skill；必要时同时整理兼容目录，或使用对应应用的原生禁用设置。
+
+### 本机导入与移除
+
+可以扫描上述应用目录，以及共享的 `~/.agents/skills`、CC Switch 的默认主副本目录 `~/.cc-switch/skills`，或者选择一个包含 `SKILL.md` 的本机文件夹导入。导入保存独立主副本，保留原目录；没有仓库来源的本机导入项不参与远程更新。扫描不跟随符号链接或 Windows junction；CC Switch 使用链接分发时，可从它的主副本目录选择实际文件夹导入。
+
+启用前会检查目标目录：已经存在且不由工具箱管理的同名目录不会被覆盖，即使内容相同。导入原应用目录后，如果希望由工具箱管理该位置，请先将原目录移出，再启用对应部署。停用和卸载只操作工具箱登记的副本；检测到主副本或部署目录有本地修改时，操作会停止并显示冲突。请先自行保留、整理冲突目录，再重试；不会静默丢弃修改。
+
+### 每日自动更新
+
+“每日自动更新”默认关闭，可在 Skills 页面直接开启。开启后立即检查，之后每次全量更新成功间隔 **24 小时**再更新；部分失败后 **1 小时**重试。仅更新已经安装且有仓库来源的 Skills，不自动安装新发现的 Skills，也不更新无来源的本机导入项。
+
+调度由宿主管理：关闭管理界面后继续执行；退出整个工具箱或关机期间不运行，下一次启动时补跑已到期任务。希望登录后自动开始，可在通用设置中同时开启“开机启动”。界面显示上次尝试、上次成功、下次更新和错误；手动更新与自动更新串行执行。
+
+更新前检查主副本及各启用目录的内容指纹，遇到本地修改会跳过该项并保留原文件；其他无冲突项仍可继续更新。每项先准备完整目录，再替换文件与状态，失败时回滚。仓库下载不会执行 Skill 内的脚本。
+
+Skills 的独立状态与主副本保存在配置目录的 `skills/`，不包含在“设置”页的应用配置 JSON 导出中。备份时先退出工具箱，再保留该目录及相关应用目录。本次支持仓库和本机目录管理；未提供 CC Switch 的 skills.sh 市场搜索、ZIP 导入及备份恢复界面。
+
 ## 设置与界面关闭
 
 设置中可切换中文或英文、选择跟随系统或固定明暗主题，分别启停最近项目和应用快捷键，并设置开机启动。主题选择会即时预览，保存后保留，撤销时恢复。
 
-应用与通用设置分别保留草稿，导航会标记尚未保存的修改。`Ctrl+S` 保存当前编辑页，`Ctrl+1`–`4` 切换页面；macOS 也支持对应的 `⌘` 组合键。
+应用与通用设置分别保留草稿，导航会标记尚未保存的修改。`Ctrl+S` 保存当前编辑页，`Ctrl+1`–`5` 切换页面；macOS 也支持对应的 `⌘` 组合键。Skills 操作直接提交到宿主，不依赖通用设置的保存按钮。
 
 “自动收起后缓存”控制最近项目面板在失焦或打开项目后收起时，界面进程保留多久。默认 `0` 秒，可设为 `1–3600` 秒以加快再次唤起。已有配置沿用保存的数值。
 
@@ -169,17 +209,25 @@ sean-toolbox show projects                打开最近项目面板
 sean-toolbox show windows                 打开应用快捷键配置
 sean-toolbox show settings                打开设置
 sean-toolbox show diagnostics             打开运行状态
+sean-toolbox show skills                  打开 Skills 管理
 sean-toolbox --background                 启动常驻宿主
 sean-toolbox toggle vscode                切换 id 为 vscode 的应用
 sean-toolbox status                       输出 JSON 运行状态
 sean-toolbox config                       输出当前配置与修订版本
 sean-toolbox config-path                  输出配置文件路径
+sean-toolbox skills list                  输出 Skills 状态、仓库及清单
+sean-toolbox skills discover              提交仓库发现任务
+sean-toolbox skills update                提交全部仓库来源 Skills 更新
+sean-toolbox skills daily on              开启每日自动更新
+sean-toolbox skills daily off             关闭每日自动更新
 sean-toolbox quit                         退出宿主和界面
 sean-toolbox --version                    显示版本
 sean-toolbox --help                       显示帮助
 ```
 
-打开界面的命令会按需启动宿主。`status`、`config`、`toggle`、`quit` 需要宿主正在运行；`config-path`、`--version` 和 `--help` 可直接使用。后台启动日志位于配置目录的 `host.log`。
+打开界面的命令会按需启动宿主。`status`、`config`、`toggle`、`skills`、`quit` 需要宿主正在运行；`config-path`、`--version` 和 `--help` 可直接使用。后台启动日志位于配置目录的 `host.log`。
+
+Skills 命令立即返回是否接受任务，接受不代表更新完成。使用 `sean-toolbox skills status`（等同 `list`）查看 `skills.busy`、`skills.last_error` 和各项结果；更新完成后 `busy` 变为 `false`。
 
 ## 常见问题
 

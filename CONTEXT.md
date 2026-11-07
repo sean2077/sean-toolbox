@@ -51,3 +51,11 @@ _Equivalent (en)_: idle release
 **工具箱（toolbox）**：
 整个 Sean Toolbox 应用，包括宿主与按需界面。
 _Equivalent (en)_: toolbox
+
+**Skills 主副本（managed skill）**：
+工具箱独立数据目录内管理的一份 Skill，来源可以是 GitHub 仓库或本机目录。各应用启用时使用复制部署；主副本不放在会被多个应用自动读取的共享 Skills 目录。
+_Equivalent (en)_: managed skill, master copy
+
+**每日更新（daily update）**：
+宿主运行期间，每次全量更新成功后间隔 24 小时更新已安装且有仓库来源的 Skills；失败后重试，下次启动补跑已过期任务。本机导入不自动更新，不自动安装发现页的新项。
+_Equivalent (en)_: daily update

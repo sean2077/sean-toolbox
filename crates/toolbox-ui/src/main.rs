@@ -1,6 +1,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod model;
+mod skills;
 mod worker;
 
 use model::{
@@ -57,6 +58,7 @@ enum ConfirmAction {
     Delete,
     Reload,
     Import,
+    UninstallSkill(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -192,6 +194,7 @@ struct State {
     host_pid: u32,
     host_status: Option<HostStatus>,
     last_error: String,
+    skills: skills::SkillsUiState,
 }
 
 struct Controller {
@@ -201,6 +204,7 @@ struct Controller {
     work: mpsc::Sender<Work>,
     query_generation: Arc<AtomicU64>,
     idle_timer: Timer,
+    skills_timer: Timer,
 }
 
 impl Controller {
@@ -501,10 +505,15 @@ impl Controller {
             ui.set_dialog_busy(false);
             ui.set_diagnostic_loading(false);
             ui.set_diagnostic_loaded(false);
+            ui.global::<SkillsState>().set_submitting(false);
+            ui.global::<SkillsState>().set_loading(false);
+            ui.global::<SkillsState>().set_loaded(false);
             {
                 let mut state = self.state.borrow_mut();
                 state.dialog_open = false;
                 state.toggling = false;
+                state.skills.submitting = false;
+                state.skills.loading = false;
             }
             self.error(
                 "后台任务已停止，请重新打开工具箱 / Background worker stopped; reopen the toolbox",
@@ -576,7 +585,11 @@ impl Controller {
         }
         if page == UiPage::Diagnostics {
             self.refresh_status();
+        } else if page == UiPage::Skills {
+            self.render_skills();
+            self.refresh_skills();
         }
+        self.schedule_skills_poll();
         Ok(())
     }
 
@@ -593,12 +606,20 @@ impl Controller {
             self.refresh_projects();
         } else if changed && target == 3 {
             self.refresh_status();
+        } else if changed && target == page_index(UiPage::Skills) {
+            self.render_skills();
+            self.refresh_skills();
         }
+        self.schedule_skills_poll();
     }
 
     fn dismiss(&self) {
         let ui = self.ui();
-        if ui.get_saving() || ui.get_project_opening() || self.state.borrow().dialog_open {
+        if ui.get_saving()
+            || ui.get_project_opening()
+            || self.state.borrow().dialog_open
+            || self.state.borrow().skills.submitting
+        {
             self.say(
                 "请等待当前操作完成。",
                 "Wait for the current operation to finish.",
@@ -631,6 +652,7 @@ impl Controller {
             return;
         }
         self.state.borrow_mut().visible = false;
+        self.schedule_skills_poll();
         self.schedule_unload();
     }
 
@@ -641,6 +663,7 @@ impl Controller {
             || state.launcher_visible
             || state.toggling
             || state.dialog_open
+            || state.skills.submitting
             || self.ui().get_project_opening()
             || self.ui().get_saving()
             || self.dirty()
@@ -696,6 +719,7 @@ impl Controller {
         self.update_match_help();
         self.sync_candidate_labels();
         self.sync_diagnostics();
+        self.render_skills();
     }
 
     fn sync_profiles(&self) {
@@ -865,6 +889,7 @@ impl Controller {
         self.update_match_help();
         self.sync_candidate_labels();
         self.sync_diagnostics();
+        self.render_skills();
     }
 
     fn apply_theme(&self) {
@@ -1403,6 +1428,9 @@ impl Controller {
                 self.cancel_editor();
                 self.start_dialog(DialogKind::Import);
             }
+            Some(ConfirmAction::UninstallSkill(skill_id)) => {
+                self.submit_skills(toolbox_core::skills::SkillsCommand::Uninstall { skill_id });
+            }
             None => {}
         }
     }
@@ -1501,7 +1529,17 @@ impl Controller {
         ui.set_diagnostic_backend(status.backend.clone().into());
         ui.set_diagnostic_platform(platform_name(Platform::current()).into());
         ui.set_diagnostic_last_action(status.last_action.clone().into());
-        ui.set_diagnostic_warnings(status.warnings.join("\n").into());
+        let mut warnings = status.warnings.clone();
+        if let Some(skills) = &state.skills.snapshot {
+            warnings.extend(
+                skills
+                    .warnings
+                    .iter()
+                    .map(|warning| format!("Skills: {warning}")),
+            );
+        }
+        let warnings = warnings.join("\n");
+        ui.set_diagnostic_warnings(warnings.clone().into());
         let availability = |value| match (ui.get_english(), value) {
             (true, true) => "Available",
             (true, false) => "Unavailable",
@@ -1519,7 +1557,7 @@ impl Controller {
                 availability(status.tray),
                 state.revision,
                 status.last_action,
-                status.warnings.join("\n"),
+                warnings,
                 state.last_error
             )
         } else {
@@ -1533,7 +1571,7 @@ impl Controller {
                 availability(status.tray),
                 state.revision,
                 status.last_action,
-                status.warnings.join("\n"),
+                warnings,
                 state.last_error
             )
         };
@@ -1691,6 +1729,9 @@ impl Controller {
                 match result { Ok(Some(path)) => { self.say("配置已导出。", "Configuration exported."); ui.set_status_message(format!("{} {}", if ui.get_english() { "Exported:" } else { "已导出：" }, path.display()).into()); }, Ok(None) => {}, Err(error) => self.error(error) }
             }
             Event::LinkOpened(result) => { if let Err(error) = result { self.error(error); } }
+            Event::SkillsLoaded(result) => self.receive_skills(result, false),
+            Event::SkillsSubmitted(result) => self.receive_skills(result, true),
+            Event::SkillFolderPicked(path) => self.import_skill_folder(path),
             Event::ServerError(error) => self.error(format!("界面唤起服务失败 / UI activation service failed: {error}")),
             Event::Ready { reply } => {
                 let response = if self.state.borrow().exit_requested { Response::error("UI is closing") } else { Response::success("ready") };
@@ -1717,13 +1758,18 @@ fn arguments() -> Result<(UiPage, String), String> {
                     Some("windows") => UiPage::Windows,
                     Some("settings") => UiPage::Settings,
                     Some("diagnostics") => UiPage::Diagnostics,
-                    _ => return Err("--page expects projects/windows/settings/diagnostics".into()),
+                    Some("skills") => UiPage::Skills,
+                    _ => {
+                        return Err(
+                            "--page expects projects/windows/settings/diagnostics/skills".into(),
+                        );
+                    }
                 }
             }
             "--endpoint" => endpoint = args.next().ok_or("--endpoint expects an identifier")?,
             "--help" | "-h" => {
                 println!(
-                    "sean-toolbox-ui [--page projects|windows|settings|diagnostics] [--endpoint ID]\nStart sean-toolbox to launch the resident host first."
+                    "sean-toolbox-ui [--page projects|windows|settings|diagnostics|skills] [--endpoint ID]\nStart sean-toolbox to launch the resident host first."
                 );
                 std::process::exit(0);
             }
@@ -1757,6 +1803,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         work: send,
         query_generation: query_generation.clone(),
         idle_timer: Timer::default(),
+        skills_timer: Timer::default(),
         state: RefCell::new(State {
             config: Config::default(),
             revision: 0,
@@ -1781,6 +1828,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             host_pid: 0,
             host_status: None,
             last_error: String::new(),
+            skills: skills::SkillsUiState::default(),
         }),
     });
     APP.with(|app| *app.borrow_mut() = Some(controller.clone()));
@@ -1812,6 +1860,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.on_refresh_status(|| with_controller(Controller::refresh_status));
     ui.on_confirm_action(|yes| with_controller(|c| c.confirm(yes)));
     ui.on_open_link(|index| with_controller(|c| c.send(Work::Link(index))));
+    skills::connect_callbacks(&ui);
     ui.window().on_close_requested(|| {
         with_controller(Controller::dismiss);
         slint::CloseRequestResponse::KeepWindowShown
@@ -1919,6 +1968,7 @@ mod tests {
                 work: send,
                 query_generation: Arc::new(AtomicU64::new(0)),
                 idle_timer: Timer::default(),
+                skills_timer: Timer::default(),
                 state: RefCell::new(State {
                     config: Config::default(),
                     revision: 1,
@@ -1943,6 +1993,7 @@ mod tests {
                     host_pid: 0,
                     host_status: None,
                     last_error: String::new(),
+                    skills: skills::SkillsUiState::default(),
                 }),
             };
             ui.set_loaded(true);
@@ -2595,6 +2646,260 @@ mod tests {
         assert_eq!(centered_position(area, 760, 408), (-1340, 356));
         assert_eq!(centered_position(area, 1920, 1040), (-1920, 40));
         assert_eq!(centered_position(area, 3000, 2000), (-1920, 40));
+    }
+
+    fn skills_snapshot() -> toolbox_core::skills::SkillsSnapshot {
+        use toolbox_core::skills::{
+            InstalledSkill, SkillApp, SkillCandidate, SkillRepository, SkillsSnapshot,
+        };
+        SkillsSnapshot {
+            repositories: vec![SkillRepository {
+                id: "source".into(),
+                url: "https://github.com/sean2077/skills".into(),
+                branch: None,
+                revision: Some("0123456789abcdef".into()),
+                last_error: None,
+            }],
+            installed: ["beta", "alpha"]
+                .into_iter()
+                .map(|name| InstalledSkill {
+                    id: format!("source:{name}"),
+                    directory: name.into(),
+                    name: name.into(),
+                    description: format!("{name} description"),
+                    repository_id: Some("source".into()),
+                    source_path: Some(name.into()),
+                    revision: Some("0123456789abcdef".into()),
+                    apps: vec![SkillApp::Claude],
+                    updated_at: 1,
+                    last_error: None,
+                })
+                .collect(),
+            available: vec![SkillCandidate {
+                id: "source:gamma".into(),
+                repository_id: "source".into(),
+                path: "extras/gamma".into(),
+                directory: "gamma".into(),
+                name: "Gamma".into(),
+                description: "Manage documents".into(),
+                installed: false,
+            }],
+            ..SkillsSnapshot::default()
+        }
+    }
+
+    fn receive_skills_snapshot(
+        controller: &Controller,
+        snapshot: toolbox_core::skills::SkillsSnapshot,
+    ) {
+        controller.handle(Event::SkillsLoaded(Ok(Response {
+            ok: true,
+            skills: Some(snapshot),
+            ..Response::default()
+        })));
+    }
+
+    #[test]
+    fn skills_navigation_loads_once_without_discarding_other_drafts() {
+        with_test_ui(|ui, controller, receive| {
+            controller.begin_edit(0);
+            ui.set_form_name("Unfinished application".into());
+            controller.profile_changed();
+            ui.set_setting_idle("120".into());
+            controller.settings_changed();
+            controller.navigate(page_index(UiPage::Skills));
+            controller.navigate(page_index(UiPage::Skills));
+            assert!(matches!(receive.try_recv().unwrap(), Work::GetSkills));
+            assert!(receive.try_recv().is_err());
+            assert!(ui.global::<SkillsState>().get_loading());
+            receive_skills_snapshot(controller, skills_snapshot());
+            assert!(ui.global::<SkillsState>().get_loaded());
+            assert!(!ui.global::<SkillsState>().get_loading());
+            assert!(ui.get_profile_dirty());
+            assert!(ui.get_settings_dirty());
+            assert_eq!(ui.get_form_name(), "Unfinished application");
+            assert_eq!(ui.get_setting_idle(), "120");
+        });
+    }
+
+    #[test]
+    fn skill_selection_survives_snapshot_reordering_and_targets_stable_ids() {
+        use toolbox_core::skills::{SkillApp, SkillsCommand};
+        with_test_ui(|ui, controller, receive| {
+            receive_skills_snapshot(controller, skills_snapshot());
+            let skills = ui.global::<SkillsState>();
+            assert_eq!(skills.get_rows().row_data(0).unwrap().name, "alpha");
+            controller.select_skill("source:beta".into());
+            let mut changed = skills_snapshot();
+            changed.installed.reverse();
+            receive_skills_snapshot(controller, changed);
+            assert_eq!(skills.get_selected_id(), "source:beta");
+            controller.toggle_skill_app(1, true);
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Skills(SkillsCommand::SetEnabled { skill_id, app: SkillApp::Codex, enabled: true }) if skill_id == "source:beta"
+            ));
+            controller.toggle_skill_app(0, false);
+            controller.refresh_skills();
+            assert!(
+                receive.try_recv().is_err(),
+                "submissions and polls cannot pile up"
+            );
+        });
+    }
+
+    #[test]
+    fn skill_discovery_searches_source_and_path_and_installs_selected_apps_only() {
+        use toolbox_core::skills::{SkillApp, SkillsCommand};
+        with_test_ui(|ui, controller, receive| {
+            receive_skills_snapshot(controller, skills_snapshot());
+            controller.skills_view(1);
+            let skills = ui.global::<SkillsState>();
+            skills.set_query("SEAN2077".into());
+            controller.render_skills();
+            assert_eq!(skills.get_rows().row_count(), 1);
+            skills.set_query("extras/gamma".into());
+            controller.render_skills();
+            assert_eq!(skills.get_selected_id(), "source:gamma");
+            controller.toggle_skill_app(1, true);
+            controller.toggle_skill_app(2, true);
+            controller.toggle_skill_app(2, false);
+            assert!(
+                receive.try_recv().is_err(),
+                "install choices do not write deployments"
+            );
+            controller.install_selected_skill();
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Skills(SkillsCommand::Install { candidate_id, apps })
+                    if candidate_id == "source:gamma" && apps == [SkillApp::Codex]
+            ));
+        });
+    }
+
+    #[test]
+    fn accepted_skill_jobs_release_the_ui_and_failed_requests_restore_saved_options() {
+        use toolbox_core::skills::SkillsCommand;
+        with_test_ui(|ui, controller, receive| {
+            receive_skills_snapshot(controller, skills_snapshot());
+            controller.state.borrow_mut().visible = false;
+            ui.global::<SkillsState>().set_daily_update(true);
+            controller.submit_skills(SkillsCommand::SetDailyUpdate { enabled: true });
+            assert!(matches!(receive.try_recv().unwrap(), Work::Skills(_)));
+            assert_eq!(controller.unload_delay(), None);
+            controller.handle(Event::SkillsSubmitted(Err("Host disconnected".into())));
+            assert!(!ui.global::<SkillsState>().get_daily_update());
+            assert!(!ui.global::<SkillsState>().get_submitting());
+            assert_eq!(
+                ui.global::<SkillsState>().get_error_text(),
+                "Host disconnected"
+            );
+            assert_eq!(controller.unload_delay(), Some(Duration::ZERO));
+
+            controller.submit_skills(SkillsCommand::Update { skill_id: None });
+            assert!(matches!(receive.try_recv().unwrap(), Work::Skills(_)));
+            controller.handle(Event::SkillsSubmitted(Ok(Response {
+                ok: true,
+                skills: Some(toolbox_core::skills::SkillsSnapshot {
+                    busy: true,
+                    ..skills_snapshot()
+                }),
+                ..Response::default()
+            })));
+            assert!(ui.global::<SkillsState>().get_busy());
+            assert!(!ui.global::<SkillsState>().get_submitting());
+            assert_eq!(controller.unload_delay(), Some(Duration::ZERO));
+        });
+    }
+
+    #[test]
+    fn uninstall_confirmation_keeps_the_original_skill_id() {
+        use toolbox_core::skills::SkillsCommand;
+        with_test_ui(|ui, controller, receive| {
+            receive_skills_snapshot(controller, skills_snapshot());
+            controller.select_skill("source:beta".into());
+            controller.uninstall_selected_skill();
+            assert!(ui.get_confirm_visible());
+            assert!(receive.try_recv().is_err());
+            controller.select_skill("source:alpha".into());
+            controller.confirm(true);
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Skills(SkillsCommand::Uninstall { skill_id }) if skill_id == "source:beta"
+            ));
+        });
+    }
+
+    #[test]
+    fn skill_folder_import_preserves_other_drafts_and_enables_no_apps_implicitly() {
+        use toolbox_core::skills::SkillsCommand;
+        with_test_ui(|ui, controller, receive| {
+            receive_skills_snapshot(controller, skills_snapshot());
+            ui.set_setting_hotkey("Ctrl+Alt+P".into());
+            controller.settings_changed();
+            controller.state.borrow_mut().dialog_open = true;
+            ui.set_dialog_busy(true);
+            controller.handle(Event::SkillFolderPicked(Ok(Some(
+                "/tmp/selected skill".into(),
+            ))));
+            assert!(!ui.get_dialog_busy());
+            assert!(!controller.state.borrow().dialog_open);
+            assert!(ui.get_settings_dirty());
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Skills(SkillsCommand::ImportLocal { path, apps })
+                    if path == "/tmp/selected skill" && apps.is_empty()
+            ));
+        });
+    }
+
+    #[test]
+    fn skill_failures_reach_diagnostics_and_partial_lists_are_explicit() {
+        with_test_ui(|ui, controller, _| {
+            let mut snapshot = skills_snapshot();
+            snapshot.last_error =
+                Some("A local deployment was edited; nothing was overwritten".into());
+            snapshot.truncated = true;
+            snapshot.warnings = vec!["Recovery backup preserved".into()];
+            receive_skills_snapshot(controller, snapshot);
+            assert!(ui.get_status_error());
+            assert!(
+                ui.get_diagnostic_error()
+                    .contains("nothing was overwritten")
+            );
+            let skills = ui.global::<SkillsState>();
+            assert!(skills.get_notice_text().contains("只显示部分条目"));
+            assert!(
+                skills
+                    .get_notice_text()
+                    .contains("Recovery backup preserved")
+            );
+        });
+    }
+
+    #[test]
+    fn discovery_empty_state_starts_from_the_configured_sources() {
+        with_test_ui(|ui, controller, _| {
+            let mut snapshot = skills_snapshot();
+            snapshot.available.clear();
+            receive_skills_snapshot(controller, snapshot);
+            controller.skills_view(1);
+            assert_eq!(
+                ui.global::<SkillsState>().get_empty_text(),
+                "点击「刷新仓库」从已配置来源发现技能。"
+            );
+
+            let mut snapshot = skills_snapshot();
+            snapshot.repositories.clear();
+            snapshot.available.clear();
+            receive_skills_snapshot(controller, snapshot);
+            controller.skills_view(0);
+            controller.skills_view(1);
+            assert_eq!(
+                ui.global::<SkillsState>().get_empty_text(),
+                "先在「仓库」添加来源，再点击「刷新仓库」发现技能。"
+            );
+        });
     }
 
     #[test]

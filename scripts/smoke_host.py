@@ -329,9 +329,9 @@ class Desktop:
                 pass
         return result
 
-    def show_ui(self) -> tuple[int, int, Path]:
-        response = self.rpc("show", "diagnostics")
-        require(response.get("ok"), f"Show diagnostics failed: {response}")
+    def show_ui(self, page: str = "diagnostics") -> tuple[int, int, Path]:
+        response = self.rpc("show", page)
+        require(response.get("ok"), f"Show {page} failed: {response}")
         try:
             children = wait_for("UI child", self.ui_children)
         except SmokeFailure as error:
@@ -351,15 +351,74 @@ class Desktop:
         endpoint_id = arguments[arguments.index(b"--endpoint") + 1].decode()
         endpoint = self.socket_directory / f"{endpoint_id}.sock"
         wait_for("UI activation endpoint", lambda: endpoint.exists())
-        acknowledgement = request(endpoint, {"page": "diagnostics"})
-        require(acknowledgement.get("ok"), f"UI did not acknowledge diagnostics: {acknowledgement}")
-        windows = wait_for("visible diagnostics window", lambda: self.windows(pid=pid))
+        acknowledgement = request(endpoint, {"page": page})
+        require(acknowledgement.get("ok"), f"UI did not acknowledge {page}: {acknowledgement}")
+        windows = wait_for(f"visible {page} window", lambda: self.windows(pid=pid))
         require(len(windows) == 1, f"Expected one UI window, got {windows}")
         # The public UI endpoint acknowledges presentation, while configuration
         # loads asynchronously. Allow its first native frames and local IPC load
         # to settle before sending a real user dismiss action.
         time.sleep(1.0)
         return pid, windows[0], endpoint
+
+    def skills_idle(self) -> dict[str, Any]:
+        def snapshot() -> dict[str, Any] | None:
+            response = self.rpc("get_skills")
+            require(response.get("ok"), f"Skills status failed: {response}")
+            skills = response["skills"]
+            return skills if not skills["busy"] else None
+        return wait_for("skills worker completion", snapshot)
+
+    def skills_command(self, kind: str, data: Any, *, succeeds: bool = True) -> dict[str, Any]:
+        self.skills_idle()
+        response = self.rpc("skills", {"type": kind, "data": data})
+        require(response.get("ok") and response["skills"]["busy"], f"Skills command not acknowledged as busy: {response}")
+        skills = self.skills_idle()
+        require(bool(skills.get("last_error")) != succeeds, f"Unexpected skills result: {skills}")
+        return skills
+
+    def skills_smoke(self) -> None:
+        # The normal IPC and host worker operate only on this fixture's home.
+        # No repository download or real installed agent directory is involved.
+        source = self.root / "smoke-skill"
+        source.mkdir()
+        original = "---\nname: smoke-skill\ndescription: Host skills integration fixture\n---\nKeep this file.\n"
+        (source / "SKILL.md").write_text(original)
+        installed = self.skills_command("import_local", {"path": str(source), "apps": ["codex"]})
+        require(len(installed["installed"]) == 1, f"Import did not register exactly one skill: {installed}")
+        skill_id = installed["installed"][0]["id"]
+        target = self.root / "home" / ".codex" / "skills" / "smoke-skill"
+        require((target / "SKILL.md").read_text() == original, "Import did not deploy the complete skill")
+
+        ui_pid, window, endpoint = self.show_ui("skills")
+        self.command("xdotool", "windowactivate", "--sync", str(window))
+        self.key("Escape")
+        self.require_ui_reaped(ui_pid, endpoint)
+        require(self.rpc("ping")["status"]["process_id"] == self.host_id, "Skills UI unload stopped the host")
+
+        enabled = self.skills_command("set_daily_update", {"enabled": True})
+        require(enabled["daily_update"], "Daily update setting was not applied with the UI closed")
+        def daily_check_completed() -> dict[str, Any] | None:
+            snapshot = self.skills_idle()
+            return snapshot if snapshot.get("last_success_at") is not None else None
+        # Setting acceptance can precede the immediate scheduled job. Wait for
+        # that job itself before submitting another mutation, rather than race
+        # the scheduler's reservation of the worker.
+        wait_for("immediate daily check with the UI closed", daily_check_completed)
+        disabled = self.skills_command("set_daily_update", {"enabled": False})
+        require(not disabled["daily_update"], "Daily update setting did not turn off")
+        self.skills_command("update", {"skill_id": None})
+        require((target / "SKILL.md").read_text() == original, "Repository update changed a local import")
+
+        changed = original + "Local user edit.\n"
+        (target / "SKILL.md").write_text(changed)
+        self.skills_command("set_enabled", {"skill_id": skill_id, "app": "codex", "enabled": False}, succeeds=False)
+        require((target / "SKILL.md").read_text() == changed, "Conflict overwrote or deleted the user's edit")
+        (target / "SKILL.md").write_text(original)
+        removed = self.skills_command("uninstall", {"skill_id": skill_id})
+        require(not removed["installed"] and not target.exists(), "Uninstall did not remove its managed deployment")
+        require((source / "SKILL.md").read_text() == original, "Uninstall touched the original import directory")
+        print("PASS Skills IPC import/deploy, page lifecycle, headless settings/update, local-edit conflict and uninstall", flush=True)
 
     def require_ui_reaped(self, pid: int, endpoint: Path) -> None:
         started = self.ui_identities[pid]
@@ -462,6 +521,8 @@ class Desktop:
         require(self.rpc("ping")["status"]["process_id"] == self.host_id, "Second invocation replaced the host PID")
         require(self.host is not None and self.host.poll() is None, "Original host exited during single-instance test")
         print("PASS single-instance invocation preserves host PID", flush=True)
+
+        self.skills_smoke()
 
         ui_pid, window, endpoint = self.show_ui()
         self.command("xdotool", "windowactivate", "--sync", str(window))

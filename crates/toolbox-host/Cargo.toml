@@ -13,6 +13,7 @@ path = "src/main.rs"
 toolbox-core = { path = "../toolbox-core" }
 toolbox-ipc = { path = "../toolbox-ipc" }
 toolbox-windows = { path = "../toolbox-windows" }
+toolbox-skills = { path = "../toolbox-skills" }
 serde_json.workspace = true
 tempfile.workspace = true
 global-hotkey = "=0.9.0"
