@@ -22,6 +22,7 @@ use toolbox_core::{
     AppProfile, Config, HostCommand, HostStatus, PROTOCOL_VERSION, Platform, Request, Response,
     UiPage, storage::ConfigStore,
 };
+use toolbox_i18n::{Locale, messages};
 use toolbox_windows::{WindowCapabilities, WindowService};
 use tray_icon::{
     TrayIcon, TrayIconBuilder, TrayIconEvent,
@@ -497,44 +498,16 @@ impl App {
         self.status
             .warnings
             .retain(|warning| !warning.starts_with("Tray:"));
-        let zh = self.config.language == "zh-CN";
+        let locale = Locale::from_tag(&self.config.language);
         let build = || -> Result<TrayIcon, String> {
             let menu = Menu::new();
             for (id, label) in [
-                (
-                    "projects",
-                    if zh {
-                        "最近项目"
-                    } else {
-                        "Recent projects"
-                    },
-                ),
-                (
-                    "windows",
-                    if zh {
-                        "窗口快捷键"
-                    } else {
-                        "Window shortcuts"
-                    },
-                ),
-                ("skills", if zh { "Skills 管理" } else { "Skills" }),
-                ("settings", if zh { "设置" } else { "Settings" }),
-                (
-                    "diagnostics",
-                    if zh {
-                        "诊断与关于"
-                    } else {
-                        "Diagnostics & about"
-                    },
-                ),
-                (
-                    "quit",
-                    if zh {
-                        "退出工具箱"
-                    } else {
-                        "Quit Sean Toolbox"
-                    },
-                ),
+                ("projects", messages::tray_projects().render(locale)),
+                ("windows", messages::tray_windows().render(locale)),
+                ("skills", messages::tray_skills().render(locale)),
+                ("settings", messages::tray_settings().render(locale)),
+                ("diagnostics", messages::tray_diagnostics().render(locale)),
+                ("quit", messages::tray_quit().render(locale)),
             ] {
                 menu.append(&MenuItem::with_id(id, label, true, None))
                     .map_err(|e| e.to_string())?;
@@ -547,7 +520,7 @@ impl App {
             let builder = TrayIconBuilder::new()
                 .with_id("sean-toolbox")
                 .with_menu(Box::new(menu))
-                .with_tooltip("Sean Toolbox · 个人工具箱")
+                .with_tooltip(messages::tray_tooltip().render(locale))
                 .with_menu_on_left_click(false);
             #[cfg(target_os = "macos")]
             let builder = builder.with_icon_templated(icon);

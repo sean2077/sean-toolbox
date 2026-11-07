@@ -488,3 +488,35 @@ workspace 包的版本，没有升级依赖。发布说明覆盖 Skills 管理�
 
 该改动位于 `v0.2.0` 发布后的 `main`，不包含在 0.2.0 Release 资产中；后续版本将包含。
 Windows 的符号链接权限、源目录被移动/删除后的恢复仍需在对应桌面环境验收。
+
+## 2026-11-07：中英翻译资源与语言预览
+
+基于 `main` 的 `1e4a70761db33833776146d6c85ebeb23432e636`，在独立工作树重构界面、托盘和 UI 自有消息。
+环境为 Ubuntu 24.04 容器、Rust/Cargo 1.99.1、Slint 1.18.1；系统开发依赖解压在任务专用目录，未修改用户配置。
+提交前已同步到 `75034efe57910c4db7c6782215c9c2a1de54f0d7`，保留上游 Skills 页面尺寸修复；
+更新翻译源位置后重新执行 fmt、Clippy、工作区测试和翻译检查，结果与下表一致。
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace --no-fail-fast` | 205 通过、3 失败、1 ignored；失败均为下述既有 IPC 环境限制，命令退出 101 |
+| 未修改 `main` 的同环境基线 | 187 通过、相同 3 项 IPC 失败、1 ignored；fmt 与 Clippy 通过 |
+| `python scripts/translations.py check` | 通过；官方提取器核对 231 条界面源文，资源覆盖 126 条 Rust 消息与 231 条界面文案，`msgfmt` 检查通过 |
+| 翻译更新流程 | 在隔离副本实跑 `update`，更新前后全部 357 个 gettext 条目相同（排除元数据）；新增未译项需补全后再通过检查 |
+| `python -m unittest discover -s scripts -p 'test_*.py' -v` | 27 项通过 |
+| `cargo tree --locked --offline -p toolbox-i18n --edges normal` | 仅该 crate 自身，无第三方运行时依赖 |
+| `git diff --check` 与 Python 语法检查 | 通过 |
+
+3 项失败为 `toolbox-ipc` 的 `owner_only_socket_round_trips_and_is_removed_on_drop`、
+`stale_owner_socket_is_recovered_but_active_socket_is_rejected`、
+`unix_transport_rejects_relative_and_oversized_messages`。均在创建 Unix socket 时返回 `EPERM / Operation not permitted`；
+独立 Python `AF_UNIX` bind 也复现，未跳过或弱化这些用例。
+
+新增 18 项回归覆盖资源缺失/重复/fuzzy/占位符错误、真实生成代码编译、英文 0/1/多项及中文复数、
+英文语序调整后的参数 API 稳定性、Unicode/Windows 路径/字面括号、Slint 编译绑定的语言预览及撤销、
+已有项目统计/导入摘要/消息的重新翻译、后台错误采用当前语言、Skills 请求错误保留及成功刷新后的清理。
+UI 行为测试使用真实 Slint 组件与软件渲染测试平台，不访问本机用户数据。
+
+本地未执行 Windows/macOS 实机桌面或 Linux 原生桌面 smoke。四平台构建、完整 IPC 与 Linux 原生窗口/界面 smoke
+以 PR 对应提交的 Actions 结果为准；测试平台通过不代表完成跨系统字体、缩放或文件选择器的人工视觉验收。

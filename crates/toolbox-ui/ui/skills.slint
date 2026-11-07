@@ -262,7 +262,6 @@ export global SkillsState {
 
 export component SkillsPage inherits Rectangle {
     horizontal-stretch: 1;
-    in property <bool> english;
     in property <bool> enabled: true;
     private property <bool> editable: root.enabled && SkillsState.loaded && !SkillsState.busy && !SkillsState.submitting;
     public function focus-search() {
@@ -276,45 +275,45 @@ export component SkillsPage inherits Rectangle {
         HorizontalLayout {
             height: 36px;
             spacing: 4px;
-            ActionButton { text: root.english ? "Installed" : "已安装"; primary: SkillsState.view == 0; subtle: SkillsState.view != 0; clicked => { SkillsState.change-view(0); } }
-            ActionButton { text: root.english ? "Discover" : "发现"; primary: SkillsState.view == 1; subtle: SkillsState.view != 1; clicked => { SkillsState.change-view(1); } }
-            ActionButton { text: root.english ? "On this device" : "本机技能"; primary: SkillsState.view == 2; subtle: SkillsState.view != 2; clicked => { SkillsState.change-view(2); } }
-            ActionButton { text: root.english ? "Repositories" : "仓库"; primary: SkillsState.view == 3; subtle: SkillsState.view != 3; clicked => { SkillsState.change-view(3); } }
+            ActionButton { text: @tr("ui.skills.installed" => "Installed"); primary: SkillsState.view == 0; subtle: SkillsState.view != 0; clicked => { SkillsState.change-view(0); } }
+            ActionButton { text: @tr("ui.skills.discover" => "Discover"); primary: SkillsState.view == 1; subtle: SkillsState.view != 1; clicked => { SkillsState.change-view(1); } }
+            ActionButton { text: @tr("ui.skills.local" => "On this device"); primary: SkillsState.view == 2; subtle: SkillsState.view != 2; clicked => { SkillsState.change-view(2); } }
+            ActionButton { text: @tr("ui.skills.repositories" => "Repositories"); primary: SkillsState.view == 3; subtle: SkillsState.view != 3; clicked => { SkillsState.change-view(3); } }
             Rectangle { horizontal-stretch: 1; }
             if SkillsState.view == 0: Rectangle {
                 horizontal-stretch: 0;
                 HorizontalLayout {
                     spacing: 8px;
                     padding-right: 4px;
-                    Text { text: root.english ? "Daily update" : "每日更新"; color: Theme.secondary; font-size: 12px; vertical-alignment: center; }
+                    Text { text: @tr("ui.skills.daily_update" => "Daily update"); color: Theme.secondary; font-size: 12px; vertical-alignment: center; }
                     VerticalLayout {
                         alignment: center;
                         Switch {
                             checked <=> SkillsState.daily-update;
                             enabled: root.editable;
-                            accessible-label: root.english ? "Daily update" : "每日更新";
+                            accessible-label: @tr("ui.skills.daily_update" => "Daily update");
                             toggled => { SkillsState.set-daily(self.checked); }
                         }
                     }
                 }
-                Tooltip { SkillPathHint { text: root.english ? "Updates every 24 hours while the toolbox is running in the tray; catches up at the next startup.\n" + SkillsState.schedule-text : "工具箱在托盘运行时每 24 小时更新；错过的更新会在下次启动时补上。\n" + SkillsState.schedule-text; } }
+                Tooltip { SkillPathHint { text: @tr("ui.skills.daily_update_hint" => "Updates every 24 hours while the toolbox is running in the tray; catches up at the next startup.\n{0}", SkillsState.schedule-text); } }
             }
             if SkillsState.view == 0: ActionButton {
-                text: root.english ? "Update all" : "全部更新";
+                text: @tr("ui.skills.update_all" => "Update all");
                 with-icon: true;
                 icon: @image-url("icons/download.svg");
                 enabled: root.editable && SkillsState.installed-count > 0;
                 clicked => { SkillsState.update-all(); }
             }
             if SkillsState.view == 2: CheckBox {
-                text: root.english ? "Link (no copy)" : "链接（不复制）";
+                text: @tr("ui.skills.link_import" => "Link (no copy)");
                 checked <=> SkillsState.link-import;
                 enabled: root.editable;
-                accessible-label: root.english ? "Import local folders as links instead of copies" : "本地目录以链接方式导入而不是复制";
-                Tooltip { SkillPathHint { text: root.english ? "Link keeps the source live and creates app symlinks on Windows; copy stores a private master copy. Existing app links to the same source are adopted." : "链接保留源目录并在应用目录创建符号链接（Windows 需要符号链接权限）；复制保存私有主副本。已存在且指向同一来源的应用链接会被接管。"; } }
+                accessible-label: @tr("ui.skills.link_import_accessible" => "Import local folders as links instead of copies");
+                Tooltip { SkillPathHint { text: @tr("ui.skills.link_import_hint" => "Link keeps the source live and creates app symlinks on Windows; copy stores a private master copy. Existing app links to the same source are adopted."); } }
             }
             if SkillsState.view == 2: ActionButton {
-                text: root.english ? "Import folder" : "导入文件夹";
+                text: @tr("ui.skills.import_folder" => "Import folder");
                 with-icon: true;
                 icon: @image-url("icons/folder.svg");
                 enabled: root.editable;
@@ -332,13 +331,13 @@ export component SkillsPage inherits Rectangle {
                     spacing: 8px;
                     search := LineEdit {
                         text <=> SkillsState.query;
-                        placeholder-text: root.english ? "Search skills or repositories…" : "搜索技能名称、描述或仓库…";
+                        placeholder-text: @tr("ui.skills.search_skills_or_repositories" => "Search skills or repositories…");
                         enabled: root.enabled;
                         horizontal-stretch: 1;
                         edited => { SkillsState.search(self.text); }
                     }
                     ActionButton {
-                        text: SkillsState.view == 1 ? (root.english ? "Reload repositories" : "刷新仓库") : SkillsState.view == 2 ? (root.english ? "Scan this device" : "扫描本机") : (root.english ? "Refresh" : "刷新");
+                        text: SkillsState.view == 1 ? (@tr("ui.skills.reload_repositories" => "Reload repositories")) : SkillsState.view == 2 ? (@tr("ui.skills.scan_this_device" => "Scan this device")) : (@tr("ui.action.refresh" => "Refresh"));
                         with-icon: true;
                         icon: @image-url("icons/refresh.svg");
                         enabled: root.enabled && !SkillsState.loading && !SkillsState.submitting && (SkillsState.view == 0 || (SkillsState.loaded && !SkillsState.busy));
@@ -360,28 +359,28 @@ export component SkillsPage inherits Rectangle {
                                     padding-right: 12px;
                                     spacing: 6px;
                                     CheckBox {
-                                        text: root.english ? "Select all" : "全选";
+                                        text: @tr("ui.skills.select_all" => "Select all");
                                         checked <=> SkillsState.all-selected;
                                         enabled: root.editable && SkillsState.rows.length > 0;
                                         toggled => { SkillsState.toggle-select-all(self.checked); }
                                     }
-                                    Text { text: root.english ? "Selected" : "已选"; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
+                                    Text { text: @tr("ui.skills.selected" => "Selected"); color: Theme.muted; font-size: 11px; vertical-alignment: center; }
                                     Text { text: SkillsState.selected-count; color: Theme.text; font-size: 11px; font-weight: 600; vertical-alignment: center; }
                                     Rectangle { width: 10px; }
-                                    Text { text: root.english ? "Status" : "状态"; color: Theme.muted; font-size: 11px; horizontal-stretch: 0; vertical-alignment: center; }
+                                    Text { text: @tr("ui.skills.status" => "Status"); color: Theme.muted; font-size: 11px; horizontal-stretch: 0; vertical-alignment: center; }
                                     VerticalLayout {
                                         alignment: center;
                                         ComboBox {
                                             width: 90px;
                                             height: 26px;
                                             horizontal-stretch: 0;
-                                            model: root.english ? ["All", "Enabled", "Disabled"] : ["全部", "已启用", "未启用"];
+                                            model: [@tr("ui.skills.status_filter.all" => "All"), @tr("ui.skills.status_filter.enabled" => "Enabled"), @tr("ui.skills.status_filter.disabled" => "Disabled")];
                                             current-index <=> SkillsState.status-filter;
                                             enabled: root.enabled;
                                             selected => { SkillsState.filter-changed(); }
                                         }
                                     }
-                                    Text { text: root.english ? "Source" : "来源"; color: Theme.muted; font-size: 11px; horizontal-stretch: 0; vertical-alignment: center; }
+                                    Text { text: @tr("ui.skills.source" => "Source"); color: Theme.muted; font-size: 11px; horizontal-stretch: 0; vertical-alignment: center; }
                                     VerticalLayout {
                                         alignment: center;
                                         ComboBox {
@@ -475,7 +474,7 @@ export component SkillsPage inherits Rectangle {
                                                 width: 22px;
                                                 checked: item.selected;
                                                 enabled: root.editable;
-                                                accessible-label: root.english ? "Select " + item.name : "选择 " + item.name;
+                                                accessible-label: @tr("ui.skills.select_named" => "Select {0}", item.name);
                                                 toggled => { SkillsState.toggle-select(item.id, self.checked); }
                                             }
                                             Rectangle {
@@ -497,7 +496,7 @@ export component SkillsPage inherits Rectangle {
                                                     if SkillsState.view == 0: SkillChip {
                                                         text: item.source;
                                                         link: item.source-target;
-                                                        link-hint: (item.source-target.starts-with("https://") ? (root.english ? "Open repository: " : "打开仓库：") : (root.english ? "Open folder: " : "打开目录：")) + item.source-target;
+                                                        link-hint: item.source-target.starts-with("https://") ? @tr("ui.skills.open_repository" => "Open repository: {0}", item.source-target) : @tr("ui.skills.open_folder" => "Open folder: {0}", item.source-target);
                                                         clicked => { SkillsState.open-source(item.source-target); }
                                                     }
                                                     if SkillsState.view == 0: SkillChip { text: item.status; accent: item.enabled; }
@@ -554,7 +553,7 @@ export component SkillsPage inherits Rectangle {
                                             if SkillsState.view == 0: VerticalLayout {
                                                 alignment: center;
                                                 RowMenuButton {
-                                                    tip: root.english ? "More actions" : "更多操作";
+                                                    tip: @tr("ui.skills.more_actions" => "More actions");
                                                     enabled: root.enabled;
                                                     clicked => {
                                                         SkillsState.select(item.id);
@@ -583,8 +582,8 @@ export component SkillsPage inherits Rectangle {
                                                     spacing: 2px;
                                                     SkillMenuItem {
                                                         icon: @image-url("icons/download.svg");
-                                                        text: root.english ? "Update" : "更新";
-                                                        hint: item.updatable ? "" : (root.english ? "Local" : "本机导入");
+                                                        text: @tr("ui.action.update" => "Update");
+                                                        hint: item.updatable ? "" : (@tr("ui.skills.local_import" => "Local"));
                                                         enabled: root.editable && item.updatable;
                                                         activated => {
                                                             row-menu.close();
@@ -595,7 +594,7 @@ export component SkillsPage inherits Rectangle {
                                                     Rectangle { height: 1px; background: Theme.border; }
                                                     SkillMenuItem {
                                                         icon: @image-url("icons/trash.svg");
-                                                        text: root.english ? "Uninstall..." : "卸载…";
+                                                        text: @tr("ui.action.confirm_uninstall" => "Uninstall...");
                                                         danger: true;
                                                         enabled: root.editable;
                                                         activated => {
@@ -645,14 +644,14 @@ export component SkillsPage inherits Rectangle {
                                 VerticalLayout {
                                     padding-right: 4px;
                                     spacing: 10px;
-                                    if SkillsState.selected-id == "": Caption { text: root.english ? "Select a skill to view details and choose deployment directories." : "选择一个技能，查看详情并管理部署目录。"; }
+                                    if SkillsState.selected-id == "": Caption { text: @tr("ui.skills.select_hint" => "Select a skill to view details and choose deployment directories."); }
                                     if SkillsState.selected-id != "": VerticalLayout {
                                         spacing: 10px;
                                         Text { text: SkillsState.selected-name; color: Theme.text; font-size: 16px; font-weight: 600; wrap: word-wrap; }
                                         Caption { text: SkillsState.selected-source; font-size: 11px; }
                                         if SkillsState.selected-error != "": Caption { text: SkillsState.selected-error; color: Theme.danger; font-size: 11px; }
                                         Divider {}
-                                        SectionLabel { text: SkillsState.view == 0 ? (root.english ? "DEPLOY TO APP DIRECTORIES" : "应用目录部署") : (root.english ? "DEPLOY AFTER IMPORT" : "安装后部署到"); }
+                                        SectionLabel { text: SkillsState.view == 0 ? (@tr("ui.skills.deploy_to_app_directories" => "DEPLOY TO APP DIRECTORIES")) : (@tr("ui.skills.deploy_after_import" => "DEPLOY AFTER IMPORT")); }
                                         VerticalLayout {
                                             spacing: 2px;
                                             for app in SkillsState.apps: Rectangle {
@@ -670,29 +669,29 @@ export component SkillsPage inherits Rectangle {
                                                 Tooltip { SkillPathHint { text: app.name + "\n" + app.path; } }
                                             }
                                         }
-                                        Caption { text: root.english ? "Hover an app for its path. Switches manage only these directories; apps may also read Claude, project or other skills directories." : "悬停应用可查看路径。开关只管理这些目录；应用也可能读取 Claude 或项目等其他 Skills 目录。"; font-size: 11px; }
+                                        Caption { text: @tr("ui.skills.deployment_hint" => "Hover an app for its path. Switches manage only these directories; apps may also read Claude, project or other skills directories."); font-size: 11px; }
                                         Divider {}
                                         Caption { text: SkillsState.selected-description; color: Theme.secondary; }
                                         if SkillsState.selected-detail != "": Caption { text: SkillsState.selected-detail; font-size: 11px; }
-                                        if SkillsState.view != 0: Caption { text: root.english ? "Leave all unchecked to keep only a managed copy or link." : "可不勾选应用，仅保存管理副本或链接。"; font-size: 11px; }
-                                        if SkillsState.view == 2 && SkillsState.selected-linked: Caption { text: root.english ? "This source is a link. “Link (no copy)” keeps it live; importing a copy reads its real target." : "该来源是链接。“链接（不复制）”保留实时源；复制会读取其真实目标。"; font-size: 11px; }
-                                        if SkillsState.view == 2 && !SkillsState.selected-linked: Caption { text: root.english ? "The original folder is kept. Move it aside before deploying to the same directory." : "导入会保留原文件夹；部署到同名目录前，请先手动移开原目录。"; font-size: 11px; }
-                                        if SkillsState.view == 0 && SkillsState.selected-linked: Caption { text: root.english ? "Managed as a link: app switches create or remove symlinks, and the source is not copied." : "以链接方式管理：应用开关创建或移除符号链接，不复制源目录。"; font-size: 11px; }
-                                        if SkillsState.view == 0 && !SkillsState.selected-updatable: Caption { text: root.english ? "Local imports have no remote update source." : "本机导入的技能没有远程更新来源。"; font-size: 11px; }
+                                        if SkillsState.view != 0: Caption { text: @tr("ui.skills.no_deployment_hint" => "Leave all unchecked to keep only a managed copy or link."); font-size: 11px; }
+                                        if SkillsState.view == 2 && SkillsState.selected-linked: Caption { text: @tr("ui.skills.source_link_hint" => "This source is a link. “Link (no copy)” keeps it live; importing a copy reads its real target."); font-size: 11px; }
+                                        if SkillsState.view == 2 && !SkillsState.selected-linked: Caption { text: @tr("ui.skills.source_copy_hint" => "The original folder is kept. Move it aside before deploying to the same directory."); font-size: 11px; }
+                                        if SkillsState.view == 0 && SkillsState.selected-linked: Caption { text: @tr("ui.skills.managed_link_hint" => "Managed as a link: app switches create or remove symlinks, and the source is not copied."); font-size: 11px; }
+                                        if SkillsState.view == 0 && !SkillsState.selected-updatable: Caption { text: @tr("ui.skills.local_update_hint" => "Local imports have no remote update source."); font-size: 11px; }
                                     }
                                     Rectangle { min-height: 0px; vertical-stretch: 1; }
                                 }
                             }
                             if SkillsState.selected-id != "" && SkillsState.view != 0: ActionButton {
-                                text: SkillsState.selected-installed ? (root.english ? "Already installed" : "已安装") : SkillsState.view == 2 ? (SkillsState.link-import ? (root.english ? "Import as link" : "以链接导入") : (root.english ? "Import as copy" : "以复制导入")) : (root.english ? "Install selected" : "安装所选技能");
+                                text: SkillsState.selected-installed ? (@tr("ui.skills.already_installed" => "Already installed")) : SkillsState.view == 2 ? (SkillsState.link-import ? (@tr("ui.skills.import_as_link" => "Import as link")) : (@tr("ui.skills.import_as_copy" => "Import as copy"))) : (@tr("ui.skills.install_selected" => "Install selected"));
                                 primary: true;
                                 enabled: root.editable && !SkillsState.selected-installed;
                                 clicked => { SkillsState.install(); }
                             }
                             if SkillsState.selected-id != "" && SkillsState.view == 0: HorizontalLayout {
                                 spacing: 8px;
-                                ActionButton { text: root.english ? "Update" : "更新"; enabled: root.editable && SkillsState.selected-updatable; clicked => { SkillsState.update-selected(); } }
-                                ActionButton { text: root.english ? "Uninstall" : "卸载"; danger: true; enabled: root.editable; clicked => { SkillsState.uninstall(); } }
+                                ActionButton { text: @tr("ui.action.update" => "Update"); enabled: root.editable && SkillsState.selected-updatable; clicked => { SkillsState.update-selected(); } }
+                                ActionButton { text: @tr("ui.action.uninstall" => "Uninstall"); danger: true; enabled: root.editable; clicked => { SkillsState.uninstall(); } }
                                 Rectangle { horizontal-stretch: 1; }
                             }
                         }
@@ -707,14 +706,14 @@ export component SkillsPage inherits Rectangle {
                     VerticalLayout {
                         padding: 15px;
                         spacing: 9px;
-                        FieldLabel { text: root.english ? "GitHub skill repository" : "GitHub 技能仓库"; }
+                        FieldLabel { text: @tr("ui.skills.github_skill_repository" => "GitHub skill repository"); }
                         repository-url := LineEdit { text <=> SkillsState.repository-url; placeholder-text: "owner/repo · https://github.com/owner/repo"; enabled: root.editable; }
                         HorizontalLayout {
                             spacing: 9px;
-                            LineEdit { text <=> SkillsState.repository-branch; placeholder-text: root.english ? "Branch (blank = default)" : "分支（留空使用默认分支）"; enabled: root.editable; }
-                            ActionButton { text: root.english ? "Add repository" : "添加仓库"; primary: true; enabled: root.editable && SkillsState.repository-url != ""; clicked => { SkillsState.add-repository(); } }
+                            LineEdit { text <=> SkillsState.repository-branch; placeholder-text: @tr("ui.skills.branch_blank_default" => "Branch (blank = default)"); enabled: root.editable; }
+                            ActionButton { text: @tr("ui.skills.add_repository" => "Add repository"); primary: true; enabled: root.editable && SkillsState.repository-url != ""; clicked => { SkillsState.add-repository(); } }
                         }
-                        Caption { text: root.english ? "After adding a source, open Discover and reload repositories. Git must be installed." : "添加后前往「发现」刷新仓库，即可选择安装。需已安装 Git。"; font-size: 11px; }
+                        Caption { text: @tr("ui.skills.repository_added_hint" => "After adding a source, open Discover and reload repositories. Git must be installed."); font-size: 11px; }
                     }
                 }
                 Card {
@@ -725,7 +724,7 @@ export component SkillsPage inherits Rectangle {
                         VerticalLayout {
                             padding: 12px;
                             spacing: 8px;
-                            if SkillsState.repositories.length == 0: Caption { text: root.english ? "Add a repository above to discover its skills." : "在上方添加仓库，开始发现技能。"; }
+                            if SkillsState.repositories.length == 0: Caption { text: @tr("ui.skills.no_repository_hint" => "Add a repository above to discover its skills."); }
                             for repo in SkillsState.repositories: VerticalLayout {
                                 spacing: 6px;
                                 HorizontalLayout {
@@ -736,7 +735,7 @@ export component SkillsPage inherits Rectangle {
                                         Text { text: repo.url; color: Theme.text; font-size: 12px; overflow: elide; min-width: 0px; }
                                         Caption { text: repo.detail; font-size: 11px; }
                                     }
-                                    ActionButton { text: root.english ? "Remove" : "移除"; subtle: true; danger: true; enabled: root.editable && repo.removable; clicked => { SkillsState.remove-repository(repo.id); } }
+                                    ActionButton { text: @tr("ui.action.remove" => "Remove"); subtle: true; danger: true; enabled: root.editable && repo.removable; clicked => { SkillsState.remove-repository(repo.id); } }
                                 }
                                 if repo.error != "": Caption { text: repo.error; color: Theme.danger; font-size: 11px; }
                                 Divider {}
@@ -745,7 +744,7 @@ export component SkillsPage inherits Rectangle {
                         }
                     }
                 }
-                Caption { text: (root.english ? "Managed copies: " : "管理副本：") + SkillsState.storage-path; font-size: 11px; }
+                Caption { text: @tr("ui.skills.managed_copies" => "Managed copies: {0}", SkillsState.storage-path); font-size: 11px; }
             }
         }
 
@@ -789,7 +788,7 @@ export component SkillsPage inherits Rectangle {
                 Tooltip { SkillPathHint { text: SkillsState.notice-detail; } }
             }
             if SkillsState.error-text != "" || SkillsState.notice-text != "": ActionButton {
-                text: root.english ? "Details" : "查看详情";
+                text: @tr("ui.action.details" => "Details");
                 subtle: true;
                 height: 28px;
                 clicked => { SkillsState.show-details(); }

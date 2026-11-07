@@ -1,8 +1,10 @@
 //! UI-owned input handling. Parsing is deliberately separate from execution.
+use crate::i18n::UiText;
 use toolbox_core::{
     AppProfile, Config, LaunchCommand, Platform, QuakeAlignment, QuakeEdge, QuakeMonitor,
     ThemePreference, UiPage,
 };
+use toolbox_i18n::{Locale, messages};
 
 pub const MAX_IMPORT_BYTES: usize = 1024 * 1024;
 
@@ -15,14 +17,14 @@ pub struct ImportedConfig {
 }
 
 impl ImportedConfig {
-    pub fn parse(text: &str, filename: String) -> Result<Self, String> {
+    pub fn parse(text: &str, filename: String) -> Result<Self, UiText> {
         if text.len() > MAX_IMPORT_BYTES {
-            return Err("配置文件超过 1 MiB / Configuration exceeds 1 MiB".into());
+            return Err(messages::config_too_large().into());
         }
         let text = text.trim_start_matches('\u{feff}');
         if filename.to_ascii_lowercase().ends_with(".json") || text.trim_start().starts_with('{') {
-            let config: Config = serde_json::from_str(text)
-                .map_err(|e| format!("JSON 格式错误 / Invalid JSON: {e}"))?;
+            let config: Config =
+                serde_json::from_str(text).map_err(messages::config_invalid_json)?;
             config.validate()?;
             Ok(Self {
                 profiles: config.profiles.clone(),
@@ -66,94 +68,91 @@ impl ImportedConfig {
         Ok(next)
     }
 
-    pub fn summary(&self, english: bool) -> String {
-        let mut out = if english {
-            format!(
-                "{}\n\n{} application profile{}\n",
-                self.filename,
-                self.profiles.len(),
-                if self.profiles.len() == 1 { "" } else { "s" }
-            )
-        } else {
-            format!(
-                "{}\n\n共 {} 个应用配置\n",
-                self.filename,
-                self.profiles.len()
-            )
+    pub fn summary(&self, locale: Locale) -> String {
+        let boolean = |value| {
+            if value {
+                messages::yes()
+            } else {
+                messages::no()
+            }
+            .render(locale)
         };
+        let mut out = messages::import_heading(self.profiles.len(), &self.filename).render(locale);
         for profile in &self.profiles {
-            out.push_str(&format!(
-                "\n• {}  [{}]  {} · {}\n  ID: {}\n  {}\n",
-                profile.name,
-                platform_name(profile.platform),
-                profile.hotkey,
-                match (english, profile.enabled) {
-                    (true, true) => "Enabled",
-                    (true, false) => "Disabled",
-                    (false, true) => "已启用",
-                    (false, false) => "已禁用",
-                },
-                profile.id,
-                profile.matcher
-            ));
+            let enabled = if profile.enabled {
+                messages::enabled()
+            } else {
+                messages::disabled()
+            };
+            out.push_str(
+                &messages::import_profile(
+                    enabled.render(locale),
+                    &profile.id,
+                    &profile.matcher,
+                    &profile.name,
+                    platform_name(profile.platform),
+                    &profile.hotkey,
+                )
+                .render(locale),
+            );
             if profile.quake.enabled {
                 let q = &profile.quake;
-                out.push_str(&if english {
-                    format!(
-                        "  Quake: {:?}, {}% × {}%, {:?} display, topmost={}, auto-hide={}\n",
-                        q.edge,
-                        q.width_percent,
+                let edge = match q.edge {
+                    QuakeEdge::Top => messages::edge_top(),
+                    QuakeEdge::Bottom => messages::edge_bottom(),
+                    QuakeEdge::Left => messages::edge_left(),
+                    QuakeEdge::Right => messages::edge_right(),
+                };
+                let monitor = match q.monitor {
+                    QuakeMonitor::Cursor => messages::monitor_cursor(),
+                    QuakeMonitor::Foreground => messages::monitor_foreground(),
+                    QuakeMonitor::Primary => messages::monitor_primary(),
+                };
+                out.push_str(
+                    &messages::import_quake(
+                        boolean(q.hide_on_focus_loss),
+                        edge.render(locale),
                         q.height_percent,
-                        q.monitor,
-                        q.always_on_top,
-                        q.hide_on_focus_loss
-                    )
-                } else {
-                    format!(
-                        "  Quake 停靠：{}，宽 {}% × 高 {}%，显示器={}，置顶={}，失焦收起={}\n",
-                        match q.edge {
-                            QuakeEdge::Top => "顶部",
-                            QuakeEdge::Bottom => "底部",
-                            QuakeEdge::Left => "左侧",
-                            QuakeEdge::Right => "右侧",
-                        },
+                        monitor.render(locale),
+                        boolean(q.always_on_top),
                         q.width_percent,
-                        q.height_percent,
-                        match q.monitor {
-                            QuakeMonitor::Cursor => "鼠标所在",
-                            QuakeMonitor::Foreground => "前台窗口所在",
-                            QuakeMonitor::Primary => "主屏",
-                        },
-                        q.always_on_top,
-                        q.hide_on_focus_loss
                     )
-                });
+                    .render(locale),
+                );
             }
             for (index, command) in profile.launch.iter().enumerate() {
                 out.push_str(&format!(
                     "  {}. {} {}\n",
                     index + 1,
                     command.executable,
-                    serde_json::to_string(&command.args).unwrap_or_default()
+                    serde_json::to_string(&command.args).unwrap_or_default(),
                 ));
                 if let Some(cwd) = &command.cwd {
-                    out.push_str(&format!("     cwd: {cwd}\n"));
+                    out.push_str(&messages::import_working_directory(cwd).render(locale));
                 }
             }
         }
         if let Some(config) = &self.config {
-            out.push_str(&if english {
-                format!("\nJSON settings: language={}, theme={:?}, shortcut={}, autostart={}, projects={}, windows={}, UI idle={} s\n", config.language, config.theme, config.launcher_hotkey, config.autostart, config.projects_enabled, config.windows_enabled, config.ui_idle_seconds)
-            } else {
-                format!("\nJSON 通用设置：语言={}，主题={}，唤出快捷键={}，自启={}，项目模块={}，窗口模块={}，界面释放={} 秒\n", config.language, match config.theme { ThemePreference::System => "跟随系统", ThemePreference::Light => "浅色", ThemePreference::Dark => "深色" }, config.launcher_hotkey, config.autostart, config.projects_enabled, config.windows_enabled, config.ui_idle_seconds)
-            });
+            let theme = match config.theme {
+                ThemePreference::System => messages::theme_system(),
+                ThemePreference::Light => messages::theme_light(),
+                ThemePreference::Dark => messages::theme_dark(),
+            };
+            out.push_str(
+                &messages::import_settings(
+                    boolean(config.autostart),
+                    config.ui_idle_seconds,
+                    &config.language,
+                    boolean(config.projects_enabled),
+                    &config.launcher_hotkey,
+                    theme.render(locale),
+                    boolean(config.windows_enabled),
+                )
+                .render(locale),
+            );
         }
         if !self.warnings.is_empty() {
-            out.push_str(if english {
-                "\nReview these notes:\n"
-            } else {
-                "\n请检查以下提示：\n"
-            });
+            out.push_str(&messages::import_notes().render(locale));
             for warning in &self.warnings {
                 out.push_str(&format!("• {warning}\n"));
             }
@@ -166,9 +165,8 @@ pub fn launch_command(
     executable: &str,
     arguments: &str,
     cwd: &str,
-) -> Result<LaunchCommand, String> {
-    let args: Vec<String> = serde_json::from_str(arguments)
-        .map_err(|e| format!("参数必须是 JSON 字符串数组，例如 [\"--new-window\"] / Arguments must be a JSON string array: {e}"))?;
+) -> Result<LaunchCommand, UiText> {
+    let args: Vec<String> = serde_json::from_str(arguments).map_err(messages::invalid_arguments)?;
     Ok(LaunchCommand {
         executable: executable.trim().to_owned(),
         args,
@@ -387,7 +385,57 @@ mod tests {
         assert_eq!(merged.profiles.len(), current.profiles.len());
         assert!(!merged.profiles[0].enabled);
         assert_eq!(imported.apply(&current, true).unwrap(), incoming);
-        assert!(imported.summary(true).contains("Disabled"));
+        assert!(imported.summary(Locale::En).contains("Disabled"));
+    }
+
+    #[test]
+    fn import_summary_keeps_named_fields_in_their_translated_positions() {
+        let mut profile = Config::default().profiles.remove(0);
+        profile.name = "Distinct {name}".into();
+        profile.id = "unique-id".into();
+        profile.matcher = "Matcher.exe".into();
+        profile.hotkey = "Ctrl+Alt+D".into();
+        profile.platform = Platform::Windows;
+        profile.enabled = false;
+        profile.quake.enabled = true;
+        profile.quake.edge = QuakeEdge::Right;
+        profile.quake.width_percent = 40;
+        profile.quake.height_percent = 75;
+        profile.quake.monitor = QuakeMonitor::Foreground;
+        profile.quake.always_on_top = true;
+        profile.quake.hide_on_focus_loss = false;
+        let imported = ImportedConfig {
+            profiles: vec![profile],
+            config: Some(Config {
+                language: "en".into(),
+                theme: ThemePreference::Dark,
+                launcher_hotkey: "Ctrl+Alt+S".into(),
+                autostart: true,
+                projects_enabled: false,
+                windows_enabled: true,
+                ui_idle_seconds: 120,
+                ..Config::default()
+            }),
+            warnings: Vec::new(),
+            filename: "backup.json".into(),
+        };
+        let english = imported.summary(Locale::En);
+        assert!(english.contains("1 application profile\n"));
+        assert!(english.contains(
+            "• Distinct {name}  [Windows]  Ctrl+Alt+D · Disabled\n  ID: unique-id\n  Matcher.exe\n"
+        ));
+        assert!(english.contains(
+            "Quake: Right, 40% × 75%, display=With foreground window, topmost=Yes, auto-hide=No"
+        ));
+        assert!(english.contains("language=en, theme=Dark, shortcut=Ctrl+Alt+S, autostart=Yes, projects=No, windows=Yes, UI idle=120 s"));
+        let chinese = imported.summary(Locale::ZhCn);
+        assert!(chinese.contains(
+            "• Distinct {name}  [Windows]  Ctrl+Alt+D · 已禁用\n  标识：unique-id\n  Matcher.exe\n"
+        ));
+        assert!(chinese.contains(
+            "Quake 停靠：右侧，宽 40% × 高 75%，显示器=前台窗口所在，置顶=是，失焦收起=否"
+        ));
+        assert!(chinese.contains("语言=en，主题=深色，唤出快捷键=Ctrl+Alt+S，自启=是，项目模块=否，窗口模块=是，界面释放=120 秒"));
     }
 
     #[test]

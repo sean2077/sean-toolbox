@@ -11,6 +11,7 @@ name = "sean-toolbox-ui"
 path = "src/main.rs"
 
 [dependencies]
+toolbox-i18n = { path = "../toolbox-i18n" }
 toolbox-core = { path = "../toolbox-core" }
 toolbox-ipc = { path = "../toolbox-ipc" }
 toolbox-projects = { path = "../toolbox-projects" }

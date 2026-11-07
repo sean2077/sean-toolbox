@@ -1,0 +1,1758 @@
+# Sean Toolbox translations.
+msgid ""
+msgstr ""
+"Project-Id-Version: Sean Toolbox\n"
+"Report-Msgid-Bugs-To: https://github.com/sean2077/sean-toolbox/issues\n"
+"POT-Creation-Date: 2026-11-07 11:21+0000\n"
+"PO-Revision-Date: 2026-11-07 19:07+0800\n"
+"Last-Translator: Sean Toolbox contributors\n"
+"Language-Team: Simplified Chinese\n"
+"Language: zh-CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: crates/toolbox-ui/ui/launcher.slint:53
+msgctxt "ui.launcher.title"
+msgid "Sean Toolbox · Recent Projects"
+msgstr "Sean Toolbox · 最近项目"
+
+#: crates/toolbox-ui/ui/launcher.slint:138
+msgctxt "ui.launcher.search_recent_projects"
+msgid "Search recent projects…"
+msgstr "搜索最近项目…"
+
+#: crates/toolbox-ui/ui/launcher.slint:154
+msgctxt "ui.launcher.search_recent_projects_by_name_or_path"
+msgid "Search recent projects by name or path"
+msgstr "按名称或路径搜索最近项目"
+
+#: crates/toolbox-ui/ui/launcher.slint:165
+msgctxt "ui.launcher.selected_result_and_match_count"
+msgid "Selected result and match count"
+msgstr "当前选择与匹配数量"
+
+#: crates/toolbox-ui/ui/launcher.slint:171
+msgctxt "ui.launcher.settings_ctrl"
+msgid "Settings · Ctrl+,"
+msgstr "设置 · Ctrl+,"
+
+#: crates/toolbox-ui/ui/launcher.slint:241 crates/toolbox-ui/ui/main.slint:29
+msgctxt "ui.status.connecting"
+msgid "Connecting…"
+msgstr "正在连接…"
+
+#: crates/toolbox-ui/ui/launcher.slint:241
+msgctxt "ui.projects.loading"
+msgid "Reading recent projects…"
+msgstr "正在读取最近项目…"
+
+#: crates/toolbox-ui/ui/launcher.slint:241 crates/toolbox-ui/ui/main.slint:340
+msgctxt "ui.projects.disabled"
+msgid "Recent projects is turned off"
+msgstr "最近项目已停用"
+
+#: crates/toolbox-ui/ui/launcher.slint:241 crates/toolbox-ui/ui/main.slint:340
+msgctxt "ui.projects.read_failed"
+msgid "Couldn't read recent projects"
+msgstr "暂时无法读取最近项目"
+
+#: crates/toolbox-ui/ui/launcher.slint:241 crates/toolbox-ui/ui/main.slint:340
+msgctxt "ui.projects.no_matches"
+msgid "No matching projects"
+msgstr "没有匹配的项目"
+
+#: crates/toolbox-ui/ui/launcher.slint:241
+msgctxt "ui.projects.empty"
+msgid "No recent projects yet"
+msgstr "还没有最近项目"
+
+#: crates/toolbox-ui/ui/launcher.slint:248
+msgctxt "ui.launcher.enable_hint"
+msgid "Open Settings to enable this module."
+msgstr "点击右上角设置，启用最近项目。"
+
+#: crates/toolbox-ui/ui/launcher.slint:248
+msgctxt "ui.launcher.search_hint"
+msgid "Try a project name or part of its path."
+msgstr "试试项目名称，或路径中的一部分。"
+
+#: crates/toolbox-ui/ui/launcher.slint:248
+msgctxt "ui.launcher.empty_hint"
+msgid "Open a folder or workspace in VS Code, then refresh."
+msgstr "在 VS Code 中打开文件夹或工作区，然后刷新。"
+
+#: crates/toolbox-ui/ui/launcher.slint:265
+msgctxt "ui.launcher.opening_in_vs_code"
+msgid "Opening in VS Code…"
+msgstr "正在用 VS Code 打开…"
+
+#: crates/toolbox-ui/ui/launcher.slint:265
+msgctxt "ui.launcher.updating"
+msgid "Updating…"
+msgstr "正在更新…"
+
+#: crates/toolbox-ui/ui/launcher.slint:265
+msgctxt "ui.launcher.keyboard_hint"
+msgid "↑ ↓  Select     Enter  Open     Esc  Dismiss"
+msgstr "↑ ↓  选择     Enter  打开     Esc  收起"
+
+#: crates/toolbox-ui/ui/launcher.slint:272
+msgctxt "ui.launcher.interaction_hint"
+msgid "Type to search · Double-click to open · Full path on hover"
+msgstr "输入即搜索 · 双击打开 · 悬停查看完整路径"
+
+#: crates/toolbox-ui/ui/launcher.slint:278
+msgctxt "ui.launcher.refresh_projects_ctrl_r"
+msgid "Refresh projects · Ctrl+R"
+msgstr "刷新项目 · Ctrl+R"
+
+#: crates/toolbox-ui/ui/main.slint:125 crates/toolbox-ui/ui/main.slint:218
+msgctxt "ui.navigation.projects"
+msgid "Recent projects"
+msgstr "最近项目"
+
+#: crates/toolbox-ui/ui/main.slint:125 crates/toolbox-ui/ui/main.slint:219
+msgctxt "ui.navigation.windows"
+msgid "Window switcher"
+msgstr "窗口切换"
+
+#: crates/toolbox-ui/ui/main.slint:125 crates/toolbox-ui/ui/main.slint:223
+msgctxt "ui.navigation.settings"
+msgid "Settings"
+msgstr "设置"
+
+#: crates/toolbox-ui/ui/main.slint:125 crates/toolbox-ui/ui/main.slint:220
+msgctxt "ui.navigation.skills"
+msgid "Skills"
+msgstr "技能管理"
+
+#: crates/toolbox-ui/ui/main.slint:125 crates/toolbox-ui/ui/main.slint:224
+msgctxt "ui.navigation.status"
+msgid "Status & about"
+msgstr "运行状态"
+
+#: crates/toolbox-ui/ui/main.slint:126
+msgctxt "ui.page.projects_description"
+msgid "Pick up where you left off in VS Code."
+msgstr "继续上次的工作，快速回到你的项目。"
+
+#: crates/toolbox-ui/ui/main.slint:126
+msgctxt "ui.page.windows_description"
+msgid "Your everyday apps, one shortcut away."
+msgstr "一个快捷键，启动、切回或收起常用应用。"
+
+#: crates/toolbox-ui/ui/main.slint:126
+msgctxt "ui.page.settings_description"
+msgid "Make the toolbox work your way."
+msgstr "按照你的习惯，调整工具箱。"
+
+#: crates/toolbox-ui/ui/main.slint:126
+msgctxt "ui.page.skills_description"
+msgid "Manage skills across your agents and keep them up to date."
+msgstr "统一管理各个 Agent 的技能，并保持每天更新。"
+
+#: crates/toolbox-ui/ui/main.slint:126
+msgctxt "ui.page.status_description"
+msgid "Check what is available on this device."
+msgstr "查看当前设备的可用能力与运行信息。"
+
+#: crates/toolbox-ui/ui/main.slint:213
+msgctxt "ui.main.personal_workspace"
+msgid "Personal workspace"
+msgstr "个人工具箱"
+
+#: crates/toolbox-ui/ui/main.slint:217
+msgctxt "ui.main.workspace"
+msgid "WORKSPACE"
+msgstr "工作空间"
+
+#: crates/toolbox-ui/ui/main.slint:222
+msgctxt "ui.main.preferences"
+msgid "PREFERENCES"
+msgstr "工具箱"
+
+#: crates/toolbox-ui/ui/main.slint:230
+msgctxt "ui.main.on_your_device"
+msgid "On your device"
+msgstr "本地运行"
+
+#: crates/toolbox-ui/ui/main.slint:252
+msgctxt "ui.main.close_ui_esc"
+msgid "Close UI · Esc"
+msgstr "关闭界面 · Esc"
+
+#: crates/toolbox-ui/ui/main.slint:263
+msgctxt "ui.main.search_projects_by_name_or_path"
+msgid "Search projects by name or path…"
+msgstr "搜索项目名称或路径…"
+
+#: crates/toolbox-ui/ui/main.slint:264 crates/toolbox-ui/ui/main.slint:351
+msgctxt "ui.action.clear_search"
+msgid "Clear search"
+msgstr "清空搜索"
+
+#: crates/toolbox-ui/ui/main.slint:274
+msgctxt "ui.main.recently_opened"
+msgid "RECENTLY OPENED"
+msgstr "最近访问"
+
+#: crates/toolbox-ui/ui/main.slint:274
+msgctxt "ui.main.search_results"
+msgid "SEARCH RESULTS"
+msgstr "搜索结果"
+
+#: crates/toolbox-ui/ui/main.slint:277 crates/toolbox-ui/ui/skills.slint:340
+msgctxt "ui.action.refresh"
+msgid "Refresh"
+msgstr "刷新"
+
+#: crates/toolbox-ui/ui/main.slint:340
+msgctxt "ui.main.connecting_to_your_toolbox"
+msgid "Connecting to your toolbox"
+msgstr "正在连接工具箱"
+
+#: crates/toolbox-ui/ui/main.slint:340
+msgctxt "ui.main.loading_your_projects"
+msgid "Loading your projects"
+msgstr "正在读取最近项目"
+
+#: crates/toolbox-ui/ui/main.slint:340
+msgctxt "ui.main.your_next_project_starts_here"
+msgid "Your next project starts here"
+msgstr "从这里继续你的工作"
+
+#: crates/toolbox-ui/ui/main.slint:344
+msgctxt "ui.projects.enable_hint"
+msgid "Enable recent projects in Settings to get started."
+msgstr "在设置中启用最近项目，即可开始使用。"
+
+#: crates/toolbox-ui/ui/main.slint:344
+msgctxt "ui.projects.search_hint"
+msgid "Try a shorter name or part of a project path."
+msgstr "试试更短的名称，或输入项目路径的一部分。"
+
+#: crates/toolbox-ui/ui/main.slint:344
+msgctxt "ui.projects.empty_hint"
+msgid "Open a folder or workspace in VS Code, then refresh this list."
+msgstr "在 VS Code 中打开文件夹或工作区，刷新后就会出现在这里。"
+
+#: crates/toolbox-ui/ui/main.slint:351 crates/toolbox-ui/ui/main.slint:401
+msgctxt "ui.action.open_settings"
+msgid "Open settings"
+msgstr "前往设置"
+
+#: crates/toolbox-ui/ui/main.slint:351
+msgctxt "ui.action.refresh_projects"
+msgid "Refresh projects"
+msgstr "刷新项目"
+
+#: crates/toolbox-ui/ui/main.slint:367
+msgctxt "ui.main.updating"
+msgid "Updating…"
+msgstr "正在更新…"
+
+#: crates/toolbox-ui/ui/main.slint:367
+msgctxt "ui.main.vs_code_history_stored_locally"
+msgid "VS Code history · stored locally"
+msgstr "VS Code 历史记录 · 数据保留在本机"
+
+#: crates/toolbox-ui/ui/main.slint:378
+msgctxt "ui.action.select"
+msgid "Select"
+msgstr "选择"
+
+#: crates/toolbox-ui/ui/main.slint:380
+msgctxt "ui.action.open"
+msgid "Open"
+msgstr "打开"
+
+#: crates/toolbox-ui/ui/main.slint:385
+msgctxt "ui.main.opening"
+msgid "Opening…"
+msgstr "正在打开…"
+
+#: crates/toolbox-ui/ui/main.slint:385
+msgctxt "ui.main.open_in_vs_code"
+msgid "Open in VS Code"
+msgstr "在 VS Code 中打开"
+
+#: crates/toolbox-ui/ui/main.slint:400
+msgctxt "ui.profiles.disabled_hint"
+msgid "Window switching is turned off. Your app configurations are kept."
+msgstr "窗口切换已停用，应用配置仍会保留。"
+
+#: crates/toolbox-ui/ui/main.slint:409
+msgctxt "ui.main.add_application"
+msgid "Add application"
+msgstr "添加应用"
+
+#: crates/toolbox-ui/ui/main.slint:412
+msgctxt "ui.main.applications"
+msgid "APPLICATIONS"
+msgstr "应用列表"
+
+#: crates/toolbox-ui/ui/main.slint:434
+msgctxt "ui.profiles.other_platform"
+msgid "{0} · other OS"
+msgstr "{0} · 其他系统"
+
+#: crates/toolbox-ui/ui/main.slint:439
+msgctxt "ui.action.edit"
+msgid "Edit"
+msgstr "编辑"
+
+#: crates/toolbox-ui/ui/main.slint:440
+msgctxt "ui.action.switch"
+msgid "Switch"
+msgstr "切换"
+
+#: crates/toolbox-ui/ui/main.slint:444
+msgctxt "ui.profiles.empty_hint"
+msgid "No applications yet. Add one to create your first shortcut."
+msgstr "还没有应用，添加一个常用应用开始使用。"
+
+#: crates/toolbox-ui/ui/main.slint:457
+msgctxt "ui.profiles.introduction"
+msgid "Less searching. More doing."
+msgstr "常用应用，一键即达"
+
+#: crates/toolbox-ui/ui/main.slint:458
+msgctxt "ui.profiles.edit_hint"
+msgid "Edit an app to set its shortcut and launch options, or add a new one."
+msgstr "选择左侧应用，编辑快捷键和启动方式；也可以添加新的应用。"
+
+#: crates/toolbox-ui/ui/main.slint:460
+msgctxt "ui.profiles.switch_hint"
+msgid ""
+"One window: focus or minimize.\n"
+"Multiple windows: cycle in the selected mode.\n"
+"Not running: launch the app."
+msgstr ""
+"一个窗口：切回或收起\n"
+"多个窗口：依次切换，可设置末尾行为\n"
+"尚未运行：自动启动应用"
+
+#: crates/toolbox-ui/ui/main.slint:468
+msgctxt "ui.main.new_application"
+msgid "New application"
+msgstr "添加应用"
+
+#: crates/toolbox-ui/ui/main.slint:469
+msgctxt "ui.main.unsaved"
+msgid "Unsaved"
+msgstr "未保存"
+
+#: crates/toolbox-ui/ui/main.slint:469
+msgctxt "ui.main.saved"
+msgid "Saved"
+msgstr "已保存"
+
+#: crates/toolbox-ui/ui/main.slint:479
+msgctxt "ui.main.application"
+msgid "APPLICATION"
+msgstr "基本信息"
+
+#: crates/toolbox-ui/ui/main.slint:480
+msgctxt "ui.main.display_name"
+msgid "Display name"
+msgstr "显示名称"
+
+#: crates/toolbox-ui/ui/main.slint:481
+msgctxt "ui.main.e_g_vs_code"
+msgid "e.g. VS Code"
+msgstr "例如：VS Code"
+
+#: crates/toolbox-ui/ui/main.slint:486
+msgctxt "ui.main.application_id"
+msgid "Application ID"
+msgstr "应用标识"
+
+#: crates/toolbox-ui/ui/main.slint:491
+msgctxt "ui.main.platform"
+msgid "Platform"
+msgstr "适用系统"
+
+#: crates/toolbox-ui/ui/main.slint:495
+msgctxt "ui.main.window_match"
+msgid "Window match"
+msgstr "窗口匹配"
+
+#: crates/toolbox-ui/ui/main.slint:498
+msgctxt "ui.main.shortcut_optional"
+msgid "Shortcut · optional"
+msgstr "快捷键 · 可留空"
+
+#: crates/toolbox-ui/ui/main.slint:500
+msgctxt "ui.main.enable_this_application"
+msgid "Enable this application"
+msgstr "启用此应用"
+
+#: crates/toolbox-ui/ui/main.slint:501
+msgctxt "ui.profiles.maximize_new"
+msgid "Maximize newly launched windows only"
+msgstr "仅最大化新启动的窗口"
+
+#: crates/toolbox-ui/ui/main.slint:502
+msgctxt "ui.profiles.wrap_cycle"
+msgid "Wrap to the first window at the end"
+msgstr "循环到末尾后回到第一个窗口"
+
+#: crates/toolbox-ui/ui/main.slint:505
+msgctxt "ui.main.quake_mode"
+msgid "QUAKE MODE"
+msgstr "下拉与停靠"
+
+#: crates/toolbox-ui/ui/main.slint:506
+msgctxt "ui.quake.wezterm_enabled"
+msgid "Enable a dedicated WezTerm dropdown"
+msgstr "启用 WezTerm 独立下拉"
+
+#: crates/toolbox-ui/ui/main.slint:506
+msgctxt "ui.quake.enabled"
+msgid "Dock one window to the screen edge"
+msgstr "将一个应用窗口停靠到屏幕边缘"
+
+#: crates/toolbox-ui/ui/main.slint:507
+msgctxt "ui.quake.wezterm_hint"
+msgid "Opens a dedicated window with your WezTerm shell, font and colors. Terminal tasks keep running while hidden."
+msgstr "打开独立窗口，沿用 WezTerm 的 shell、字体与配色。收起后终端任务继续运行。"
+
+#: crates/toolbox-ui/ui/main.slint:507
+msgctxt "ui.quake.toggle_hint"
+msgid "Summon the same window with your shortcut. Press again while it is active to hide it."
+msgstr "快捷键唤回同一个窗口；窗口在前台时再按一次即可收起。"
+
+#: crates/toolbox-ui/ui/main.slint:513
+msgctxt "ui.main.top_half"
+msgid "Top half"
+msgstr "顶部半屏"
+
+#: crates/toolbox-ui/ui/main.slint:514
+msgctxt "ui.main.right_side"
+msgid "Right side"
+msgstr "右侧边栏"
+
+#: crates/toolbox-ui/ui/main.slint:515
+msgctxt "ui.main.fill_screen"
+msgid "Fill screen"
+msgstr "铺满工作区"
+
+#: crates/toolbox-ui/ui/main.slint:521
+msgctxt "ui.main.screen_edge"
+msgid "Screen edge"
+msgstr "停靠边缘"
+
+#: crates/toolbox-ui/ui/main.slint:522
+msgctxt "ui.quake.edge.top"
+msgid "Top"
+msgstr "顶部"
+
+#: crates/toolbox-ui/ui/main.slint:522
+msgctxt "ui.quake.edge.bottom"
+msgid "Bottom"
+msgstr "底部"
+
+#: crates/toolbox-ui/ui/main.slint:522
+msgctxt "ui.quake.edge.left"
+msgid "Left"
+msgstr "左侧"
+
+#: crates/toolbox-ui/ui/main.slint:522
+msgctxt "ui.quake.edge.right"
+msgid "Right"
+msgstr "右侧"
+
+#: crates/toolbox-ui/ui/main.slint:526
+msgctxt "ui.main.alignment"
+msgid "Alignment"
+msgstr "对齐位置"
+
+#: crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.quake.horizontal_alignment.left"
+msgid "Left"
+msgstr "靠左"
+
+#: crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.quake.horizontal_alignment.center"
+msgid "Center"
+msgstr "居中"
+
+#: crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.quake.horizontal_alignment.right"
+msgid "Right"
+msgstr "靠右"
+
+#: crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.quake.vertical_alignment.top"
+msgid "Top"
+msgstr "靠上"
+
+#: crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.quake.vertical_alignment.center"
+msgid "Center"
+msgstr "居中"
+
+#: crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.quake.vertical_alignment.bottom"
+msgid "Bottom"
+msgstr "靠下"
+
+#: crates/toolbox-ui/ui/main.slint:534
+msgctxt "ui.quake.width_percent"
+msgid "Width · % of work area"
+msgstr "宽度 · 工作区百分比"
+
+#: crates/toolbox-ui/ui/main.slint:539
+msgctxt "ui.quake.height_percent"
+msgid "Height · % of work area"
+msgstr "高度 · 工作区百分比"
+
+#: crates/toolbox-ui/ui/main.slint:543
+msgctxt "ui.main.show_on_display"
+msgid "Show on display"
+msgstr "唤出位置"
+
+#: crates/toolbox-ui/ui/main.slint:544
+msgctxt "ui.quake.monitor.at_mouse_pointer"
+msgid "At mouse pointer"
+msgstr "鼠标所在显示器"
+
+#: crates/toolbox-ui/ui/main.slint:544
+msgctxt "ui.quake.monitor.with_foreground_window"
+msgid "With foreground window"
+msgstr "当前前台窗口所在显示器"
+
+#: crates/toolbox-ui/ui/main.slint:544
+msgctxt "ui.quake.monitor.primary_display"
+msgid "Primary display"
+msgstr "主显示器"
+
+#: crates/toolbox-ui/ui/main.slint:545
+msgctxt "ui.quake.always_on_top"
+msgid "Keep on top while shown"
+msgstr "显示时保持置顶"
+
+#: crates/toolbox-ui/ui/main.slint:546
+msgctxt "ui.quake.hide_on_blur"
+msgid "Hide when focus leaves · Windows"
+msgstr "失去焦点时自动收起 · Windows"
+
+#: crates/toolbox-ui/ui/main.slint:547
+msgctxt "ui.quake.macos_hint"
+msgid "macOS supports placement through Accessibility. Keep-on-top and auto-hide are unavailable."
+msgstr "macOS 通过辅助功能定位窗口；暂不支持置顶和失焦收起。"
+
+#: crates/toolbox-ui/ui/main.slint:547
+msgctxt "ui.quake.linux_hint"
+msgid "Requires an X11 / EWMH desktop. Auto-hide is currently available on Windows only."
+msgstr "需要 X11 / EWMH 桌面。失焦自动收起目前仅支持 Windows。"
+
+#: crates/toolbox-ui/ui/main.slint:547
+msgctxt "ui.quake.placement_hint"
+msgid "Uses the display work area, leaving room for the taskbar. Esc stays available to your app."
+msgstr "按显示器可用工作区定位，避开任务栏；Esc 保留给目标应用。"
+
+#: crates/toolbox-ui/ui/main.slint:551
+msgctxt "ui.main.launch_options"
+msgid "LAUNCH OPTIONS"
+msgstr "启动方式"
+
+#: crates/toolbox-ui/ui/main.slint:552
+msgctxt "ui.launch_options.order_hint"
+msgid "If the app is closed, try these locations in order."
+msgstr "应用未运行时，按顺序尝试以下启动候选。"
+
+#: crates/toolbox-ui/ui/main.slint:556
+msgctxt "ui.main.add_candidate"
+msgid "Add candidate"
+msgstr "添加启动候选"
+
+#: crates/toolbox-ui/ui/main.slint:557
+msgctxt "ui.main.remove_candidate"
+msgid "Remove candidate"
+msgstr "移除启动候选"
+
+#: crates/toolbox-ui/ui/main.slint:559
+msgctxt "ui.main.executable_or_application"
+msgid "Executable or application"
+msgstr "可执行文件或应用路径"
+
+#: crates/toolbox-ui/ui/main.slint:562
+msgctxt "ui.main.choose_a_program"
+msgid "Choose a program…"
+msgstr "选择应用程序…"
+
+#: crates/toolbox-ui/ui/main.slint:563 crates/toolbox-ui/ui/main.slint:572
+msgctxt "ui.action.browse"
+msgid "Browse"
+msgstr "浏览"
+
+#: crates/toolbox-ui/ui/main.slint:565
+msgctxt "ui.main.arguments_json_array"
+msgid "Arguments · JSON array"
+msgstr "启动参数 · JSON 数组"
+
+#: crates/toolbox-ui/ui/main.slint:567
+msgctxt "ui.launch_options.arguments_hint"
+msgid "Use [] for no arguments; each argument is a quoted string."
+msgstr "无参数时填写 []；每个参数用双引号包裹。"
+
+#: crates/toolbox-ui/ui/main.slint:568
+msgctxt "ui.main.working_directory_optional"
+msgid "Working directory · optional"
+msgstr "工作目录 · 可留空"
+
+#: crates/toolbox-ui/ui/main.slint:571
+msgctxt "ui.main.default_directory"
+msgid "Default directory"
+msgstr "默认目录"
+
+#: crates/toolbox-ui/ui/main.slint:580
+msgctxt "ui.action.delete"
+msgid "Delete"
+msgstr "删除"
+
+#: crates/toolbox-ui/ui/main.slint:582 crates/toolbox-ui/ui/main.slint:823
+msgctxt "ui.action.cancel"
+msgid "Cancel"
+msgstr "取消"
+
+#: crates/toolbox-ui/ui/main.slint:583 crates/toolbox-ui/ui/main.slint:700
+msgctxt "ui.status.saving"
+msgid "Saving…"
+msgstr "保存中…"
+
+#: crates/toolbox-ui/ui/main.slint:583
+msgctxt "ui.main.save_app"
+msgid "Save app"
+msgstr "保存应用"
+
+#: crates/toolbox-ui/ui/main.slint:598
+msgctxt "ui.main.appearance"
+msgid "APPEARANCE"
+msgstr "外观"
+
+#: crates/toolbox-ui/ui/main.slint:602
+msgctxt "ui.main.choose_your_theme"
+msgid "Choose your theme"
+msgstr "选择界面主题"
+
+#: crates/toolbox-ui/ui/main.slint:603
+msgctxt "ui.settings.theme_hint"
+msgid "Preview instantly in the manager and project launcher. Save to keep your choice."
+msgstr "管理窗口与最近项目面板同步预览，保存后保留。"
+
+#: crates/toolbox-ui/ui/main.slint:606
+msgctxt "ui.main.system"
+msgid "System"
+msgstr "跟随系统"
+
+#: crates/toolbox-ui/ui/main.slint:607
+msgctxt "ui.main.light"
+msgid "Light"
+msgstr "浅色"
+
+#: crates/toolbox-ui/ui/main.slint:608
+msgctxt "ui.main.dark"
+msgid "Dark"
+msgstr "深色"
+
+#: crates/toolbox-ui/ui/main.slint:612
+msgctxt "ui.main.general"
+msgid "GENERAL"
+msgstr "通用"
+
+#: crates/toolbox-ui/ui/main.slint:617
+msgctxt "ui.main.language"
+msgid "Language"
+msgstr "界面语言"
+
+#: crates/toolbox-ui/ui/main.slint:618
+msgctxt "ui.settings.language_hint"
+msgid "Preview immediately. Save to keep your choice."
+msgstr "选择后即时预览，保存后保留。"
+
+#: crates/toolbox-ui/ui/main.slint:629
+msgctxt "ui.main.open_toolbox"
+msgid "Open toolbox"
+msgstr "唤出工具箱"
+
+#: crates/toolbox-ui/ui/main.slint:630
+msgctxt "ui.settings.hotkey_hint"
+msgid "A global shortcut to your recent projects."
+msgstr "随时按下快捷键，打开最近项目。"
+
+#: crates/toolbox-ui/ui/main.slint:635 crates/toolbox-ui/ui/main.slint:637
+msgctxt "ui.main.launch_at_sign_in"
+msgid "Launch at sign-in"
+msgstr "登录时启动"
+
+#: crates/toolbox-ui/ui/main.slint:636
+msgctxt "ui.settings.autostart_hint"
+msgid "Keep your shortcuts ready when you sign in."
+msgstr "登录系统后，让快捷键随时可用。"
+
+#: crates/toolbox-ui/ui/main.slint:641
+msgctxt "ui.settings.idle_timeout"
+msgid "Automatic-hide cache · seconds"
+msgstr "自动收起后缓存 · 秒"
+
+#: crates/toolbox-ui/ui/main.slint:642
+msgctxt "ui.settings.idle_hint"
+msgid "0 releases memory immediately; up to 3600 keeps reopening fast. Close or Esc always releases the last UI."
+msgstr "0 立即释放内存；设为 1–3600 可加快再次唤起。手动关闭或 Esc 始终释放最后一个界面。"
+
+#: crates/toolbox-ui/ui/main.slint:648
+msgctxt "ui.main.tools"
+msgid "TOOLS"
+msgstr "功能模块"
+
+#: crates/toolbox-ui/ui/main.slint:654
+msgctxt "ui.settings.projects_hint"
+msgid "Find folders and workspaces from VS Code history."
+msgstr "查找 VS Code 最近使用的文件夹和工作区。"
+
+#: crates/toolbox-ui/ui/main.slint:655
+msgctxt "ui.main.enable_recent_projects"
+msgid "Enable recent projects"
+msgstr "启用最近项目"
+
+#: crates/toolbox-ui/ui/main.slint:660
+msgctxt "ui.settings.windows_hint"
+msgid "Launch, focus and minimize apps with a shortcut."
+msgstr "通过快捷键启动、切回和收起应用。"
+
+#: crates/toolbox-ui/ui/main.slint:661
+msgctxt "ui.main.enable_window_switcher"
+msgid "Enable window switcher"
+msgstr "启用窗口切换"
+
+#: crates/toolbox-ui/ui/main.slint:666
+msgctxt "ui.main.vs_code_location"
+msgid "VS Code location"
+msgstr "VS Code 路径"
+
+#: crates/toolbox-ui/ui/main.slint:667
+msgctxt "ui.settings.code_path_hint"
+msgid "Leave empty to locate VS Code automatically."
+msgstr "留空时自动查找；也可以指定可执行文件。"
+
+#: crates/toolbox-ui/ui/main.slint:670
+msgctxt "ui.main.automatically_detect"
+msgid "Automatically detect"
+msgstr "自动查找"
+
+#: crates/toolbox-ui/ui/main.slint:677
+msgctxt "ui.main.configuration"
+msgid "CONFIGURATION"
+msgstr "配置管理"
+
+#: crates/toolbox-ui/ui/main.slint:681
+msgctxt "ui.settings.import_export_hint"
+msgid "Import a WinGuake INI or Toolbox JSON with a preview. Export backs up the configuration currently in use."
+msgstr "导入 WinGuake INI 或工具箱 JSON，预览后再应用；导出当前已生效的配置以备份。"
+
+#: crates/toolbox-ui/ui/main.slint:684
+msgctxt "ui.main.import"
+msgid "Import…"
+msgstr "导入配置"
+
+#: crates/toolbox-ui/ui/main.slint:685
+msgctxt "ui.main.export_json"
+msgid "Export JSON…"
+msgstr "导出 JSON"
+
+#: crates/toolbox-ui/ui/main.slint:686
+msgctxt "ui.main.reload_saved"
+msgid "Reload saved"
+msgstr "重新载入"
+
+#: crates/toolbox-ui/ui/main.slint:698
+msgctxt "ui.main.you_have_unsaved_changes"
+msgid "You have unsaved changes"
+msgstr "有尚未保存的修改"
+
+#: crates/toolbox-ui/ui/main.slint:698
+msgctxt "ui.main.all_changes_saved"
+msgid "All changes saved"
+msgstr "设置已保存"
+
+#: crates/toolbox-ui/ui/main.slint:699
+msgctxt "ui.action.discard"
+msgid "Discard"
+msgstr "撤销修改"
+
+#: crates/toolbox-ui/ui/main.slint:700
+msgctxt "ui.main.save_settings"
+msgid "Save settings"
+msgstr "保存设置"
+
+#: crates/toolbox-ui/ui/main.slint:715
+msgctxt "ui.main.device_capabilities"
+msgid "DEVICE CAPABILITIES"
+msgstr "设备能力"
+
+#: crates/toolbox-ui/ui/main.slint:718
+msgctxt "ui.main.checking"
+msgid "Checking…"
+msgstr "检查中…"
+
+#: crates/toolbox-ui/ui/main.slint:718
+msgctxt "ui.main.check_again"
+msgid "Check again"
+msgstr "重新检查"
+
+#: crates/toolbox-ui/ui/main.slint:722
+msgctxt "ui.main.window_control"
+msgid "Window control"
+msgstr "窗口控制"
+
+#: crates/toolbox-ui/ui/main.slint:722 crates/toolbox-ui/ui/main.slint:723
+msgctxt "ui.status.unchecked"
+msgid "Unchecked"
+msgstr "尚未确认"
+
+#: crates/toolbox-ui/ui/main.slint:722 crates/toolbox-ui/ui/main.slint:723
+msgctxt "ui.status.available"
+msgid "Available"
+msgstr "可用"
+
+#: crates/toolbox-ui/ui/main.slint:722 crates/toolbox-ui/ui/main.slint:723
+msgctxt "ui.status.unavailable"
+msgid "Unavailable"
+msgstr "不可用"
+
+#: crates/toolbox-ui/ui/main.slint:723
+msgctxt "ui.main.global_shortcuts"
+msgid "Global shortcuts"
+msgstr "全局快捷键"
+
+#: crates/toolbox-ui/ui/main.slint:724
+msgctxt "ui.main.system_tray"
+msgid "System tray"
+msgstr "系统托盘"
+
+#: crates/toolbox-ui/ui/main.slint:734
+msgctxt "ui.main.last_action"
+msgid "LAST ACTION"
+msgstr "最近操作"
+
+#: crates/toolbox-ui/ui/main.slint:735
+msgctxt "ui.main.no_actions_recorded_yet"
+msgid "No actions recorded yet."
+msgstr "暂无操作记录。"
+
+#: crates/toolbox-ui/ui/main.slint:742
+msgctxt "ui.main.needs_your_attention"
+msgid "Needs your attention"
+msgstr "需要留意"
+
+#: crates/toolbox-ui/ui/main.slint:750
+msgctxt "ui.main.last_interface_error"
+msgid "Last interface error"
+msgstr "最近一次界面错误"
+
+#: crates/toolbox-ui/ui/main.slint:755
+msgctxt "ui.main.hide_technical_details"
+msgid "Hide technical details"
+msgstr "收起技术详情"
+
+#: crates/toolbox-ui/ui/main.slint:755
+msgctxt "ui.main.show_technical_details"
+msgid "Show technical details"
+msgstr "查看技术详情"
+
+#: crates/toolbox-ui/ui/main.slint:774
+msgctxt "ui.about.description"
+msgid "An independent, local-first personal toolbox."
+msgstr "独立运行的个人工具箱，专注本地日常工作。"
+
+#: crates/toolbox-ui/ui/main.slint:777
+msgctxt "ui.main.project_licenses"
+msgid "Project & licenses"
+msgstr "项目与许可证"
+
+#: crates/toolbox-ui/ui/main.slint:778
+msgctxt "ui.main.slint_website"
+msgid "Slint website"
+msgstr "Slint 网站"
+
+#: crates/toolbox-ui/ui/main.slint:797 crates/toolbox-ui/ui/skills.slint:791
+msgctxt "ui.action.details"
+msgid "Details"
+msgstr "查看详情"
+
+#: crates/toolbox-ui/ui/main.slint:815
+msgctxt "ui.main.review_your_import"
+msgid "Review your import"
+msgstr "确认导入内容"
+
+#: crates/toolbox-ui/ui/main.slint:816
+msgctxt "ui.import.review_hint"
+msgid "Review the applications below before applying changes."
+msgstr "先检查应用和设置，再选择如何应用。"
+
+#: crates/toolbox-ui/ui/main.slint:819
+msgctxt "ui.import.merge_hint"
+msgid "Merge replaces matching app IDs. Replace removes the existing app list; JSON also replaces settings. No application is launched."
+msgstr "合并会更新相同标识的应用；替换会移除原应用列表，JSON 还会替换通用设置。导入不会启动应用。"
+
+#: crates/toolbox-ui/ui/main.slint:825
+msgctxt "ui.main.replace_all"
+msgid "Replace all"
+msgstr "替换全部配置"
+
+#: crates/toolbox-ui/ui/main.slint:825
+msgctxt "ui.main.replace_app_list"
+msgid "Replace app list"
+msgstr "替换应用列表"
+
+#: crates/toolbox-ui/ui/main.slint:826
+msgctxt "ui.main.merge_apps"
+msgid "Merge apps"
+msgstr "合并应用"
+
+#: crates/toolbox-ui/ui/main.slint:852
+msgctxt "ui.action.keep_editing"
+msgid "Keep editing"
+msgstr "继续编辑"
+
+#: crates/toolbox-ui/ui/main.slint:853
+msgctxt "ui.action.continue"
+msgid "Continue"
+msgstr "确认继续"
+
+#: crates/toolbox-ui/ui/main.slint:864
+msgctxt "ui.dialog.file_chooser_hint"
+msgid "Continue in the file chooser"
+msgstr "请在文件选择窗口中继续"
+
+#: crates/toolbox-ui/ui/skills.slint:278
+msgctxt "ui.skills.installed"
+msgid "Installed"
+msgstr "已安装"
+
+#: crates/toolbox-ui/ui/skills.slint:279
+msgctxt "ui.skills.discover"
+msgid "Discover"
+msgstr "发现"
+
+#: crates/toolbox-ui/ui/skills.slint:280
+msgctxt "ui.skills.local"
+msgid "On this device"
+msgstr "本机技能"
+
+#: crates/toolbox-ui/ui/skills.slint:281
+msgctxt "ui.skills.repositories"
+msgid "Repositories"
+msgstr "仓库"
+
+#: crates/toolbox-ui/ui/skills.slint:288 crates/toolbox-ui/ui/skills.slint:294
+msgctxt "ui.skills.daily_update"
+msgid "Daily update"
+msgstr "每日更新"
+
+#: crates/toolbox-ui/ui/skills.slint:299
+msgctxt "ui.skills.daily_update_hint"
+msgid ""
+"Updates every 24 hours while the toolbox is running in the tray; catches up at the next startup.\n"
+"{0}"
+msgstr ""
+"工具箱在托盘运行时每 24 小时更新；错过的更新会在下次启动时补上。\n"
+"{0}"
+
+#: crates/toolbox-ui/ui/skills.slint:302
+msgctxt "ui.skills.update_all"
+msgid "Update all"
+msgstr "全部更新"
+
+#: crates/toolbox-ui/ui/skills.slint:309
+msgctxt "ui.skills.link_import"
+msgid "Link (no copy)"
+msgstr "链接（不复制）"
+
+#: crates/toolbox-ui/ui/skills.slint:312
+msgctxt "ui.skills.link_import_accessible"
+msgid "Import local folders as links instead of copies"
+msgstr "本地目录以链接方式导入而不是复制"
+
+#: crates/toolbox-ui/ui/skills.slint:313
+msgctxt "ui.skills.link_import_hint"
+msgid "Link keeps the source live and creates app symlinks on Windows; copy stores a private master copy. Existing app links to the same source are adopted."
+msgstr "链接保留源目录并在应用目录创建符号链接（Windows 需要符号链接权限）；复制保存私有主副本。已存在且指向同一来源的应用链接会被接管。"
+
+#: crates/toolbox-ui/ui/skills.slint:316
+msgctxt "ui.skills.import_folder"
+msgid "Import folder"
+msgstr "导入文件夹"
+
+#: crates/toolbox-ui/ui/skills.slint:334
+msgctxt "ui.skills.search_skills_or_repositories"
+msgid "Search skills or repositories…"
+msgstr "搜索技能名称、描述或仓库…"
+
+#: crates/toolbox-ui/ui/skills.slint:340
+msgctxt "ui.skills.reload_repositories"
+msgid "Reload repositories"
+msgstr "刷新仓库"
+
+#: crates/toolbox-ui/ui/skills.slint:340
+msgctxt "ui.skills.scan_this_device"
+msgid "Scan this device"
+msgstr "扫描本机"
+
+#: crates/toolbox-ui/ui/skills.slint:362
+msgctxt "ui.skills.select_all"
+msgid "Select all"
+msgstr "全选"
+
+#: crates/toolbox-ui/ui/skills.slint:367
+msgctxt "ui.skills.selected"
+msgid "Selected"
+msgstr "已选"
+
+#: crates/toolbox-ui/ui/skills.slint:370
+msgctxt "ui.skills.status"
+msgid "Status"
+msgstr "状态"
+
+#: crates/toolbox-ui/ui/skills.slint:377
+msgctxt "ui.skills.status_filter.all"
+msgid "All"
+msgstr "全部"
+
+#: crates/toolbox-ui/ui/skills.slint:377
+msgctxt "ui.skills.status_filter.enabled"
+msgid "Enabled"
+msgstr "已启用"
+
+#: crates/toolbox-ui/ui/skills.slint:377
+msgctxt "ui.skills.status_filter.disabled"
+msgid "Disabled"
+msgstr "未启用"
+
+#: crates/toolbox-ui/ui/skills.slint:383
+msgctxt "ui.skills.source"
+msgid "Source"
+msgstr "来源"
+
+#: crates/toolbox-ui/ui/skills.slint:477
+msgctxt "ui.skills.select_named"
+msgid "Select {0}"
+msgstr "选择 {0}"
+
+#: crates/toolbox-ui/ui/skills.slint:499
+msgctxt "ui.skills.open_repository"
+msgid "Open repository: {0}"
+msgstr "打开仓库：{0}"
+
+#: crates/toolbox-ui/ui/skills.slint:499
+msgctxt "ui.skills.open_folder"
+msgid "Open folder: {0}"
+msgstr "打开目录：{0}"
+
+#: crates/toolbox-ui/ui/skills.slint:556
+msgctxt "ui.skills.more_actions"
+msgid "More actions"
+msgstr "更多操作"
+
+#: crates/toolbox-ui/ui/skills.slint:585 crates/toolbox-ui/ui/skills.slint:693
+msgctxt "ui.action.update"
+msgid "Update"
+msgstr "更新"
+
+#: crates/toolbox-ui/ui/skills.slint:586
+msgctxt "ui.skills.local_import"
+msgid "Local"
+msgstr "本机导入"
+
+#: crates/toolbox-ui/ui/skills.slint:597
+msgctxt "ui.action.confirm_uninstall"
+msgid "Uninstall..."
+msgstr "卸载…"
+
+#: crates/toolbox-ui/ui/skills.slint:647
+msgctxt "ui.skills.select_hint"
+msgid "Select a skill to view details and choose deployment directories."
+msgstr "选择一个技能，查看详情并管理部署目录。"
+
+#: crates/toolbox-ui/ui/skills.slint:654
+msgctxt "ui.skills.deploy_to_app_directories"
+msgid "DEPLOY TO APP DIRECTORIES"
+msgstr "应用目录部署"
+
+#: crates/toolbox-ui/ui/skills.slint:654
+msgctxt "ui.skills.deploy_after_import"
+msgid "DEPLOY AFTER IMPORT"
+msgstr "安装后部署到"
+
+#: crates/toolbox-ui/ui/skills.slint:672
+msgctxt "ui.skills.deployment_hint"
+msgid "Hover an app for its path. Switches manage only these directories; apps may also read Claude, project or other skills directories."
+msgstr "悬停应用可查看路径。开关只管理这些目录；应用也可能读取 Claude 或项目等其他 Skills 目录。"
+
+#: crates/toolbox-ui/ui/skills.slint:676
+msgctxt "ui.skills.no_deployment_hint"
+msgid "Leave all unchecked to keep only a managed copy or link."
+msgstr "可不勾选应用，仅保存管理副本或链接。"
+
+#: crates/toolbox-ui/ui/skills.slint:677
+msgctxt "ui.skills.source_link_hint"
+msgid "This source is a link. “Link (no copy)” keeps it live; importing a copy reads its real target."
+msgstr "该来源是链接。“链接（不复制）”保留实时源；复制会读取其真实目标。"
+
+#: crates/toolbox-ui/ui/skills.slint:678
+msgctxt "ui.skills.source_copy_hint"
+msgid "The original folder is kept. Move it aside before deploying to the same directory."
+msgstr "导入会保留原文件夹；部署到同名目录前，请先手动移开原目录。"
+
+#: crates/toolbox-ui/ui/skills.slint:679
+msgctxt "ui.skills.managed_link_hint"
+msgid "Managed as a link: app switches create or remove symlinks, and the source is not copied."
+msgstr "以链接方式管理：应用开关创建或移除符号链接，不复制源目录。"
+
+#: crates/toolbox-ui/ui/skills.slint:680
+msgctxt "ui.skills.local_update_hint"
+msgid "Local imports have no remote update source."
+msgstr "本机导入的技能没有远程更新来源。"
+
+#: crates/toolbox-ui/ui/skills.slint:686
+msgctxt "ui.skills.already_installed"
+msgid "Already installed"
+msgstr "已安装"
+
+#: crates/toolbox-ui/ui/skills.slint:686
+msgctxt "ui.skills.import_as_link"
+msgid "Import as link"
+msgstr "以链接导入"
+
+#: crates/toolbox-ui/ui/skills.slint:686
+msgctxt "ui.skills.import_as_copy"
+msgid "Import as copy"
+msgstr "以复制导入"
+
+#: crates/toolbox-ui/ui/skills.slint:686
+msgctxt "ui.skills.install_selected"
+msgid "Install selected"
+msgstr "安装所选技能"
+
+#: crates/toolbox-ui/ui/skills.slint:694
+msgctxt "ui.action.uninstall"
+msgid "Uninstall"
+msgstr "卸载"
+
+#: crates/toolbox-ui/ui/skills.slint:709
+msgctxt "ui.skills.github_skill_repository"
+msgid "GitHub skill repository"
+msgstr "GitHub 技能仓库"
+
+#: crates/toolbox-ui/ui/skills.slint:713
+msgctxt "ui.skills.branch_blank_default"
+msgid "Branch (blank = default)"
+msgstr "分支（留空使用默认分支）"
+
+#: crates/toolbox-ui/ui/skills.slint:714
+msgctxt "ui.skills.add_repository"
+msgid "Add repository"
+msgstr "添加仓库"
+
+#: crates/toolbox-ui/ui/skills.slint:716
+msgctxt "ui.skills.repository_added_hint"
+msgid "After adding a source, open Discover and reload repositories. Git must be installed."
+msgstr "添加后前往「发现」刷新仓库，即可选择安装。需已安装 Git。"
+
+#: crates/toolbox-ui/ui/skills.slint:727
+msgctxt "ui.skills.no_repository_hint"
+msgid "Add a repository above to discover its skills."
+msgstr "在上方添加仓库，开始发现技能。"
+
+#: crates/toolbox-ui/ui/skills.slint:738
+msgctxt "ui.action.remove"
+msgid "Remove"
+msgstr "移除"
+
+#: crates/toolbox-ui/ui/skills.slint:747
+msgctxt "ui.skills.managed_copies"
+msgid "Managed copies: {0}"
+msgstr "管理副本：{0}"
+
+msgctxt "rust.import_settings"
+msgid ""
+"\n"
+"JSON settings: language={language}, theme={theme}, shortcut={shortcut}, autostart={autostart}, projects={projects}, windows={windows}, UI idle={idle} s\n"
+msgstr ""
+"\n"
+"JSON 通用设置：语言={language}，主题={theme}，唤出快捷键={shortcut}，自启={autostart}，项目模块={projects}，窗口模块={windows}，界面释放={idle} 秒\n"
+
+msgctxt "rust.import_notes"
+msgid ""
+"\n"
+"Review these notes:\n"
+msgstr ""
+"\n"
+"请检查以下提示：\n"
+
+msgctxt "rust.import_profile"
+msgid ""
+"\n"
+"• {name}  [{platform}]  {shortcut} · {enabled}\n"
+"  ID: {id}\n"
+"  {matcher}\n"
+msgstr ""
+"\n"
+"• {name}  [{platform}]  {shortcut} · {enabled}\n"
+"  标识：{id}\n"
+"  {matcher}\n"
+
+msgctxt "rust.import_working_directory"
+msgid "     Working directory: {path}\n"
+msgstr "     工作目录：{path}\n"
+
+msgctxt "rust.import_quake"
+msgid "  Quake: {edge}, {width}% × {height}%, display={monitor}, topmost={topmost}, auto-hide={auto_hide}\n"
+msgstr "  Quake 停靠：{edge}，宽 {width}% × 高 {height}%，显示器={monitor}，置顶={topmost}，失焦收起={auto_hide}\n"
+
+msgctxt "rust.skills_empty_sources"
+msgid "Add a source in Repositories, then reload repositories to discover skills."
+msgstr "先在「仓库」添加来源，再点击「刷新仓库」发现技能。"
+
+msgctxt "rust.skills_source_all"
+msgid "All"
+msgstr "全部"
+
+msgctxt "rust.error_app_list_changed_reload_configuration"
+msgid "App list changed; reload configuration"
+msgstr "应用列表已变化，请重新载入"
+
+msgctxt "rust.invalid_arguments"
+msgid "Arguments must be a JSON string array, e.g. [\"--new-window\"]: {error}"
+msgstr "参数必须是 JSON 字符串数组，例如 [\"--new-window\"]：{error}"
+
+msgctxt "rust.monitor_cursor"
+msgid "At mouse pointer"
+msgstr "鼠标所在"
+
+msgctxt "rust.available"
+msgid "Available"
+msgstr "可用"
+
+msgctxt "rust.error_background_worker_stopped_reopen_the_toolbox"
+msgid "Background worker stopped; reopen the toolbox"
+msgstr "后台任务已停止，请重新打开工具箱"
+
+msgctxt "rust.edge_bottom"
+msgid "Bottom"
+msgstr "底部"
+
+msgctxt "rust.launch_candidate"
+msgid "Candidate {number}"
+msgstr "候选 {number}"
+
+msgctxt "rust.host_connection_failed"
+msgid "Cannot connect to host; start sean-toolbox first. {error}"
+msgstr "无法连接常驻服务，请先运行 sean-toolbox。{error}"
+
+msgctxt "rust.confirm_closing_releases_the_ui_from_memory_unsaved_changes_will"
+msgid "Closing releases the UI from memory; unsaved changes will be lost."
+msgstr "关闭界面会释放内存，尚未保存的修改会丢失。"
+
+msgctxt "rust.error_configuration_changed_externally_reload_before_saving"
+msgid "Configuration changed externally; reload before saving"
+msgstr "配置已在外部更改，请重新载入后再保存"
+
+msgctxt "rust.config_too_large"
+msgid "Configuration exceeds 1 MiB."
+msgstr "配置文件超过 1 MiB。"
+
+msgctxt "rust.status_configuration_loaded_review_before_applying"
+msgid "Configuration loaded; review before applying."
+msgstr "配置已读取，请预览后应用。"
+
+msgctxt "rust.status_configuration_saved_and_applied"
+msgid "Configuration saved and applied."
+msgstr "配置已保存并应用。"
+
+msgctxt "rust.status_connected_to_the_resident_host"
+msgid "Connected to the resident host."
+msgstr "已连接常驻服务。"
+
+msgctxt "rust.theme_dark"
+msgid "Dark"
+msgstr "深色"
+
+msgctxt "rust.confirm_delete_this_app_profile"
+msgid "Delete this app profile?"
+msgstr "删除这个应用配置？"
+
+msgctxt "rust.tray_diagnostics"
+msgid "Diagnostics & about"
+msgstr "诊断与关于"
+
+msgctxt "rust.skills_detail"
+msgid ""
+"Directory: {directory}\n"
+"Revision: {revision}\n"
+"Updated: {updated}"
+msgstr ""
+"目录：{directory}\n"
+"修订：{revision}\n"
+"更新：{updated}"
+
+msgctxt "rust.skills_linked_detail"
+msgid ""
+"Directory: {directory}\n"
+"Revision: {revision}\n"
+"Updated: {updated}\n"
+"Link: {target}"
+msgstr ""
+"目录：{directory}\n"
+"修订：{revision}\n"
+"更新：{updated}\n"
+"链接：{target}"
+
+msgctxt "rust.disabled"
+msgid "Disabled"
+msgstr "已禁用"
+
+msgctxt "rust.skills_disabled"
+msgid "Disabled"
+msgstr "未启用"
+
+msgctxt "rust.confirm_discard_app_changes"
+msgid "Discard app changes?"
+msgstr "放弃应用的修改？"
+
+msgctxt "rust.confirm_discard_settings_changes"
+msgid "Discard settings changes?"
+msgstr "放弃设置的修改？"
+
+msgctxt "rust.confirm_discard_unsaved_changes_first"
+msgid "Discard unsaved changes first?"
+msgstr "先放弃尚未保存的修改？"
+
+msgctxt "rust.confirm_discard_unsaved_changes"
+msgid "Discard unsaved changes?"
+msgstr "放弃尚未保存的修改？"
+
+msgctxt "rust.enabled"
+msgid "Enabled"
+msgstr "已启用"
+
+msgctxt "rust.skills_enabled"
+msgid "Enabled"
+msgstr "已启用"
+
+msgctxt "rust.skills_enter_repository"
+msgid "Enter a GitHub repository"
+msgstr "请输入 GitHub 仓库"
+
+msgctxt "rust.match_windows"
+msgid "Enter the executable filename, e.g. Code.exe."
+msgstr "填写进程文件名，例如 Code.exe。"
+
+msgctxt "rust.config_exported"
+msgid "Exported: {path}"
+msgstr "已导出：{path}"
+
+msgctxt "rust.file_dialog_failed"
+msgid "File dialog failed: {error}"
+msgstr "文件选择器失败：{error}"
+
+msgctxt "rust.folder_not_found"
+msgid "Folder not found: {path}"
+msgstr "目录不存在：{path}"
+
+msgctxt "rust.error_host_returned_no_configuration"
+msgid "Host returned no configuration"
+msgstr "宿主未返回配置"
+
+msgctxt "rust.skills_missing_state"
+msgid "Host returned no skills state"
+msgstr "宿主未返回技能状态"
+
+msgctxt "rust.error_host_returned_no_status"
+msgid "Host returned no status"
+msgstr "宿主未返回状态"
+
+msgctxt "rust.invalid_idle_timeout"
+msgid "Idle timeout must be an integer from 0 to 3600."
+msgstr "释放时间必须为 0–3600 的整数。"
+
+msgctxt "rust.confirm_import_uses_the_saved_configuration_and_discards_unsaved_edits"
+msgid "Import uses the saved configuration and discards unsaved edits."
+msgstr "导入基于当前已保存配置，尚未保存的修改将被丢弃。"
+
+msgctxt "rust.config_invalid_json"
+msgid "Invalid JSON: {error}"
+msgstr "JSON 格式错误：{error}"
+
+msgctxt "rust.invalid_export_directory"
+msgid "Invalid export directory."
+msgstr "导出目录无效。"
+
+msgctxt "rust.skills_schedule"
+msgid "Last attempt: {attempt} · Last success: {success} · Next: {next}"
+msgstr "上次尝试：{attempt} · 上次成功：{success} · 下次更新：{next}"
+
+msgctxt "rust.edge_left"
+msgid "Left"
+msgstr "左侧"
+
+msgctxt "rust.theme_light"
+msgid "Light"
+msgstr "浅色"
+
+msgctxt "rust.skills_source_linked"
+msgid "Linked"
+msgstr "链接"
+
+msgctxt "rust.skills_loading"
+msgid "Loading skills from the host…"
+msgstr "正在从宿主读取技能…"
+
+msgctxt "rust.skills_source_local"
+msgid "Local"
+msgstr "本地"
+
+msgctxt "rust.match_macos"
+msgid "Match a bundle ID, app name or executable name. Accessibility permission is required."
+msgstr "匹配 bundle ID、应用名称或可执行文件名；需要辅助功能权限。"
+
+msgctxt "rust.no"
+msgid "No"
+msgstr "否"
+
+msgctxt "rust.skills_no_deployments"
+msgid "No app deployments"
+msgstr "尚未部署到应用"
+
+msgctxt "rust.skills_empty_managed"
+msgid "No managed skills yet. Add a repository in Repositories, or import skills already on this device."
+msgstr "暂无管理中的技能。可在「仓库」添加来源，或导入本机已有技能。"
+
+msgctxt "rust.projects_no_matches"
+msgid "No matching projects."
+msgstr "没有匹配的项目。"
+
+msgctxt "rust.skills_empty_matches"
+msgid "No matching skills."
+msgstr "没有匹配的技能。"
+
+msgctxt "rust.projects_empty"
+msgid "No recent projects yet. Open a folder or workspace in VS Code, then refresh."
+msgstr "暂无最近项目。在 VS Code 中打开文件夹或工作区后刷新。"
+
+msgctxt "rust.skills_not_deployed"
+msgid "Not deployed"
+msgstr "尚未部署"
+
+msgctxt "rust.open_failed"
+msgid "Open failed: {status}"
+msgstr "打开失败：{status}"
+
+msgctxt "rust.path_invalid_unicode"
+msgid "Path is not valid Unicode."
+msgstr "路径不是有效的 Unicode。"
+
+msgctxt "rust.monitor_primary"
+msgid "Primary"
+msgstr "主屏"
+
+msgctxt "rust.project_list_changed"
+msgid "Project list changed; refresh and retry."
+msgstr "项目列表已变化，请刷新后重试。"
+
+msgctxt "rust.status_project_open_request_sent"
+msgid "Project open request sent."
+msgstr "已发送项目打开请求。"
+
+msgctxt "rust.projects_disabled"
+msgid "Projects are disabled. Enable this module in Settings."
+msgstr "最近项目模块已关闭，可在设置中启用。"
+
+msgctxt "rust.error_quake_dimensions_must_be_between_10_and_100"
+msgid "Quake dimensions must be between 10 and 100%"
+msgstr "停靠宽高必须为 10–100%"
+
+msgctxt "rust.tray_quit"
+msgid "Quit Sean Toolbox"
+msgstr "退出工具箱"
+
+msgctxt "rust.projects_reading"
+msgid "Reading recent projects…"
+msgstr "正在读取最近项目…"
+
+msgctxt "rust.tray_projects"
+msgid "Recent projects"
+msgstr "最近项目"
+
+msgctxt "rust.skills_empty_discovery"
+msgid "Reload repositories to discover skills from your configured sources."
+msgstr "点击「刷新仓库」从已配置来源发现技能。"
+
+msgctxt "rust.confirm_reload_saved_configuration"
+msgid "Reload saved configuration?"
+msgstr "重新载入已保存配置？"
+
+msgctxt "rust.skills_uninstall_body"
+msgid "Remove the managed copy or tool-owned links. The linked source folder is kept. Local edits or replaced links stop the operation and are reported."
+msgstr "将移除工具箱管理的副本或链接；链接的源目录会保留。若检测到本地修改或链接被替换，操作会停止并报告。"
+
+msgctxt "rust.confirm_restore_saved_settings_application_profile_edits_will_be_kept"
+msgid "Restore saved settings. Application profile edits will be kept."
+msgstr "将恢复已保存的设置，应用配置的修改会保留。"
+
+msgctxt "rust.edge_right"
+msgid "Right"
+msgstr "右侧"
+
+msgctxt "rust.status_save_or_cancel_your_changes_before_opening_a_project"
+msgid "Save or cancel your changes before opening a project."
+msgstr "请先保存或取消修改，再打开项目。"
+
+msgctxt "rust.status_save_or_cancel_your_changes_before_toggling_a_window"
+msgid "Save or cancel your changes before toggling a window."
+msgstr "请先保存或取消修改，再切换窗口。"
+
+msgctxt "rust.config_invalid_encoding"
+msgid "Save the configuration as UTF-8."
+msgstr "请将配置文件保存为 UTF-8。"
+
+msgctxt "rust.status_saving_and_applying"
+msgid "Saving and applying…"
+msgstr "正在保存并应用…"
+
+msgctxt "rust.skills_empty_local"
+msgid "Scan this device to find unmanaged skills. You can also import a folder containing SKILL.md."
+msgstr "点击「扫描本机」查找尚未管理的技能，也可导入包含 SKILL.md 的文件夹。"
+
+msgctxt "rust.tray_tooltip"
+msgid "Sean Toolbox · Personal toolbox"
+msgstr "Sean Toolbox · 个人工具箱"
+
+msgctxt "rust.tray_settings"
+msgid "Settings"
+msgstr "设置"
+
+msgctxt "rust.skills_shared"
+msgid "Shared"
+msgstr "共享"
+
+msgctxt "rust.tray_skills"
+msgid "Skills"
+msgstr "Skills 管理"
+
+msgctxt "rust.skills_submitting"
+msgid "Submitting skills operation…"
+msgstr "正在提交技能操作…"
+
+msgctxt "rust.theme_system"
+msgid "System"
+msgstr "跟随系统"
+
+msgctxt "rust.diagnostics_summary"
+msgid ""
+"System: {platform}\n"
+"Backend: {backend}\n"
+"Host process: {pid}\n"
+"Window control: {windows}\n"
+"Global shortcuts: {hotkeys}\n"
+"System tray: {tray}\n"
+"Configuration revision: {revision}\n"
+"\n"
+"Last action:\n"
+"{action}\n"
+"\n"
+"Notes:\n"
+"{notes}\n"
+"\n"
+"Last UI error:\n"
+"{error}"
+msgstr ""
+"系统：{platform}\n"
+"窗口后端：{backend}\n"
+"常驻进程：{pid}\n"
+"窗口控制：{windows}\n"
+"全局快捷键：{hotkeys}\n"
+"系统托盘：{tray}\n"
+"配置修订号：{revision}\n"
+"\n"
+"最近操作：\n"
+"{action}\n"
+"\n"
+"提示：\n"
+"{notes}\n"
+"\n"
+"最近的界面错误：\n"
+"{error}"
+
+msgctxt "rust.confirm_the_current_app_has_unsaved_changes"
+msgid "The current app has unsaved changes."
+msgstr "当前应用尚未保存。"
+
+msgctxt "rust.skills_operation_accepted"
+msgid "The host accepted the operation. You can close this window."
+msgstr "技能操作已交给宿主，可以关闭界面。"
+
+msgctxt "rust.match_wezterm"
+msgid "The toolbox identifies the dedicated dropdown automatically. This match is used when dropdown mode is off."
+msgstr "独立下拉窗口由工具箱自动识别。关闭下拉模式后使用此匹配标识。"
+
+msgctxt "rust.skills_catalog_truncated"
+msgid "This catalog is too large to display in full. Some entries are omitted; narrow the repository list and reload."
+msgstr "列表过大，当前只显示部分条目；可缩小仓库范围后重新刷新。"
+
+msgctxt "rust.confirm_this_removes_the_profile_and_shortcut_the_application_remains"
+msgid "This removes the profile and shortcut. The application remains installed."
+msgstr "此操作移除配置及快捷键，不会卸载应用。"
+
+msgctxt "rust.edge_top"
+msgid "Top"
+msgstr "顶部"
+
+msgctxt "rust.activation_failed"
+msgid "UI activation service failed: {error}"
+msgstr "界面唤起服务失败：{error}"
+
+msgctxt "rust.unavailable"
+msgid "Unavailable"
+msgstr "不可用"
+
+msgctxt "rust.skills_uninstall_title"
+msgid "Uninstall the selected skill?"
+msgstr "卸载所选技能？"
+
+msgctxt "rust.confirm_unsaved_changes_will_be_discarded"
+msgid "Unsaved changes will be discarded."
+msgstr "尚未保存的修改将被丢弃。"
+
+msgctxt "rust.status_wait_for_the_current_operation_to_finish"
+msgid "Wait for the current operation to finish."
+msgstr "请等待当前操作完成。"
+
+msgctxt "rust.skills_wait_for_operation"
+msgid "Wait for the current skills operation to finish."
+msgstr "请等待当前技能操作完成。"
+
+msgctxt "rust.tray_windows"
+msgid "Window shortcuts"
+msgstr "窗口快捷键"
+
+msgctxt "rust.monitor_foreground"
+msgid "With foreground window"
+msgstr "前台窗口所在"
+
+msgctxt "rust.match_linux"
+msgid "X11: match WM_CLASS or executable name. Wayland window control is limited."
+msgstr "X11：匹配 WM_CLASS 或进程文件名。Wayland 窗口控制受限。"
+
+msgctxt "rust.yes"
+msgid "Yes"
+msgstr "是"
+
+msgctxt "rust.skills_default_branch"
+msgid "default branch"
+msgstr "默认分支"
+
+msgctxt "rust.skills_schedule_due"
+msgid "due now"
+msgstr "已到期"
+
+msgctxt "rust.skills_time_days_future"
+msgid "in {amount} d"
+msgstr "{amount} 天后"
+
+msgctxt "rust.skills_time_hours_future"
+msgid "in {amount} h"
+msgstr "{amount} 小时后"
+
+msgctxt "rust.skills_time_minutes_future"
+msgid "in {amount} min"
+msgstr "{amount} 分钟后"
+
+msgctxt "rust.skills_schedule_never"
+msgid "never"
+msgstr "尚无"
+
+msgctxt "rust.skills_time_now"
+msgid "now"
+msgstr "现在"
+
+msgctxt "rust.skills_schedule_off"
+msgid "off"
+msgstr "已关闭"
+
+msgctxt "rust.skills_schedule_waiting"
+msgid "waiting for an installed repository skill"
+msgstr "等待安装仓库技能"
+
+msgctxt "rust.skills_time_days_past"
+msgid "{amount} d ago"
+msgstr "{amount} 天前"
+
+msgctxt "rust.skills_time_hours_past"
+msgid "{amount} h ago"
+msgstr "{amount} 小时前"
+
+msgctxt "rust.skills_time_minutes_past"
+msgid "{amount} min ago"
+msgstr "{amount} 分钟前"
+
+msgctxt "rust.skills_app_count"
+msgid "{app} {count}"
+msgstr "{app} {count}"
+
+msgctxt "rust.skills_local_path"
+msgid "{app} · {path}"
+msgstr "{app} · {path}"
+
+msgctxt "rust.skills_local_link"
+msgid "{app} · {path} → {target}"
+msgstr "{app} · {path} → {target}"
+
+msgctxt "rust.skills_repository_installed"
+msgid "{branch} · {count} skill installed (uninstall before removing source)"
+msgid_plural "{branch} · {count} skills installed (uninstall before removing source)"
+msgstr[0] "{branch} · 已安装 {count} 个（卸载后可移除来源）"
+
+msgctxt "rust.skills_notice_count"
+msgid "{count} skill notice. Open Details for the full message."
+msgid_plural "{count} skill notices. Open Details for the full message."
+msgstr[0] "有 {count} 条技能提示，点击「查看详情」查看完整信息。"
+
+msgctxt "rust.skills_selected_summary"
+msgid "{directory} · Revision {revision} · Updated {updated}"
+msgstr "{directory} · 修订 {revision} · 更新 {updated}"
+
+msgctxt "rust.import_heading"
+msgid ""
+"{filename}\n"
+"\n"
+"{count} application profile\n"
+msgid_plural ""
+"{filename}\n"
+"\n"
+"{count} application profiles\n"
+msgstr[0] ""
+"{filename}\n"
+"\n"
+"共 {count} 个应用配置\n"
+
+msgctxt "rust.skills_repository_path"
+msgid "{repository} · {path}"
+msgstr "{repository} · {path}"
+
+msgctxt "rust.skills_repository_revision"
+msgid "{repository}@{revision}"
+msgstr "{repository}@{revision}"
+
+msgctxt "rust.projects_count"
+msgid "{shown} shown · {count} recent project"
+msgid_plural "{shown} shown · {count} recent projects"
+msgstr[0] "显示 {shown} 项 · 共 {count} 个最近项目"
+
+msgctxt "rust.skills_source_apps"
+msgid "{source} · {apps}"
+msgstr "{source} · {apps}"

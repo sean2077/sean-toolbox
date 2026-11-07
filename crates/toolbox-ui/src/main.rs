@@ -1,9 +1,11 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
+mod i18n;
 mod model;
 mod skills;
 mod worker;
 
+use crate::i18n::UiText;
 use model::{
     ImportedConfig, launch_command, next_profile_id, page_from_index, page_index,
     platform_from_index, platform_index, platform_name, quake_alignment_from_index,
@@ -11,7 +13,7 @@ use model::{
     quake_monitor_index, theme_from_index, theme_index,
 };
 use slint::{
-    ComponentHandle, Model, ModelRc, SharedString, Timer, TimerMode, VecModel,
+    ComponentHandle, Model, ModelRc, Timer, TimerMode, VecModel,
     winit_030::{EventResult, WinitWindowAccessor, winit},
 };
 use std::{
@@ -28,6 +30,7 @@ use toolbox_core::{
     AppProfile, Config, HostStatus, LaunchCommand, Platform, QuakeConfig, Response,
     ThemePreference, UiPage,
 };
+use toolbox_i18n::{Locale, Message, messages};
 use worker::{DialogKind, Event, SaveKind, Work};
 
 slint::include_modules!();
@@ -193,7 +196,9 @@ struct State {
     rendered_generation: u64,
     host_pid: u32,
     host_status: Option<HostStatus>,
-    last_error: String,
+    last_error: UiText,
+    status_text: Option<UiText>,
+    confirmation_text: Option<(Message, Message)>,
     skills: skills::SkillsUiState,
 }
 
@@ -223,7 +228,6 @@ impl Controller {
     fn sync_launcher(&self) {
         let ui = self.ui();
         let launcher = self.launcher();
-        launcher.set_english(ui.get_english());
         launcher.set_loaded(ui.get_loaded());
         launcher.set_projects_enabled(ui.get_projects_enabled());
         launcher.set_projects(ui.get_projects());
@@ -515,25 +519,61 @@ impl Controller {
                 state.skills.submitting = false;
                 state.skills.loading = false;
             }
-            self.error(
-                "后台任务已停止，请重新打开工具箱 / Background worker stopped; reopen the toolbox",
-            );
+            self.error(messages::error_background_worker_stopped_reopen_the_toolbox());
         }
     }
 
-    fn say(&self, chinese: &str, english: &str) {
-        let ui = self.ui();
-        ui.set_status_message(if ui.get_english() { english } else { chinese }.into());
-        ui.set_status_error(false);
+    fn locale(&self) -> Locale {
+        if self.ui().get_setting_language() == 1 {
+            Locale::En
+        } else {
+            Locale::ZhCn
+        }
     }
 
-    fn error(&self, message: impl Into<String>) {
+    fn say(&self, message: Message) {
+        self.status(message, false);
+    }
+
+    fn status(&self, message: impl Into<UiText>, error: bool) {
         let message = message.into();
-        self.state.borrow_mut().last_error.clone_from(&message);
-        let ui = self.ui();
-        ui.set_status_message(message.into());
-        ui.set_status_error(true);
+        self.ui()
+            .set_status_message(message.render(self.locale()).into());
+        self.ui().set_status_error(error);
+        self.state.borrow_mut().status_text = Some(message);
+    }
+
+    fn error(&self, message: impl Into<UiText>) {
+        let message = message.into();
+        self.state.borrow_mut().last_error = message.clone();
+        self.status(message, true);
         self.sync_diagnostics();
+    }
+
+    /// Change the presentation locale without changing the saved host settings.
+    /// Slint invalidates @tr bindings; Rust messages retain their ID and arguments.
+    fn apply_language(&self) {
+        let locale = self.locale();
+        slint::select_bundled_translation(locale.tag()).expect("supported bundled locale");
+        let ui = self.ui();
+        let state = self.state.borrow();
+        if let Some(message) = &state.status_text {
+            ui.set_status_message(message.render(locale).into());
+        }
+        if let Some((title, message)) = &state.confirmation_text {
+            ui.set_confirm_title(title.render(locale).into());
+            ui.set_confirm_message(message.render(locale).into());
+        }
+        if let Some(imported) = &state.imported {
+            ui.set_import_summary(imported.summary(locale).into());
+        }
+        drop(state);
+        self.update_match_help();
+        self.sync_candidate_labels();
+        self.sync_project_message();
+        self.sync_diagnostics();
+        self.render_skills();
+        self.sync_launcher();
     }
 
     fn dirty(&self) -> bool {
@@ -636,10 +676,7 @@ impl Controller {
             || self.state.borrow().dialog_open
             || self.state.borrow().skills.submitting
         {
-            self.say(
-                "请等待当前操作完成。",
-                "Wait for the current operation to finish.",
-            );
+            self.say(messages::status_wait_for_the_current_operation_to_finish());
         } else if ui.get_confirm_visible() {
             self.confirm(false);
         } else if ui.get_import_visible() {
@@ -647,10 +684,8 @@ impl Controller {
         } else if self.dirty() {
             self.ask(
                 ConfirmAction::Close,
-                "放弃尚未保存的修改？",
-                "Discard unsaved changes?",
-                "关闭界面会释放内存，尚未保存的修改会丢失。",
-                "Closing releases the UI from memory; unsaved changes will be lost.",
+                messages::confirm_discard_unsaved_changes(),
+                messages::confirm_closing_releases_the_ui_from_memory_unsaved_changes_will(),
             );
         } else {
             self.close_manager();
@@ -715,7 +750,6 @@ impl Controller {
         let ui = self.ui();
         let state = self.state.borrow();
         let config = &state.config;
-        ui.set_english(config.language == "en");
         ui.set_setting_language(i32::from(config.language == "en"));
         ui.set_setting_theme(theme_index(config.theme));
         self.apply_theme();
@@ -732,10 +766,8 @@ impl Controller {
                 .into(),
         );
         ui.set_settings_dirty(false);
-        self.update_match_help();
-        self.sync_candidate_labels();
-        self.sync_diagnostics();
-        self.render_skills();
+        drop(state);
+        self.apply_language();
     }
 
     fn sync_profiles(&self) {
@@ -782,26 +814,12 @@ impl Controller {
             ui.set_selected_project(-1);
             ui.set_project_loading(false);
             ui.set_project_total(0);
-            ui.set_project_message(
-                if ui.get_english() {
-                    "Projects are disabled. Enable this module in Settings."
-                } else {
-                    "最近项目模块已关闭，可在设置中启用。"
-                }
-                .into(),
-            );
+            self.sync_project_message();
             return;
         }
         ui.set_project_loading(true);
         ui.set_selected_project(-1);
-        ui.set_project_message(
-            if ui.get_english() {
-                "Reading recent projects…"
-            } else {
-                "正在读取最近项目…"
-            }
-            .into(),
-        );
+        self.sync_project_message();
         let code_path = state.config.vscode_path_override.clone();
         drop(state);
         self.send(Work::Discover {
@@ -809,6 +827,31 @@ impl Controller {
             query: ui.get_query().into(),
             code_path,
         });
+    }
+
+    fn sync_project_message(&self) {
+        let ui = self.ui();
+        // Keep an external diagnostic verbatim; a locale preview must not hide it.
+        if ui.get_project_error() {
+            return;
+        }
+        let message = if !ui.get_projects_enabled() {
+            messages::projects_disabled()
+        } else if ui.get_project_loading() {
+            messages::projects_reading()
+        } else if ui.get_projects().row_count() == 0 {
+            if ui.get_project_total() == 0 {
+                messages::projects_empty()
+            } else {
+                messages::projects_no_matches()
+            }
+        } else {
+            messages::projects_count(
+                ui.get_project_total().max(0) as usize,
+                ui.get_projects().row_count(),
+            )
+        };
+        ui.set_project_message(message.render(self.locale()).into());
     }
 
     fn query_changed(&self, query: String) {
@@ -823,6 +866,7 @@ impl Controller {
         ui.set_selected_project(-1);
         ui.set_project_loading(true);
         ui.set_project_error(false);
+        self.sync_project_message();
         self.send(Work::Search { generation, query });
     }
 
@@ -864,10 +908,7 @@ impl Controller {
     fn request_project_open(&self, index: i32, target: ProjectOpenTarget) {
         let ui = self.ui();
         if target == ProjectOpenTarget::Manager && self.dirty() {
-            self.say(
-                "请先保存或取消修改，再打开项目。",
-                "Save or cancel your changes before opening a project.",
-            );
+            self.say(messages::status_save_or_cancel_your_changes_before_opening_a_project());
             return;
         }
         if ui.get_project_opening()
@@ -900,12 +941,8 @@ impl Controller {
     fn settings_changed(&self) {
         let ui = self.ui();
         ui.set_settings_dirty(true);
-        ui.set_english(ui.get_setting_language() == 1);
         self.apply_theme();
-        self.update_match_help();
-        self.sync_candidate_labels();
-        self.sync_diagnostics();
-        self.render_skills();
+        self.apply_language();
     }
 
     fn apply_theme(&self) {
@@ -937,32 +974,26 @@ impl Controller {
         if self.ui().get_settings_dirty() {
             self.ask(
                 ConfirmAction::ResetSettings,
-                "放弃设置的修改？",
-                "Discard settings changes?",
-                "将恢复已保存的设置，应用配置的修改会保留。",
-                "Restore saved settings. Application profile edits will be kept.",
+                messages::confirm_discard_settings_changes(),
+                messages::confirm_restore_saved_settings_application_profile_edits_will_be_kept(),
             );
         }
     }
 
-    fn settings_config(&self) -> Result<Config, String> {
+    fn settings_config(&self) -> Result<Config, UiText> {
         let ui = self.ui();
         let mut config = self.state.borrow().config.clone();
-        config.language = if ui.get_setting_language() == 1 {
-            "en"
-        } else {
-            "zh-CN"
-        }
-        .into();
+        config.language = self.locale().tag().into();
         config.theme = theme_from_index(ui.get_setting_theme());
         config.launcher_hotkey = ui.get_setting_hotkey().trim().to_owned();
         config.autostart = ui.get_setting_autostart();
         config.projects_enabled = ui.get_setting_projects();
         config.windows_enabled = ui.get_setting_windows();
-        config.ui_idle_seconds = ui.get_setting_idle().trim().parse().map_err(|_| {
-            "释放时间必须为 0–3600 的整数 / Idle timeout must be an integer from 0 to 3600"
-                .to_owned()
-        })?;
+        config.ui_idle_seconds = ui
+            .get_setting_idle()
+            .trim()
+            .parse()
+            .map_err(|_| UiText::from(messages::invalid_idle_timeout()))?;
         let code = ui.get_setting_code_path().trim().to_owned();
         config.vscode_path_override = (!code.is_empty()).then_some(code);
         config.validate()?;
@@ -979,7 +1010,7 @@ impl Controller {
         }
         self.ui().set_saving(true);
         let revision = self.state.borrow().revision;
-        self.say("正在保存并应用…", "Saving and applying…");
+        self.say(messages::status_saving_and_applying());
         self.send(Work::Save {
             config,
             revision,
@@ -1015,25 +1046,15 @@ impl Controller {
                     })
             });
         ui.set_form_wezterm_dropdown(wezterm);
-        let (zh, en) = match platform {
-            Platform::Windows if wezterm && ui.get_form_quake_enabled() => (
-                "独立下拉窗口由工具箱自动识别。关闭下拉模式后使用此匹配标识。",
-                "The toolbox identifies the dedicated dropdown automatically. This match is used when dropdown mode is off.",
-            ),
-            Platform::Windows => (
-                "填写进程文件名，例如 Code.exe。",
-                "Enter the executable filename, e.g. Code.exe.",
-            ),
-            Platform::Macos => (
-                "匹配 bundle ID、应用名称或可执行文件名；需要辅助功能权限。",
-                "Match a bundle ID, app name or executable name. Accessibility permission is required.",
-            ),
-            Platform::Linux => (
-                "X11：匹配 WM_CLASS 或进程文件名。Wayland 窗口控制受限。",
-                "X11: match WM_CLASS or executable name. Wayland window control is limited.",
-            ),
+        let message = match platform {
+            Platform::Windows if wezterm && ui.get_form_quake_enabled() => {
+                messages::match_wezterm()
+            }
+            Platform::Windows => messages::match_windows(),
+            Platform::Macos => messages::match_macos(),
+            Platform::Linux => messages::match_linux(),
         };
-        ui.set_profile_help(if ui.get_english() { en } else { zh }.into());
+        ui.set_profile_help(message.render(self.locale()).into());
     }
 
     fn profile_changed(&self) {
@@ -1058,10 +1079,8 @@ impl Controller {
         if self.ui().get_profile_dirty() {
             self.ask(
                 ConfirmAction::Edit(index),
-                "放弃应用的修改？",
-                "Discard app changes?",
-                "当前应用尚未保存。",
-                "The current app has unsaved changes.",
+                messages::confirm_discard_app_changes(),
+                messages::confirm_the_current_app_has_unsaved_changes(),
             );
         } else {
             self.begin_edit(index);
@@ -1132,17 +1151,15 @@ impl Controller {
         if self.ui().get_profile_dirty() {
             self.ask(
                 ConfirmAction::New,
-                "放弃应用的修改？",
-                "Discard app changes?",
-                "当前应用尚未保存。",
-                "The current app has unsaved changes.",
+                messages::confirm_discard_app_changes(),
+                messages::confirm_the_current_app_has_unsaved_changes(),
             );
         } else {
             self.begin_edit(-1);
         }
     }
 
-    fn capture_candidate(&self) -> Result<(), String> {
+    fn capture_candidate(&self) -> Result<(), UiText> {
         let ui = self.ui();
         let command = launch_command(
             &ui.get_launch_executable(),
@@ -1187,15 +1204,9 @@ impl Controller {
             .iter()
             .enumerate()
             .map(|(index, _)| {
-                SharedString::from(format!(
-                    "{} {}",
-                    if ui.get_english() {
-                        "Candidate"
-                    } else {
-                        "候选"
-                    },
-                    index + 1
-                ))
+                messages::launch_candidate(index + 1)
+                    .render(self.locale())
+                    .into()
             })
             .collect::<Vec<_>>();
         ui.set_candidate_labels(ModelRc::new(VecModel::from(labels)));
@@ -1291,7 +1302,7 @@ impl Controller {
         let width = ui.get_form_quake_width();
         let height = ui.get_form_quake_height();
         if !(10..=100).contains(&width) || !(10..=100).contains(&height) {
-            self.error("停靠宽高必须为 10–100% / Quake dimensions must be between 10 and 100%");
+            self.error(messages::error_quake_dimensions_must_be_between_10_and_100());
             return;
         }
         profile.quake = QuakeConfig {
@@ -1306,7 +1317,7 @@ impl Controller {
         };
         if let Some(index) = index {
             let Some(existing) = config.profiles.get_mut(index) else {
-                self.error("应用列表已变化，请重新载入 / App list changed; reload configuration");
+                self.error(messages::error_app_list_changed_reload_configuration());
                 return;
             };
             *existing = profile;
@@ -1330,10 +1341,8 @@ impl Controller {
         if self.ui().get_profile_dirty() {
             self.ask(
                 ConfirmAction::CancelEdit,
-                "放弃应用的修改？",
-                "Discard app changes?",
-                "当前应用尚未保存。",
-                "The current app has unsaved changes.",
+                messages::confirm_discard_app_changes(),
+                messages::confirm_the_current_app_has_unsaved_changes(),
             );
         } else {
             self.cancel_editor();
@@ -1343,10 +1352,8 @@ impl Controller {
     fn delete_profile(&self) {
         self.ask(
             ConfirmAction::Delete,
-            "删除这个应用配置？",
-            "Delete this app profile?",
-            "此操作移除配置及快捷键，不会卸载应用。",
-            "This removes the profile and shortcut. The application remains installed.",
+            messages::confirm_delete_this_app_profile(),
+            messages::confirm_this_removes_the_profile_and_shortcut_the_application_remains(),
         );
     }
 
@@ -1366,10 +1373,7 @@ impl Controller {
         };
         // A saved draft may not be lost just because the UI later unloads.
         if self.dirty() {
-            self.say(
-                "请先保存或取消修改，再切换窗口。",
-                "Save or cancel your changes before toggling a window.",
-            );
+            self.say(messages::status_save_or_cancel_your_changes_before_toggling_a_window());
             return;
         }
         #[cfg(windows)]
@@ -1382,7 +1386,8 @@ impl Controller {
                 self.state.borrow_mut().last_error =
                     format!("AllowSetForegroundWindow({host_pid}) failed: {}", unsafe {
                         GetLastError()
-                    });
+                    })
+                    .into();
             }
         }
         self.state.borrow_mut().toggling = true;
@@ -1390,24 +1395,21 @@ impl Controller {
         self.send(Work::Toggle(id));
     }
 
-    fn ask(
-        &self,
-        action: ConfirmAction,
-        zh_title: &str,
-        en_title: &str,
-        zh_text: &str,
-        en_text: &str,
-    ) {
-        self.state.borrow_mut().confirmation = Some(action);
+    fn ask(&self, action: ConfirmAction, title: Message, message: Message) {
         let ui = self.ui();
-        ui.set_confirm_title(if ui.get_english() { en_title } else { zh_title }.into());
-        ui.set_confirm_message(if ui.get_english() { en_text } else { zh_text }.into());
+        ui.set_confirm_title(title.render(self.locale()).into());
+        ui.set_confirm_message(message.render(self.locale()).into());
+        let mut state = self.state.borrow_mut();
+        state.confirmation = Some(action);
+        state.confirmation_text = Some((title, message));
+        drop(state);
         ui.set_confirm_visible(true);
         ui.invoke_focus_confirm_actions();
     }
 
     fn confirm(&self, yes: bool) {
         let action = self.state.borrow_mut().confirmation.take();
+        self.state.borrow_mut().confirmation_text = None;
         self.ui().set_confirm_visible(false);
         if !yes {
             self.ui().invoke_focus_page();
@@ -1455,10 +1457,8 @@ impl Controller {
         if self.dirty() {
             self.ask(
                 ConfirmAction::Reload,
-                "重新载入已保存配置？",
-                "Reload saved configuration?",
-                "尚未保存的修改将被丢弃。",
-                "Unsaved changes will be discarded.",
+                messages::confirm_reload_saved_configuration(),
+                messages::confirm_unsaved_changes_will_be_discarded(),
             );
         } else {
             self.send(Work::Load { force: true });
@@ -1483,10 +1483,8 @@ impl Controller {
         if self.dirty() {
             self.ask(
                 ConfirmAction::Import,
-                "先放弃尚未保存的修改？",
-                "Discard unsaved changes first?",
-                "导入基于当前已保存配置，尚未保存的修改将被丢弃。",
-                "Import uses the saved configuration and discards unsaved edits.",
+                messages::confirm_discard_unsaved_changes_first(),
+                messages::confirm_import_uses_the_saved_configuration_and_discards_unsaved_edits(),
             );
         } else {
             self.start_dialog(DialogKind::Import);
@@ -1535,7 +1533,7 @@ impl Controller {
     fn sync_diagnostics(&self) {
         let ui = self.ui();
         let state = self.state.borrow();
-        ui.set_diagnostic_error(state.last_error.clone().into());
+        ui.set_diagnostic_error(state.last_error.render(self.locale()).into());
         let Some(status) = &state.host_status else {
             return;
         };
@@ -1556,41 +1554,28 @@ impl Controller {
         }
         let warnings = warnings.join("\n");
         ui.set_diagnostic_warnings(warnings.clone().into());
-        let availability = |value| match (ui.get_english(), value) {
-            (true, true) => "Available",
-            (true, false) => "Unavailable",
-            (false, true) => "可用",
-            (false, false) => "不可用",
+        let locale = self.locale();
+        let availability = |value| {
+            if value {
+                messages::available()
+            } else {
+                messages::unavailable()
+            }
+            .render(locale)
         };
-        let text = if ui.get_english() {
-            format!(
-                "System: {}\nBackend: {}\nHost process: {}\nWindow control: {}\nGlobal shortcuts: {}\nSystem tray: {}\nConfiguration revision: {}\n\nLast action:\n{}\n\nNotes:\n{}\n\nLast UI error:\n{}",
-                platform_name(Platform::current()),
-                status.backend,
-                state.host_pid,
-                availability(status.window_control),
-                availability(status.hotkeys),
-                availability(status.tray),
-                state.revision,
-                status.last_action,
-                warnings,
-                state.last_error
-            )
-        } else {
-            format!(
-                "系统：{}\n窗口后端：{}\n常驻进程：{}\n窗口控制：{}\n全局快捷键：{}\n系统托盘：{}\n配置修订号：{}\n\n最近操作：\n{}\n\n提示：\n{}\n\n最近的界面错误：\n{}",
-                platform_name(Platform::current()),
-                status.backend,
-                state.host_pid,
-                availability(status.window_control),
-                availability(status.hotkeys),
-                availability(status.tray),
-                state.revision,
-                status.last_action,
-                warnings,
-                state.last_error
-            )
-        };
+        let text = messages::diagnostics_summary(
+            &status.last_action,
+            &status.backend,
+            state.last_error.render(locale),
+            availability(status.hotkeys),
+            warnings,
+            state.host_pid,
+            platform_name(Platform::current()),
+            state.revision,
+            availability(status.tray),
+            availability(status.window_control),
+        )
+        .render(locale);
         ui.set_diagnostics(text.into());
     }
 
@@ -1599,52 +1584,97 @@ impl Controller {
         match event {
             Event::Loaded { response, force } => match response {
                 Ok(response) => {
-                    if let Some(status) = response.status { self.receive_status(status); }
-                    let Some(config) = response.config else { self.error("宿主未返回配置 / Host returned no configuration"); return; };
-                    if ui.get_saving() { return; }
+                    if let Some(status) = response.status {
+                        self.receive_status(status);
+                    }
+                    let Some(config) = response.config else {
+                        self.error(messages::error_host_returned_no_configuration());
+                        return;
+                    };
+                    if ui.get_saving() {
+                        return;
+                    }
                     // A forced reload discards the old draft before dispatch.
                     // Never discard a new draft entered while IPC was in flight.
                     if self.dirty() {
-                        if response.revision != self.state.borrow().revision { self.error("配置已在外部更改，请重新载入后再保存 / Configuration changed externally; reload before saving"); }
-                        if ui.get_page() == 0 || self.state.borrow().launcher_visible { self.refresh_projects(); }
+                        if response.revision != self.state.borrow().revision {
+                            self.error(messages::error_configuration_changed_externally_reload_before_saving());
+                        }
+                        if ui.get_page() == 0 || self.state.borrow().launcher_visible {
+                            self.refresh_projects();
+                        }
                         return;
                     }
                     let changed = response.revision != self.state.borrow().revision;
                     {
                         let mut state = self.state.borrow_mut();
-                        state.config = config; state.revision = response.revision;
+                        state.config = config;
+                        state.revision = response.revision;
                     }
                     ui.set_loaded(true);
-                    self.sync_settings(); self.sync_profiles();
-                    if force || changed { self.cancel_editor(); }
-                    self.say("已连接常驻服务。", "Connected to the resident host.");
-                    if ui.get_page() == 0 || self.state.borrow().launcher_visible { self.refresh_projects(); }
+                    self.sync_settings();
+                    self.sync_profiles();
+                    if force || changed {
+                        self.cancel_editor();
+                    }
+                    self.say(messages::status_connected_to_the_resident_host());
+                    if ui.get_page() == 0 || self.state.borrow().launcher_visible {
+                        self.refresh_projects();
+                    }
                     self.sync_launcher();
-                    if self.state.borrow().launcher_visible { self.launcher().invoke_focus_search(); }
+                    if self.state.borrow().launcher_visible {
+                        self.launcher().invoke_focus_search();
+                    }
                 }
-                Err(error) => self.error(format!("无法连接常驻服务，请先运行 sean-toolbox / Cannot connect to host; start sean-toolbox first. {error}")),
+                Err(error) => self.error(messages::host_connection_failed(error)),
             },
-            Event::Saved { response, config, kind } => {
+            Event::Saved {
+                response,
+                config,
+                kind,
+            } => {
                 ui.set_saving(false);
                 match response {
                     Ok(response) => {
                         {
                             let mut state = self.state.borrow_mut();
-                            state.config = response.config.unwrap_or(config); state.revision = response.revision;
+                            state.config = response.config.unwrap_or(config);
+                            state.revision = response.revision;
                         }
-                        if let Some(status) = response.status { self.receive_status(status); }
-                        if matches!(kind, SaveKind::Settings | SaveKind::Import) || !ui.get_settings_dirty() { self.sync_settings(); }
+                        if let Some(status) = response.status {
+                            self.receive_status(status);
+                        }
+                        if matches!(kind, SaveKind::Settings | SaveKind::Import)
+                            || !ui.get_settings_dirty()
+                        {
+                            self.sync_settings();
+                        }
                         self.sync_profiles();
-                        if matches!(kind, SaveKind::Profile | SaveKind::Delete | SaveKind::Import) { self.cancel_editor(); }
-                        if kind == SaveKind::Import { self.cancel_import(); }
-                        self.say("配置已保存并应用。", "Configuration saved and applied.");
-                        if kind == SaveKind::Settings || kind == SaveKind::Import { self.refresh_projects(); }
+                        if matches!(
+                            kind,
+                            SaveKind::Profile | SaveKind::Delete | SaveKind::Import
+                        ) {
+                            self.cancel_editor();
+                        }
+                        if kind == SaveKind::Import {
+                            self.cancel_import();
+                        }
+                        self.say(messages::status_configuration_saved_and_applied());
+                        if kind == SaveKind::Settings || kind == SaveKind::Import {
+                            self.refresh_projects();
+                        }
                     }
                     Err(error) => self.error(error),
                 }
             }
-            Event::Projects { generation, result, total } => {
-                if generation != self.query_generation.load(Ordering::Relaxed) { return; }
+            Event::Projects {
+                generation,
+                result,
+                total,
+            } => {
+                if generation != self.query_generation.load(Ordering::Relaxed) {
+                    return;
+                }
                 self.state.borrow_mut().rendered_generation = generation;
                 ui.set_project_loading(false);
                 ui.set_project_total(total.min(i32::MAX as usize) as i32);
@@ -1652,18 +1682,27 @@ impl Controller {
                     Ok(items) => {
                         ui.set_project_error(false);
                         let count = items.len();
-                        let rows = items.into_iter().map(|item| ProjectRow { id: item.id.into(), name: item.name.into(), location: item.location.into(), source: item.source.into() }).collect::<Vec<_>>();
+                        let rows = items
+                            .into_iter()
+                            .map(|item| ProjectRow {
+                                id: item.id.into(),
+                                name: item.name.into(),
+                                location: item.location.into(),
+                                source: item.source.into(),
+                            })
+                            .collect::<Vec<_>>();
                         ui.set_projects(ModelRc::new(VecModel::from(rows)));
                         ui.set_selected_project(if count == 0 { -1 } else { 0 });
                         ui.invoke_reveal_selection();
-                        let message = if count == 0 {
-                            let empty = if total == 0 { if ui.get_english() { "No recent projects yet. Open a folder or workspace in VS Code, then refresh." } else { "暂无最近项目。在 VS Code 中打开文件夹或工作区后刷新。" } }
-                            else if ui.get_english() { "No matching projects." } else { "没有匹配的项目。" };
-                            empty.to_owned()
-                        } else if ui.get_english() { format!("{count} shown · {total} recent projects") } else { format!("显示 {count} 项 · 共 {total} 个最近项目") };
-                        ui.set_project_message(message.into());
+                        self.sync_project_message();
                     }
-                    Err(error) => { ui.set_project_error(true); ui.set_projects(ModelRc::default()); ui.set_selected_project(-1); ui.set_project_message(error.clone().into()); self.error(error); }
+                    Err(error) => {
+                        ui.set_project_error(true);
+                        ui.set_projects(ModelRc::default());
+                        ui.set_selected_project(-1);
+                        ui.set_project_message(error.clone().into());
+                        self.error(error);
+                    }
                 }
             }
             Event::Opened(result) => {
@@ -1671,20 +1710,28 @@ impl Controller {
                 let target = self.state.borrow_mut().project_open_target.take();
                 match result {
                     Ok(()) => {
-                        self.say("已发送项目打开请求。", "Project open request sent.");
+                        self.say(messages::status_project_open_request_sent());
                         // Opening may be slow. Do not hide a different page or
                         // a newer launcher session, or unload management drafts.
                         if let Some(ProjectOpenTarget::Launcher(session)) = target {
                             let state = self.state.borrow();
-                            let current = state.launcher_visible && state.launcher_session == session;
+                            let current =
+                                state.launcher_visible && state.launcher_session == session;
                             drop(state);
-                            if current { self.hide_launcher(); }
+                            if current {
+                                self.hide_launcher();
+                            }
                         } else if target == Some(ProjectOpenTarget::Manager)
-                            && ui.get_page() == 0 && !self.dirty() && !ui.get_confirm_visible()
-                            && !ui.get_import_visible() && !ui.get_dialog_busy() && !ui.get_saving() {
+                            && ui.get_page() == 0
+                            && !self.dirty()
+                            && !ui.get_confirm_visible()
+                            && !ui.get_import_visible()
+                            && !ui.get_dialog_busy()
+                            && !ui.get_saving()
+                        {
                             self.hide();
                         }
-                    },
+                    }
                     Err(error) => self.error(error),
                 }
                 self.schedule_unload();
@@ -1692,18 +1739,25 @@ impl Controller {
             Event::Toggled(result) => {
                 self.state.borrow_mut().toggling = false;
                 match result {
-                    Ok(response) => { ui.set_status_message(response.message.into()); ui.set_status_error(false); self.schedule_unload(); }
-                    Err(error) => { let _ = self.show(UiPage::Windows, false); self.error(error); }
+                    Ok(response) => {
+                        self.status(response.message, false);
+                        self.schedule_unload();
+                    }
+                    Err(error) => {
+                        let _ = self.show(UiPage::Windows, false);
+                        self.error(error);
+                    }
                 }
             }
             Event::Status(result) => {
                 ui.set_diagnostic_loading(false);
                 match result {
                     Ok(response) => {
-                        if let Some(status) = response.status { self.receive_status(status); }
-                        else {
+                        if let Some(status) = response.status {
+                            self.receive_status(status);
+                        } else {
                             ui.set_diagnostic_loaded(false);
-                            self.error("宿主未返回状态 / Host returned no status");
+                            self.error(messages::error_host_returned_no_status());
                         }
                     }
                     Err(error) => {
@@ -1717,11 +1771,21 @@ impl Controller {
                 ui.set_dialog_busy(false);
                 match path {
                     Ok(Some(path)) => match kind {
-                        0 => { ui.set_launch_executable(path.into()); self.profile_changed(); }
-                        1 => { ui.set_launch_cwd(path.into()); ui.set_profile_dirty(true); }
-                        _ => { ui.set_setting_code_path(path.into()); ui.set_settings_dirty(true); }
+                        0 => {
+                            ui.set_launch_executable(path.into());
+                            self.profile_changed();
+                        }
+                        1 => {
+                            ui.set_launch_cwd(path.into());
+                            ui.set_profile_dirty(true);
+                        }
+                        _ => {
+                            ui.set_setting_code_path(path.into());
+                            ui.set_settings_dirty(true);
+                        }
                     },
-                    Ok(None) => {}, Err(error) => self.error(error),
+                    Ok(None) => {}
+                    Err(error) => self.error(error),
                 }
             }
             Event::Imported(result) => {
@@ -1729,32 +1793,48 @@ impl Controller {
                 ui.set_dialog_busy(false);
                 match result {
                     Ok(Some(imported)) => {
-                        self.say("配置已读取，请预览后应用。", "Configuration loaded; review before applying.");
+                        self.say(messages::status_configuration_loaded_review_before_applying());
                         ui.set_import_is_json(imported.config.is_some());
-                        ui.set_import_summary(imported.summary(ui.get_english()).into());
+                        ui.set_import_summary(imported.summary(self.locale()).into());
                         self.state.borrow_mut().imported = Some(imported);
                         ui.set_import_visible(true);
                         ui.invoke_focus_import_actions();
                     }
-                    Ok(None) => {}, Err(error) => self.error(error),
+                    Ok(None) => {}
+                    Err(error) => self.error(error),
                 }
             }
             Event::Exported(result) => {
                 self.state.borrow_mut().dialog_open = false;
                 ui.set_dialog_busy(false);
-                match result { Ok(Some(path)) => { self.say("配置已导出。", "Configuration exported."); ui.set_status_message(format!("{} {}", if ui.get_english() { "Exported:" } else { "已导出：" }, path.display()).into()); }, Ok(None) => {}, Err(error) => self.error(error) }
+                match result {
+                    Ok(Some(path)) => self.say(messages::config_exported(path.display())),
+                    Ok(None) => {}
+                    Err(error) => self.error(error),
+                }
             }
-            Event::LinkOpened(result) => { if let Err(error) = result { self.error(error); } }
+            Event::LinkOpened(result) => {
+                if let Err(error) = result {
+                    self.error(error);
+                }
+            }
             Event::SkillsLoaded(result) => self.receive_skills(result, false),
             Event::SkillsSubmitted(result) => self.receive_skills(result, true),
             Event::SkillFolderPicked(path) => self.import_skill_folder(path),
-            Event::ServerError(error) => self.error(format!("界面唤起服务失败 / UI activation service failed: {error}")),
+            Event::ServerError(error) => self.error(messages::activation_failed(error)),
             Event::Ready { reply } => {
-                let response = if self.state.borrow().exit_requested { Response::error("UI is closing") } else { Response::success("ready") };
+                let response = if self.state.borrow().exit_requested {
+                    Response::error("UI is closing")
+                } else {
+                    Response::success("ready")
+                };
                 let _ = reply.send(response);
             }
             Event::Show { page, reply } => {
-                let response = match self.show(page, true) { Ok(()) => Response::success("shown"), Err(error) => Response::error(error) };
+                let response = match self.show(page, true) {
+                    Ok(()) => Response::success("shown"),
+                    Err(error) => Response::error(error),
+                };
                 let _ = reply.send(response);
             }
         }
@@ -1843,7 +1923,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rendered_generation: 0,
             host_pid: 0,
             host_status: None,
-            last_error: String::new(),
+            last_error: UiText::default(),
+            status_text: None,
+            confirmation_text: None,
             skills: skills::SkillsUiState::default(),
         }),
     });
@@ -1925,6 +2007,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         EventResult::Propagate
     });
+    controller.sync_settings();
     controller.show(page, false)?;
     std::thread::Builder::new()
         .name("toolbox-ui-worker".into())
@@ -2008,7 +2091,9 @@ mod tests {
                     rendered_generation: 0,
                     host_pid: 0,
                     host_status: None,
-                    last_error: String::new(),
+                    last_error: UiText::default(),
+                    status_text: None,
+                    confirmation_text: None,
                     skills: skills::SkillsUiState::default(),
                 }),
             };
@@ -2019,6 +2104,129 @@ mod tests {
         })
         .join()
         .unwrap();
+    }
+
+    #[test]
+    fn bundled_translations_follow_preview_and_discard_on_both_surfaces() {
+        with_test_ui(|ui, controller, _| {
+            // This default is a compiled Slint @tr binding, not a Rust lookup.
+            assert_eq!(ui.get_status_message(), "正在连接…");
+            assert_eq!(controller.launcher().get_status_message(), "正在连接…");
+            controller.begin_edit(0);
+            ui.set_launch_args("[unfinished".into());
+            controller.profile_changed();
+
+            ui.set_setting_language(1);
+            controller.settings_changed();
+            assert_eq!(ui.get_status_message(), "Connecting…");
+            assert_eq!(controller.launcher().get_status_message(), "Connecting…");
+            assert_eq!(controller.state.borrow().config.language, "zh-CN");
+
+            controller.reset_settings();
+            assert_eq!(ui.get_confirm_title(), "Discard settings changes?");
+            controller.confirm(true);
+            assert_eq!(controller.locale(), Locale::ZhCn);
+            assert_eq!(ui.get_status_message(), "正在连接…");
+            assert_eq!(controller.launcher().get_status_message(), "正在连接…");
+            assert_eq!(ui.get_launch_args(), "[unfinished");
+            assert!(ui.get_profile_dirty());
+        });
+    }
+
+    #[test]
+    fn language_changes_rerender_existing_messages_projects_and_imports() {
+        with_test_ui(|ui, controller, receive| {
+            receive_project(controller, "project-{literal}");
+            ui.set_project_total(2);
+            controller.say(messages::config_exported(r"C:\backup\{literal}.json"));
+            ui.set_setting_language(1);
+            controller.settings_changed();
+            assert_eq!(ui.get_project_message(), "1 shown · 2 recent projects");
+            assert_eq!(
+                controller.launcher().get_project_message(),
+                ui.get_project_message()
+            );
+            assert_eq!(
+                ui.get_status_message(),
+                r"Exported: C:\backup\{literal}.json"
+            );
+            // Re-rendering translations must not dispatch a discovery or host request.
+            assert!(receive.try_recv().is_err());
+
+            controller.handle(Event::Imported(Ok(Some(ImportedConfig {
+                profiles: Vec::new(),
+                config: None,
+                warnings: Vec::new(),
+                filename: r"C:\backup\{literal}.json".into(),
+            }))));
+            assert!(ui.get_import_summary().contains("0 application profiles"));
+            ui.set_setting_language(0);
+            controller.settings_changed();
+            assert_eq!(ui.get_project_message(), "显示 1 项 · 共 2 个最近项目");
+            assert!(ui.get_import_summary().contains("共 0 个应用配置"));
+            assert!(
+                ui.get_import_summary()
+                    .contains(r"C:\backup\{literal}.json")
+            );
+            assert_eq!(ui.get_status_message(), "配置已读取，请预览后应用。");
+        });
+    }
+
+    #[test]
+    fn worker_messages_use_current_locale_and_external_errors_stay_verbatim() {
+        with_test_ui(|ui, controller, _| {
+            // Construct the result before switching, as a background worker does.
+            let event = Event::PathPicked {
+                kind: 0,
+                path: Err(messages::file_dialog_failed("portal {literal}").into()),
+            };
+            ui.set_setting_language(1);
+            controller.settings_changed();
+            controller.handle(event);
+            assert_eq!(
+                ui.get_status_message(),
+                "File dialog failed: portal {literal}"
+            );
+            assert!(ui.get_status_error());
+
+            ui.set_setting_language(0);
+            controller.settings_changed();
+            assert_eq!(ui.get_status_message(), "文件选择器失败：portal {literal}");
+            assert_eq!(ui.get_diagnostic_error(), ui.get_status_message());
+            assert!(ui.get_status_error());
+
+            controller.error("backend: {path} / OS error 42");
+            ui.set_setting_language(1);
+            controller.settings_changed();
+            assert_eq!(ui.get_status_message(), "backend: {path} / OS error 42");
+            assert_eq!(ui.get_diagnostic_error(), ui.get_status_message());
+            assert!(ui.get_status_error());
+        });
+    }
+
+    #[test]
+    fn skills_request_errors_survive_language_preview_until_a_successful_refresh() {
+        with_test_ui(|ui, controller, _| {
+            let skills = ui.global::<SkillsState>();
+            controller.receive_skills(Ok(Response::default()), false);
+            assert_eq!(skills.get_error_text(), "宿主未返回技能状态");
+            ui.set_setting_language(1);
+            controller.settings_changed();
+            assert_eq!(skills.get_error_text(), "Host returned no skills state");
+
+            controller.receive_skills(Err("backend {literal} / error".into()), false);
+            ui.set_setting_language(0);
+            controller.settings_changed();
+            assert_eq!(skills.get_error_text(), "backend {literal} / error");
+            controller.receive_skills(
+                Ok(Response {
+                    skills: Some(toolbox_core::skills::SkillsSnapshot::default()),
+                    ..Response::default()
+                }),
+                false,
+            );
+            assert_eq!(skills.get_error_text(), "");
+        });
     }
 
     #[test]
@@ -2381,7 +2589,7 @@ mod tests {
             controller.confirm(true);
             assert!(!ui.get_settings_dirty());
             assert!(ui.get_setting_windows());
-            assert!(!ui.get_english());
+            assert_eq!(controller.locale(), Locale::ZhCn);
             assert!(ui.get_profile_dirty());
             assert_eq!(ui.get_form_name(), "My terminal draft");
             assert_eq!(ui.get_launch_args(), "[");
@@ -3044,11 +3252,12 @@ mod tests {
 
     #[test]
     fn action_and_navigation_buttons_accept_the_first_pointer_click() {
-        with_test_ui(|ui, _, _| {
+        with_test_ui(|ui, controller, _| {
             use slint::platform::{PointerEventButton, WindowEvent};
             use std::cell::Cell;
 
-            ui.set_english(true);
+            ui.set_setting_language(1);
+            controller.settings_changed();
             ui.set_page(1);
             ui.window().set_size(slint::LogicalSize::new(1120.0, 780.0));
             ui.show().unwrap();

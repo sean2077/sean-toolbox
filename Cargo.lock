@@ -4434,12 +4434,21 @@ dependencies = [
  "serde_json",
  "tempfile",
  "toolbox-core",
+ "toolbox-i18n",
  "toolbox-ipc",
  "toolbox-skills",
  "toolbox-windows",
  "tray-icon",
  "windows-sys 0.61.2",
  "winit",
+]
+
+[[package]]
+name = "toolbox-i18n"
+version = "0.2.0"
+dependencies = [
+ "rspolib",
+ "tempfile",
 ]
 
 [[package]]
@@ -4492,6 +4501,7 @@ dependencies = [
  "slint-build",
  "tempfile",
  "toolbox-core",
+ "toolbox-i18n",
  "toolbox-ipc",
  "toolbox-projects",
  "windows-sys 0.61.2",

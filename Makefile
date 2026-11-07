@@ -15,7 +15,7 @@ DEBUG_HOST := target/debug/sean-toolbox$(EXE)
 RELEASE_HOST := target/release/sean-toolbox$(EXE)
 
 .DEFAULT_GOAL := help
-.PHONY: help fmt fmt-check clippy test check build build-release run run-release test-x11 smoke licenses package clean
+.PHONY: help fmt fmt-check clippy test check translations translations-check build build-release run run-release test-x11 smoke licenses package clean
 
 help: ## Show this help
 	@echo "Sean Toolbox development targets:"
@@ -25,6 +25,8 @@ help: ## Show this help
 	@echo "  make clippy         Run Clippy with warnings as errors"
 	@echo "  make test           Run workspace unit and contract tests"
 	@echo "  make check          fmt-check + clippy + test"
+	@echo "  make translations   Update translation templates and merge the Chinese catalog"
+	@echo "  make translations-check  Check catalog completeness and UI source drift"
 	@echo "  make build          Build debug host and UI binaries"
 	@echo "  make build-release  Build release host and UI binaries"
 	@echo "  make run            Build and run the debug host"
@@ -48,6 +50,12 @@ test: ## Run workspace unit and contract tests
 	$(CARGO) test --locked --workspace
 
 check: fmt-check clippy test ## Run the standard local gate
+
+translations: ## Extract Slint strings and merge translation resources
+	$(PYTHON) scripts/translations.py update
+
+translations-check: ## Verify translations and source-template consistency
+	$(PYTHON) scripts/translations.py check
 
 build: ## Build debug host and UI binaries
 	$(CARGO) build --locked -p toolbox-host -p toolbox-ui

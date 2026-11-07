@@ -1,5 +1,8 @@
 //! A blocking worker keeps SQLite, filesystem access, dialogs and IPC off the UI thread.
-use crate::model::{ImportedConfig, MAX_IMPORT_BYTES};
+use crate::{
+    i18n::UiText,
+    model::{ImportedConfig, MAX_IMPORT_BYTES},
+};
 use std::{
     fs::File,
     io::{Read, Write},
@@ -12,6 +15,7 @@ use std::{
     },
 };
 use toolbox_core::{Config, HostCommand, Response, UiPage, UiRequest, skills::SkillsCommand};
+use toolbox_i18n::messages;
 use toolbox_projects::ProjectItem;
 
 // rfd exposes Option for both cancel and backend errors. Preserve its actual
@@ -37,7 +41,7 @@ pub fn init_dialog_logging() {
         log::set_max_level(log::LevelFilter::Error);
     }
 }
-fn native_dialog<T>(show: impl FnOnce() -> Option<T>) -> Result<Option<T>, String> {
+fn native_dialog<T>(show: impl FnOnce() -> Option<T>) -> Result<Option<T>, UiText> {
     if let Ok(mut error) = DIALOG_ERROR.lock() {
         *error = None;
     }
@@ -45,7 +49,7 @@ fn native_dialog<T>(show: impl FnOnce() -> Option<T>) -> Result<Option<T>, Strin
     if result.is_none()
         && let Some(error) = DIALOG_ERROR.lock().ok().and_then(|mut error| error.take())
     {
-        return Err(format!("文件选择器失败 / File dialog failed: {error}"));
+        return Err(messages::file_dialog_failed(error).into());
     }
     Ok(result)
 }
@@ -112,19 +116,19 @@ pub enum Event {
         result: Result<Vec<ProjectItem>, String>,
         total: usize,
     },
-    Opened(Result<(), String>),
+    Opened(Result<(), UiText>),
     Toggled(Result<Response, String>),
     Status(Result<Response, String>),
     SkillsLoaded(Result<Response, String>),
     SkillsSubmitted(Result<Response, String>),
-    SkillFolderPicked(Result<Option<String>, String>),
+    SkillFolderPicked(Result<Option<String>, UiText>),
     PathPicked {
         kind: i32,
-        path: Result<Option<String>, String>,
+        path: Result<Option<String>, UiText>,
     },
-    Imported(Result<Option<ImportedConfig>, String>),
-    Exported(Result<Option<PathBuf>, String>),
-    LinkOpened(Result<(), String>),
+    Imported(Result<Option<ImportedConfig>, UiText>),
+    Exported(Result<Option<PathBuf>, UiText>),
+    LinkOpened(Result<(), UiText>),
     ServerError(String),
     Ready {
         reply: std::sync::mpsc::Sender<Response>,
@@ -222,11 +226,10 @@ pub fn run(receiver: Receiver<Work>, latest_query: Arc<AtomicU64>) {
                 let result = projects
                     .iter()
                     .find(|item| item.id == id)
-                    .ok_or_else(|| {
-                        "项目列表已变化，请刷新 / Project list changed; refresh and retry"
-                            .to_owned()
-                    })
-                    .and_then(|item| toolbox_projects::open(item, code_path.as_deref()));
+                    .ok_or_else(|| UiText::from(messages::project_list_changed()))
+                    .and_then(|item| {
+                        toolbox_projects::open(item, code_path.as_deref()).map_err(UiText::from)
+                    });
                 Event::Opened(result)
             }
             Work::Toggle(id) => {
@@ -253,9 +256,9 @@ pub fn run(receiver: Receiver<Work>, latest_query: Arc<AtomicU64>) {
                     let path = selected.and_then(|selected| {
                         selected
                             .map(|p| {
-                                p.into_os_string().into_string().map_err(|_| {
-                                    "路径不是有效的 Unicode / Path is not valid Unicode".to_owned()
-                                })
+                                p.into_os_string()
+                                    .into_string()
+                                    .map_err(|_| UiText::from(messages::path_invalid_unicode()))
                             })
                             .transpose()
                     });
@@ -266,9 +269,9 @@ pub fn run(receiver: Receiver<Work>, latest_query: Arc<AtomicU64>) {
                 DialogKind::SkillImport => Event::SkillFolderPicked(
                     native_dialog(|| dialog.pick_folder()).and_then(|path| {
                         path.map(|path| {
-                            path.into_os_string().into_string().map_err(|_| {
-                                "路径不是有效的 Unicode / Path is not valid Unicode".to_owned()
-                            })
+                            path.into_os_string()
+                                .into_string()
+                                .map_err(|_| UiText::from(messages::path_invalid_unicode()))
                         })
                         .transpose()
                     }),
@@ -281,7 +284,7 @@ pub fn run(receiver: Receiver<Work>, latest_query: Arc<AtomicU64>) {
     }
 }
 
-fn import_file(dialog: rfd::FileDialog) -> Result<Option<ImportedConfig>, String> {
+fn import_file(dialog: rfd::FileDialog) -> Result<Option<ImportedConfig>, UiText> {
     let Some(path) = native_dialog(|| {
         dialog
             .add_filter("Toolbox / WinGuake", &["json", "ini"])
@@ -297,10 +300,9 @@ fn import_file(dialog: rfd::FileDialog) -> Result<Option<ImportedConfig>, String
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
     if bytes.len() > MAX_IMPORT_BYTES {
-        return Err("配置文件超过 1 MiB / Configuration exceeds 1 MiB".into());
+        return Err(messages::config_too_large().into());
     }
-    let text = String::from_utf8(bytes)
-        .map_err(|_| "请将配置文件保存为 UTF-8 / Save the configuration as UTF-8".to_owned())?;
+    let text = String::from_utf8(bytes).map_err(|_| messages::config_invalid_encoding())?;
     ImportedConfig::parse(
         &text,
         path.file_name()
@@ -311,12 +313,12 @@ fn import_file(dialog: rfd::FileDialog) -> Result<Option<ImportedConfig>, String
     .map(Some)
 }
 
-fn export_file(dialog: rfd::FileDialog) -> Result<Option<PathBuf>, String> {
+fn export_file(dialog: rfd::FileDialog) -> Result<Option<PathBuf>, UiText> {
     // Ask the host again so an export never silently contains a stale UI draft.
     let response = toolbox_ipc::call(HostCommand::GetConfig).and_then(successful)?;
     let config = response
         .config
-        .ok_or_else(|| "Host returned no configuration".to_owned())?;
+        .ok_or_else(messages::error_host_returned_no_configuration)?;
     let Some(path) = native_dialog(|| {
         dialog
             .add_filter("JSON", &["json"])
@@ -328,7 +330,7 @@ fn export_file(dialog: rfd::FileDialog) -> Result<Option<PathBuf>, String> {
     };
     let parent = path
         .parent()
-        .ok_or_else(|| "Invalid export directory".to_owned())?;
+        .ok_or_else(messages::invalid_export_directory)?;
     let mut file = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
     serde_json::to_writer_pretty(&mut file, &config).map_err(|e| e.to_string())?;
     file.write_all(b"\n").map_err(|e| e.to_string())?;
@@ -337,7 +339,7 @@ fn export_file(dialog: rfd::FileDialog) -> Result<Option<PathBuf>, String> {
     Ok(Some(path))
 }
 
-fn open_link(index: i32) -> Result<(), String> {
+fn open_link(index: i32) -> Result<(), UiText> {
     let url = if index == 1 {
         "https://slint.dev"
     } else {
@@ -346,13 +348,13 @@ fn open_link(index: i32) -> Result<(), String> {
     open_with_system(url.as_ref())
 }
 
-fn open_target(target: &str) -> Result<(), String> {
+fn open_target(target: &str) -> Result<(), UiText> {
     if target.starts_with("https://") {
         return open_with_system(target.as_ref());
     }
     let path = std::path::Path::new(target);
     if !path.is_absolute() || !path.is_dir() {
-        return Err(format!("目录不存在 / Folder not found: {target}"));
+        return Err(messages::folder_not_found(target).into());
     }
     #[cfg(windows)]
     {
@@ -367,13 +369,13 @@ fn open_target(target: &str) -> Result<(), String> {
             .stderr(Stdio::null())
             .spawn()
             .map(|_| ())
-            .map_err(|e| e.to_string())
+            .map_err(|e| UiText::from(e.to_string()))
     }
     #[cfg(not(windows))]
     open_with_system(path.as_os_str())
 }
 
-fn open_with_system(target: &std::ffi::OsStr) -> Result<(), String> {
+fn open_with_system(target: &std::ffi::OsStr) -> Result<(), UiText> {
     #[cfg(windows)]
     let mut command = {
         use std::os::windows::process::CommandExt;
@@ -397,7 +399,7 @@ fn open_with_system(target: &std::ffi::OsStr) -> Result<(), String> {
     if status.success() {
         Ok(())
     } else {
-        Err(format!("打开失败 / Open failed: {status}"))
+        Err(messages::open_failed(status).into())
     }
 }
 

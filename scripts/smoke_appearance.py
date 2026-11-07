@@ -29,6 +29,16 @@ from typing import Any
 from smoke_host import Desktop, SmokeFailure, become_child_subreaper, process_info, request, require, wait_for
 
 
+# xdotool search can expose legacy WM_NAME UTF-8 as Latin-1. Match the
+# invariant ASCII prefix and trailing space (excluding the manager), then verify
+# the exact localized UTF-8 title when opening the panel.
+LAUNCHER_TITLE_PATTERN = r"^Sean Toolbox "
+LAUNCHER_TITLES = {
+    "en": "Sean Toolbox · Recent Projects",
+    "zh-CN": "Sean Toolbox · 最近项目",
+}
+
+
 class X11FocusEvent(ctypes.Structure):
     _fields_ = [("type", ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int),
                 ("display", ctypes.c_void_p), ("window", ctypes.c_ulong),
@@ -244,10 +254,12 @@ class AppearanceDesktop(Desktop):
 
     def popup(self, dark: bool) -> int:
         self.key("ctrl+alt+space")
-        # xdotool search reads legacy WM_NAME, whose UTF-8 middle dot can be
-        # exposed as Latin-1. Match ASCII here and verify the UTF-8 title below.
-        window = wait_for("recent-project panel", lambda: self.visible("^Sean Toolbox.*Recent Projects$"))[0]
-        require(self.command("xdotool", "getwindowname", str(window)).stdout.strip() == "Sean Toolbox · Recent Projects", "Global shortcut opened the wrong native surface")
+        window = wait_for("recent-project panel", lambda: self.visible(LAUNCHER_TITLE_PATTERN))[0]
+        expected_title = LAUNCHER_TITLES[self.saved()["language"]]
+        # A cold UI loads the saved language asynchronously after creation.
+        wait_for("localized project panel title", lambda: self.command(
+            "xdotool", "getwindowname", str(window)
+        ).stdout.strip() == expected_title)
         wait_for("project panel focus", lambda: self.active() == window)
         self.wait_theme(dark, window)
         self.wait_popup_geometry(window)
@@ -255,7 +267,7 @@ class AppearanceDesktop(Desktop):
 
     def dismiss_popup(self, window: int) -> None:
         self.key("Escape")
-        wait_for("panel dismissed", lambda: window not in self.visible("^Sean Toolbox.*Recent Projects$"))
+        wait_for("panel dismissed", lambda: window not in self.visible(LAUNCHER_TITLE_PATTERN))
         require(self.ui_children() == [self.ui_pid], "Dismissing a panel exited the visible manager")
         require(self.manager in self.visible("^Sean Toolbox$"), "Dismissing a panel hid the manager")
         self.activate(self.manager)
@@ -293,7 +305,7 @@ class AppearanceDesktop(Desktop):
 
         self.key("ctrl+alt+space")
         current, endpoint = self.track_ui()
-        popup = wait_for("cold project panel", lambda: self.visible("^Sean Toolbox.*Recent Projects$"))[0]
+        popup = wait_for("cold project panel", lambda: self.visible(LAUNCHER_TITLE_PATTERN))[0]
         wait_for("cold project panel acquires focus", lambda: self.active() == popup)
         self.wait_theme(dark, popup)
         self.wait_popup_geometry(popup)
@@ -306,13 +318,13 @@ class AppearanceDesktop(Desktop):
         external_window = int(external.splitlines()[0])
         self.activate(external_window)
         try:
-            wait_for("automatic blur dismissal", lambda: popup not in self.visible("^Sean Toolbox.*Recent Projects$"))
+            wait_for("automatic blur dismissal", lambda: popup not in self.visible(LAUNCHER_TITLE_PATTERN))
         except SmokeFailure as error:
             raise SmokeFailure(f"{error}; input_focus={self.probe.input_focus()}, active_window={self.active()}, "
                                f"popup={popup}, native_events={self.probe.window_events()}") from error
         require(self.ui_children() == [current], "Automatic blur ignored the explicit warm-cache timeout")
         self.key("ctrl+alt+space")
-        wait_for("same panel reused from warm cache", lambda: popup in self.visible("^Sean Toolbox.*Recent Projects$") and self.active() == popup)
+        wait_for("same panel reused from warm cache", lambda: popup in self.visible(LAUNCHER_TITLE_PATTERN) and self.active() == popup)
         self.wait_popup_geometry(popup)
         require(self.ui_children() == [current], "Warm activation replaced the retained UI process")
         print("PASS automatic focus-loss dismissal preserves the configured warm cache and reuses the UI", flush=True)
@@ -325,7 +337,7 @@ class AppearanceDesktop(Desktop):
         self.key("ctrl+alt+space")
         reopened, endpoint = self.track_ui()
         require(reopened != current, "Explicit panel dismissal kept the old UI PID")
-        popup = wait_for("reopened project panel", lambda: self.visible("^Sean Toolbox.*Recent Projects$"))[0]
+        popup = wait_for("reopened project panel", lambda: self.visible(LAUNCHER_TITLE_PATTERN))[0]
         self.activate(popup)
         self.wait_popup_geometry(popup)
         self.key("alt+F4")
@@ -345,7 +357,7 @@ class AppearanceDesktop(Desktop):
             self.key("Escape")
             self.command(str(self.binary), "show", "projects")
             wait_for(f"rapid reopen {index + 1}", self.ready_popup)
-            self.wait_popup_geometry(self.visible("^Sean Toolbox.*Recent Projects$")[0])
+            self.wait_popup_geometry(self.visible(LAUNCHER_TITLE_PATTERN)[0])
             warnings = self.rpc("status")["status"]["warnings"]
             require(not any(warning.startswith("UI:") for warning in warnings), f"Rapid reopen reported a UI failure: {warnings}")
         print("PASS eight immediate Escape → Show cycles keep one responsive UI process and panel", flush=True)
@@ -381,7 +393,7 @@ class AppearanceDesktop(Desktop):
             # grab can emit FocusOut without changing the actual input focus.
             deadline = time.monotonic() + 0.9
             while time.monotonic() < deadline:
-                require(popup in self.visible("^Sean Toolbox.*Recent Projects$"), "Holding the launcher shortcut dismissed its panel")
+                require(popup in self.visible(LAUNCHER_TITLE_PATTERN), "Holding the launcher shortcut dismissed its panel")
                 require(self.probe.input_focus() == popup, "Holding the launcher shortcut changed native input focus")
                 time.sleep(0.04)
         finally:
@@ -389,7 +401,7 @@ class AppearanceDesktop(Desktop):
         for _ in range(3):
             self.key("ctrl+alt+space")
             self.wait_popup_geometry(popup)
-            require(popup in self.visible("^Sean Toolbox.*Recent Projects$"), "Repeated launcher shortcut dismissed its panel")
+            require(popup in self.visible(LAUNCHER_TITLE_PATTERN), "Repeated launcher shortcut dismissed its panel")
         events = self.probe.window_events()
         require(not any(event["type"] == 18 for event in events), f"Shortcut grab unmapped and reopened the panel: {events}")
         print("PASS held/repeated global shortcuts preserve the focused panel without unmapping it", flush=True)
@@ -407,7 +419,7 @@ class AppearanceDesktop(Desktop):
             require(self.probe.input_focus() == external, "Delayed-WM fixture did not transfer native input focus")
             require(self.active() == popup, "Delayed-WM fixture did not preserve the old active-window property")
             try:
-                wait_for("blur dismissal with delayed WM active-window property", lambda: popup not in self.visible("^Sean Toolbox.*Recent Projects$"), timeout=3)
+                wait_for("blur dismissal with delayed WM active-window property", lambda: popup not in self.visible(LAUNCHER_TITLE_PATTERN), timeout=3)
             except SmokeFailure as error:
                 raise SmokeFailure(f"{error}; input_focus={self.probe.input_focus()}, active_window={self.active()}, "
                                    f"popup={popup}, native_events={self.probe.window_events()}") from error
@@ -415,7 +427,7 @@ class AppearanceDesktop(Desktop):
             os.kill(wm.pid, signal.SIGCONT)
         require(self.ui_children() == [current], "Delayed-WM dismissal ignored the configured warm cache")
         self.key("ctrl+alt+space")
-        wait_for("same panel reopened after delayed WM dismissal", lambda: popup in self.visible("^Sean Toolbox.*Recent Projects$") and self.active() == popup)
+        wait_for("same panel reopened after delayed WM dismissal", lambda: popup in self.visible(LAUNCHER_TITLE_PATTERN) and self.active() == popup)
         self.wait_popup_geometry(popup)
         require(self.ui_children() == [current], "Delayed-WM recovery replaced the retained UI process")
         print("PASS real input-focus loss dismisses the panel even while WM active-window metadata is stale", flush=True)
@@ -432,7 +444,7 @@ class AppearanceDesktop(Desktop):
             reply = request(endpoint, {"page": "projects", "readiness_only": True})
         except (OSError, ValueError, SmokeFailure):
             return False
-        windows = self.visible("^Sean Toolbox.*Recent Projects$")
+        windows = self.visible(LAUNCHER_TITLE_PATTERN)
         require(len(windows) <= 1, f"Multiple visible project panels: {windows}")
         return bool(reply.get("ok") and windows and self.active() == windows[0])
 
