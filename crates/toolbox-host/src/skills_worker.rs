@@ -424,6 +424,8 @@ mod tests {
                 apps: Vec::new(),
                 updated_at: 0,
                 last_error: None,
+                linked: false,
+                target: None,
             }],
             ..SkillsSnapshot::default()
         };

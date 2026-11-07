@@ -132,6 +132,64 @@ pub fn exists(path: &Path) -> Result<bool, String> {
     }
 }
 
+/// Return the raw link target when `path` is a symlink or reparse point.
+pub fn link_target(path: &Path) -> Result<Option<PathBuf>, String> {
+    let metadata = fs::symlink_metadata(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut link = metadata.file_type().is_symlink();
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        link |= metadata.file_attributes() & 0x400 != 0;
+    }
+    #[cfg(not(windows))]
+    let _ = &mut link;
+    if link {
+        fs::read_link(path)
+            .map(Some)
+            .map_err(|e| format!("{}: {e}", path.display()))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Create a directory symlink. Windows requires Developer Mode or the
+/// SeCreateSymbolicLinkPrivilege.
+pub fn link_dir(target: &Path, link: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    let result = std::os::unix::fs::symlink(target, link);
+    #[cfg(windows)]
+    let result = std::os::windows::fs::symlink_dir(target, link);
+    result.map_err(|error| {
+        format!(
+            "Cannot create link {} -> {}: {error} (on Windows, enable Developer Mode or grant symlink permission)",
+            link.display(),
+            target.display()
+        )
+    })
+}
+
+pub fn remove_link(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    let result = fs::remove_file(path);
+    #[cfg(windows)]
+    let result = fs::remove_dir(path);
+    result.map_err(|e| format!("Cannot remove link {}: {e}", path.display()))
+}
+
+/// True when `path` is a link that resolves to `target`.
+pub fn links_to(path: &Path, target: &Path) -> Result<bool, String> {
+    if link_target(path)?.is_none() {
+        return Ok(false);
+    }
+    let actual = path
+        .canonicalize()
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let target = target
+        .canonicalize()
+        .map_err(|e| format!("{}: {e}", target.display()))?;
+    Ok(actual == target)
+}
+
 pub fn sorted_entries(path: &Path) -> Result<Vec<fs::DirEntry>, String> {
     let mut entries = fs::read_dir(path)
         .map_err(|e| format!("{}: {e}", path.display()))?

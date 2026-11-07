@@ -71,6 +71,12 @@ pub struct InstalledSkill {
     pub apps: Vec<SkillApp>,
     pub updated_at: u64,
     pub last_error: Option<String>,
+    /// A local source deployed as symbolic links instead of a private copy.
+    #[serde(default)]
+    pub linked: bool,
+    /// Canonical source of a linked skill; display paths may be normalized.
+    #[serde(default)]
+    pub target: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,6 +86,13 @@ pub struct LocalSkill {
     pub name: String,
     pub description: String,
     pub app: Option<SkillApp>,
+    /// The app folder is a symlink/reparse point. It can be imported as a
+    /// linked skill or, when copying, its real target is copied.
+    #[serde(default)]
+    pub linked: bool,
+    /// Canonical target of a linked folder, when it can be resolved.
+    #[serde(default)]
+    pub target: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,6 +135,9 @@ pub enum SkillsCommand {
     ImportLocal {
         path: String,
         apps: Vec<SkillApp>,
+        /// Keep the source and deploy app symlinks instead of copying a master.
+        #[serde(default)]
+        link: bool,
     },
     ScanLocal,
     SetEnabled {

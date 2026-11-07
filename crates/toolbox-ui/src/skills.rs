@@ -124,11 +124,15 @@ fn filtered_rows(
             .installed
             .iter()
             .map(|skill| {
-                let source = skill
-                    .repository_id
-                    .as_deref()
-                    .map(|id| repository_label(snapshot, id))
-                    .unwrap_or_else(|| local.into());
+                let source = if skill.linked {
+                    if english { "Linked" } else { "链接" }.to_owned()
+                } else {
+                    skill
+                        .repository_id
+                        .as_deref()
+                        .map(|id| repository_label(snapshot, id))
+                        .unwrap_or_else(|| local.into())
+                };
                 let apps = skill
                     .apps
                     .iter()
@@ -151,6 +155,7 @@ fn filtered_rows(
                     detail: format!("{source} · {apps}").into(),
                     installed: true,
                     problem: skill.last_error.is_some(),
+                    linked: skill.linked,
                 }
             })
             .collect::<Vec<_>>(),
@@ -169,18 +174,31 @@ fn filtered_rows(
                 .into(),
                 installed: skill.installed || directory_is_managed(snapshot, &skill.directory),
                 problem: false,
+                linked: false,
             })
             .collect(),
         2 => snapshot
             .local
             .iter()
-            .map(|skill| SkillListRow {
-                id: skill.path.clone().into(),
-                name: skill.name.clone().into(),
-                description: skill.description.clone().into(),
-                detail: skill.path.clone().into(),
-                installed: directory_is_managed(snapshot, &skill.directory),
-                problem: false,
+            .map(|skill| {
+                let app = skill.app.map(SkillApp::label).unwrap_or(if english {
+                    "Shared"
+                } else {
+                    "共享"
+                });
+                let detail = match (&skill.target, skill.linked) {
+                    (Some(target), true) => format!("{app} · {} → {target}", skill.path),
+                    _ => format!("{app} · {}", skill.path),
+                };
+                SkillListRow {
+                    id: skill.path.clone().into(),
+                    name: skill.name.clone().into(),
+                    description: skill.description.clone().into(),
+                    detail: detail.into(),
+                    installed: directory_is_managed(snapshot, &skill.directory),
+                    problem: false,
+                    linked: skill.linked,
+                }
             })
             .collect(),
         _ => Vec::new(),
@@ -408,6 +426,7 @@ impl Controller {
         );
         skills.set_selected_source(selected.map(|row| row.detail.clone()).unwrap_or_default());
         skills.set_selected_installed(selected.is_some_and(|row| row.installed));
+        skills.set_selected_linked(selected.is_some_and(|row| row.linked));
         skills.set_selected_detail("".into());
         skills.set_selected_error("".into());
         skills.set_selected_updatable(false);
@@ -426,15 +445,30 @@ impl Controller {
                 .map(|revision| revision.chars().take(12).collect::<String>())
                 .unwrap_or_else(|| "—".into());
             let updated = relative_time(installed.updated_at, now_seconds(), english);
+            let link = if installed.linked {
+                installed
+                    .target
+                    .as_deref()
+                    .map(|target| {
+                        if english {
+                            format!("\nLink: {target}")
+                        } else {
+                            format!("\n链接：{target}")
+                        }
+                    })
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
             skills.set_selected_detail(
                 if english {
                     format!(
-                        "Directory: {}\nRevision: {revision}\nUpdated: {updated}",
+                        "Directory: {}\nRevision: {revision}\nUpdated: {updated}{link}",
                         installed.directory
                     )
                 } else {
                     format!(
-                        "目录：{}\n修订：{revision}\n更新：{updated}",
+                        "目录：{}\n修订：{revision}\n更新：{updated}{link}",
                         installed.directory
                     )
                 }
@@ -582,7 +616,11 @@ impl Controller {
                 candidate_id: id,
                 apps,
             },
-            2 => SkillsCommand::ImportLocal { path: id, apps },
+            2 => SkillsCommand::ImportLocal {
+                path: id,
+                apps,
+                link: skills.get_link_import(),
+            },
             _ => return,
         };
         self.submit_skills(command);
@@ -609,8 +647,8 @@ impl Controller {
             ConfirmAction::UninstallSkill(skills.get_selected_id().to_string()),
             "卸载所选技能？",
             "Uninstall the selected skill?",
-            "将移除管理副本及由工具箱启用的副本。若检测到本地修改，操作会停止并报告。",
-            "Remove the managed copy and deployments owned by the toolbox. Local edits stop the operation and are reported.",
+            "将移除工具箱管理的副本或链接；链接的源目录会保留。若检测到本地修改或链接被替换，操作会停止并报告。",
+            "Remove the managed copy or tool-owned links. The linked source folder is kept. Local edits or replaced links stop the operation and are reported.",
         );
     }
 
@@ -620,9 +658,11 @@ impl Controller {
         match path {
             Ok(Some(path)) => {
                 self.skills_view(0);
+                let link = self.ui().global::<SkillsState>().get_link_import();
                 self.submit_skills(SkillsCommand::ImportLocal {
                     path,
                     apps: Vec::new(),
+                    link,
                 });
             }
             Ok(None) => {}
@@ -717,6 +757,27 @@ mod tests {
     }
 
     #[test]
+    fn linked_local_folders_show_their_target_in_the_list() {
+        use toolbox_core::skills::LocalSkill;
+        let snapshot = SkillsSnapshot {
+            local: vec![LocalSkill {
+                path: "/home/.claude/skills/ob".into(),
+                directory: "ob".into(),
+                name: "ob".into(),
+                description: String::new(),
+                app: Some(SkillApp::Claude),
+                linked: true,
+                target: Some("/vault/ob".into()),
+            }],
+            ..SkillsSnapshot::default()
+        };
+        let rows = filtered_rows(&snapshot, 2, "", true);
+        assert!(rows[0].linked);
+        assert!(rows[0].detail.contains("→ /vault/ob"));
+        assert!(!rows[0].installed);
+    }
+
+    #[test]
     fn shadowed_directory_names_are_not_offered_for_import_or_install() {
         use toolbox_core::skills::{InstalledSkill, LocalSkill, SkillCandidate};
         let snapshot = SkillsSnapshot {
@@ -731,6 +792,8 @@ mod tests {
                 apps: Vec::new(),
                 updated_at: 0,
                 last_error: None,
+                linked: false,
+                target: None,
             }],
             available: vec![SkillCandidate {
                 id: "other:alpha".into(),
@@ -747,6 +810,8 @@ mod tests {
                 name: "Alpha".into(),
                 description: String::new(),
                 app: None,
+                linked: false,
+                target: None,
             }],
             ..SkillsSnapshot::default()
         };

@@ -190,7 +190,13 @@ impl SkillsService {
                 .state
                 .installed
                 .iter()
-                .map(|entry| entry.skill.clone())
+                .map(|entry| {
+                    let mut skill = entry.skill.clone();
+                    if let Some(target) = &skill.target {
+                        skill.target = Some(display_path(Path::new(target)));
+                    }
+                    skill
+                })
                 .collect(),
             available: self
                 .available
@@ -273,7 +279,9 @@ impl SkillsService {
             SkillsCommand::RemoveRepository { id } => self.remove_repository(&id),
             SkillsCommand::Discover => self.discover(),
             SkillsCommand::Install { candidate_id, apps } => self.install(&candidate_id, apps, now),
-            SkillsCommand::ImportLocal { path, apps } => self.import_local(&path, apps, now),
+            SkillsCommand::ImportLocal { path, apps, link } => {
+                self.import_local(&path, apps, link, now)
+            }
             SkillsCommand::ScanLocal => self.scan_local(),
             SkillsCommand::SetEnabled {
                 skill_id,
@@ -435,10 +443,29 @@ fn validate_state(state: &State) -> Result<(), String> {
         {
             return Err("Invalid or duplicate installed skill directory".into());
         }
-        if entry.fingerprint.len() != 64
-            || !entry.fingerprint.bytes().all(|c| c.is_ascii_hexdigit())
-        {
-            return Err("Invalid installed skill fingerprint".into());
+        if skill.linked {
+            if skill.repository_id.is_some() || skill.source_path.is_some() {
+                return Err("Linked skill cannot have a repository source".into());
+            }
+            let target = skill
+                .target
+                .as_deref()
+                .ok_or("Missing linked skill source")?;
+            if !Path::new(target).is_absolute() || Path::new(target).file_name().is_none() {
+                return Err("Invalid linked skill source".into());
+            }
+            if !entry.fingerprint.is_empty() {
+                return Err("Linked skill cannot have a copy fingerprint".into());
+            }
+        } else {
+            if skill.target.is_some() {
+                return Err("Copied skill cannot have a link source".into());
+            }
+            if entry.fingerprint.len() != 64
+                || !entry.fingerprint.bytes().all(|c| c.is_ascii_hexdigit())
+            {
+                return Err("Invalid installed skill fingerprint".into());
+            }
         }
         if skill.apps.iter().collect::<HashSet<_>>().len() != skill.apps.len() {
             return Err("Duplicate skill app".into());
@@ -710,6 +737,8 @@ impl SkillsService {
             apps,
             updated_at: now,
             last_error: None,
+            linked: false,
+            target: None,
         };
         self.install_source(&source, skill)?;
         Ok("Skill installed; app copies are managed by Sean Toolbox".into())
@@ -719,16 +748,24 @@ impl SkillsService {
         &mut self,
         path: &str,
         apps: Vec<SkillApp>,
+        link: bool,
         now: u64,
     ) -> Result<String, String> {
-        let path = PathBuf::from(path);
-        if !path.is_absolute() {
+        let input = PathBuf::from(path);
+        if !input.is_absolute() {
             return Err("Choose an absolute local skill directory".into());
         }
-        if !files::metadata(&path)?.is_dir() {
+        // Resolve links once: a linked app folder can be imported as a copy of
+        // its target or as a link to it, but never as an ambiguous hybrid.
+        let source = input
+            .canonicalize()
+            .map_err(|e| format!("Cannot resolve the local skill path: {e}"))?;
+        if !fs::metadata(&source)
+            .map_err(|e| format!("{}: {e}", source.display()))?
+            .is_dir()
+        {
             return Err("Choose a folder containing SKILL.md".into());
         }
-        let source = path.canonicalize().map_err(|e| e.to_string())?;
         if source.starts_with(&self.root) {
             return Err("This folder already belongs to the skills manager".into());
         }
@@ -750,10 +787,87 @@ impl SkillsService {
             apps,
             updated_at: now,
             last_error: None,
+            linked: link,
+            target: link.then(|| source.to_string_lossy().into_owned()),
         };
-        self.install_source(&source, skill)?;
-        self.local.retain(|skill| Path::new(&skill.path) != source);
-        Ok("Imported a local master copy; local imports have no remote update source".into())
+        if link {
+            self.install_link(&source, skill)?;
+        } else {
+            self.install_source(&source, skill)?;
+        }
+        self.local.retain(|skill| {
+            let local = Path::new(&skill.path);
+            local != input
+                && local
+                    .canonicalize()
+                    .map(|path| path != source)
+                    .unwrap_or(true)
+        });
+        Ok(if link {
+            "Imported a linked local skill; source changes apply immediately and it has no remote update source"
+        } else {
+            "Imported a local master copy; local imports have no remote update source"
+        }
+        .into())
+    }
+
+    fn install_link(&mut self, source: &Path, mut skill: InstalledSkill) -> Result<(), String> {
+        if self.state.installed.len() >= MAX_SKILLS {
+            return Err("At most 250 skills can be managed".into());
+        }
+        files::name(&skill.directory)?;
+        if skill.directory.starts_with('.') {
+            return Err("Skill directory names cannot start with a dot".into());
+        }
+        if self
+            .state
+            .installed
+            .iter()
+            .any(|entry| entry.skill.directory.to_lowercase() == skill.directory.to_lowercase())
+        {
+            return Err("A skill with this directory name is already installed; names must be unique across sources".into());
+        }
+        skill.apps.sort();
+        skill.apps.dedup();
+        let mut created = Vec::new();
+        let result = (|| {
+            for app in &skill.apps {
+                let destination = self.target(*app, &skill.directory, true)?;
+                if destination.starts_with(source) {
+                    return Err("The app link cannot be created inside its own source".into());
+                }
+                match fs::symlink_metadata(&destination) {
+                    Ok(_) => {
+                        if files::link_target(&destination)?.is_none()
+                            || !files::links_to(&destination, source)?
+                        {
+                            return Err(format!(
+                                "An unmanaged folder or a different link already exists: {}",
+                                destination.display()
+                            ));
+                        }
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        files::link_dir(source, &destination)?;
+                        created.push(destination);
+                    }
+                    Err(error) => return Err(format!("{}: {error}", destination.display())),
+                }
+            }
+            let mut next = self.state.clone();
+            next.installed.push(ManagedSkill {
+                skill,
+                fingerprint: String::new(),
+            });
+            self.save(next)
+        })();
+        if let Err(error) = result {
+            for destination in created {
+                let _ = files::remove_link(&destination);
+            }
+            return Err(error);
+        }
+        Ok(())
     }
 
     fn stage_source(&self, source: &Path) -> Result<(tempfile::TempDir, String), String> {
@@ -814,7 +928,41 @@ impl SkillsService {
             .ok_or_else(|| "Unknown installed skill".into())
     }
 
+    fn linked_source(&self, entry: &ManagedSkill) -> Result<PathBuf, String> {
+        let target = entry
+            .skill
+            .target
+            .as_deref()
+            .ok_or("Linked skill has no source directory")?;
+        let source = PathBuf::from(target);
+        if !source.is_dir() {
+            return Err(format!(
+                "The linked source is missing: {}",
+                source.display()
+            ));
+        }
+        Ok(source)
+    }
+
     fn verify_owned(&self, entry: &ManagedSkill) -> Result<(), String> {
+        if entry.skill.linked {
+            let source = self.linked_source(entry)?;
+            for app in &entry.skill.apps {
+                let root = self.app_root(*app);
+                files::checked_path(&self.home, &root, false)?;
+                let destination = root.join(&entry.skill.directory);
+                if fs::symlink_metadata(&destination).is_ok()
+                    && (files::link_target(&destination)?.is_none()
+                        || !files::links_to(&destination, &source)?)
+                {
+                    return Err(format!(
+                        "The app link was replaced; move or restore it before retrying: {}",
+                        destination.display()
+                    ));
+                }
+            }
+            return Ok(());
+        }
         let central = self.root.join("managed").join(&entry.skill.directory);
         let mut destinations = vec![central];
         for app in &entry.skill.apps {
@@ -838,6 +986,9 @@ impl SkillsService {
     fn set_enabled(&mut self, id: &str, app: SkillApp, enabled: bool) -> Result<String, String> {
         let index = self.installed_index(id)?;
         let entry = self.state.installed[index].clone();
+        if entry.skill.linked {
+            return self.set_link_enabled(index, entry, app, enabled);
+        }
         self.verify_owned(&entry)?;
         if !enabled && !entry.skill.apps.contains(&app) {
             return Ok("Skill is already disabled for this app".into());
@@ -882,9 +1033,86 @@ impl SkillsService {
         ))
     }
 
+    fn set_link_enabled(
+        &mut self,
+        index: usize,
+        entry: ManagedSkill,
+        app: SkillApp,
+        enabled: bool,
+    ) -> Result<String, String> {
+        let source = self.linked_source(&entry)?;
+        self.verify_owned(&entry)?;
+        if !enabled && !entry.skill.apps.contains(&app) {
+            return Ok("Skill is already disabled for this app".into());
+        }
+        let destination = self.target(app, &entry.skill.directory, enabled)?;
+        let mut created = false;
+        if enabled {
+            match fs::symlink_metadata(&destination) {
+                Ok(_) => {
+                    if files::link_target(&destination)?.is_none()
+                        || !files::links_to(&destination, &source)?
+                    {
+                        return Err(format!(
+                            "An unmanaged folder or a different link already exists: {}",
+                            destination.display()
+                        ));
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    files::link_dir(&source, &destination)?;
+                    created = true;
+                }
+                Err(error) => return Err(format!("{}: {error}", destination.display())),
+            }
+        } else {
+            match fs::symlink_metadata(&destination) {
+                Ok(_) => {
+                    if files::link_target(&destination)?.is_none()
+                        || !files::links_to(&destination, &source)?
+                    {
+                        return Err(format!(
+                            "The app link was replaced; restore it before disabling: {}",
+                            destination.display()
+                        ));
+                    }
+                    files::remove_link(&destination)?;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(format!("{}: {error}", destination.display())),
+            }
+        }
+        let mut next = self.state.clone();
+        next.installed[index]
+            .skill
+            .apps
+            .retain(|current| *current != app);
+        if enabled {
+            next.installed[index].skill.apps.push(app);
+            next.installed[index].skill.apps.sort();
+        }
+        next.installed[index].skill.last_error = None;
+        if let Err(error) = self.save(next) {
+            if enabled && created {
+                let _ = files::remove_link(&destination);
+            } else if !enabled {
+                let _ = files::link_dir(&source, &destination);
+            }
+            return Err(error);
+        }
+        Ok(format!(
+            "{} link {}",
+            app.label(),
+            if enabled { "created" } else { "removed" }
+        ))
+    }
+
     fn uninstall(&mut self, id: &str) -> Result<String, String> {
         let index = self.installed_index(id)?;
         let entry = self.state.installed[index].clone();
+        if entry.skill.linked {
+            return self.uninstall_link(index, entry);
+        }
         self.verify_owned(&entry)?;
         let mut changes = vec![Change {
             destination: self.root.join("managed").join(&entry.skill.directory),
@@ -909,6 +1137,40 @@ impl SkillsService {
         next.installed.remove(index);
         self.commit(next, changes)?;
         Ok("Skill uninstalled; unrelated folders were left untouched".into())
+    }
+
+    fn uninstall_link(&mut self, index: usize, entry: ManagedSkill) -> Result<String, String> {
+        let source = self.linked_source(&entry)?;
+        self.verify_owned(&entry)?;
+        let mut removed = Vec::new();
+        for app in &entry.skill.apps {
+            let destination = self.target(*app, &entry.skill.directory, false)?;
+            match fs::symlink_metadata(&destination) {
+                Ok(_) => {
+                    if files::link_target(&destination)?.is_none()
+                        || !files::links_to(&destination, &source)?
+                    {
+                        return Err(format!(
+                            "The app link was replaced; move or restore it before uninstalling: {}",
+                            destination.display()
+                        ));
+                    }
+                    files::remove_link(&destination)?;
+                    removed.push(destination);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(format!("{}: {error}", destination.display())),
+            }
+        }
+        let mut next = self.state.clone();
+        next.installed.remove(index);
+        if let Err(error) = self.save(next) {
+            for destination in removed {
+                let _ = files::link_dir(&source, &destination);
+            }
+            return Err(error);
+        }
+        Ok("Linked skill uninstalled; the source folder was left untouched".into())
     }
 
     fn scan_local(&mut self) -> Result<String, String> {
@@ -956,18 +1218,43 @@ impl SkillsService {
                     continue;
                 }
                 let path = entry.path();
-                if !files::metadata(&path).is_ok_and(|meta| meta.is_dir())
-                    || !path.join("SKILL.md").exists()
-                {
+                let (is_dir, linked) = match files::metadata(&path) {
+                    Ok(meta) => (meta.is_dir(), false),
+                    // A symlink/reparse entry is listed read-only; it is never
+                    // followed for import or deployment.
+                    Err(_) => match fs::metadata(&path) {
+                        Ok(meta) if meta.is_dir() => (true, true),
+                        _ => (false, false),
+                    },
+                };
+                if !is_dir || !path.join("SKILL.md").exists() {
                     continue;
                 }
-                if app.is_some_and(|app| {
+                if linked {
+                    // A link for a directory that is already managed adds no
+                    // new information to the local list.
+                    if self
+                        .state
+                        .installed
+                        .iter()
+                        .any(|entry| entry.skill.directory.eq_ignore_ascii_case(directory))
+                    {
+                        continue;
+                    }
+                } else if app.is_some_and(|app| {
                     self.state.installed.iter().any(|entry| {
                         entry.skill.directory == directory && entry.skill.apps.contains(&app)
                     })
                 }) {
                     continue;
                 }
+                let target = if linked {
+                    fs::canonicalize(&path)
+                        .ok()
+                        .map(|target| display_path(&target))
+                } else {
+                    None
+                };
                 match files::descriptor(&path, directory) {
                     Ok((name, description)) => {
                         if self.local.len() >= MAX_SKILLS {
@@ -980,6 +1267,8 @@ impl SkillsService {
                             name,
                             description,
                             app,
+                            linked,
+                            target,
                         });
                     }
                     Err(error) => errors.push(error),

@@ -408,6 +408,7 @@ fn local_import_scans_cc_switch_and_preserves_original_on_uninstall() {
             SkillsCommand::ImportLocal {
                 path: original.to_string_lossy().into_owned(),
                 apps: vec![SkillApp::Gemini],
+                link: false,
             },
             1,
         )
@@ -572,7 +573,8 @@ fn missing_remote_skill_and_case_collisions_preserve_installed_versions() {
             .execute(
                 SkillsCommand::ImportLocal {
                     path: local.to_string_lossy().into_owned(),
-                    apps: vec![]
+                    apps: vec![],
+                    link: false,
                 },
                 3
             )
@@ -709,6 +711,7 @@ fn symlink_sources_and_redirected_targets_fail_without_touching_victims() {
             SkillsCommand::ImportLocal {
                 path: local.to_string_lossy().into_owned(),
                 apps: vec![SkillApp::Claude],
+                link: false,
             },
             1,
         )
@@ -845,6 +848,143 @@ fn a_status_write_failure_does_not_report_a_completed_command_as_failed() {
     assert_eq!(snapshot.available.len(), 1);
 }
 
+#[cfg(unix)]
+#[test]
+fn local_scan_lists_linked_folders_read_only() {
+    use std::os::unix::fs::symlink;
+    let mut fixture = Fixture::new();
+    let target = fixture.home.join("vault/ob");
+    fs::create_dir_all(&target).unwrap();
+    fs::write(
+        target.join("SKILL.md"),
+        "---\nname: ob\ndescription: Linked fixture\n---\n",
+    )
+    .unwrap();
+    let app_root = fixture.home.join(".claude/skills");
+    fs::create_dir_all(&app_root).unwrap();
+    symlink(&target, app_root.join("ob")).unwrap();
+    fixture
+        .service()
+        .execute(SkillsCommand::ScanLocal, 0)
+        .unwrap();
+    let snapshot = fixture.service().snapshot();
+    let linked = snapshot
+        .local
+        .iter()
+        .find(|skill| skill.directory == "ob")
+        .expect("linked folder is listed");
+    assert!(linked.linked);
+    assert_eq!(linked.app, Some(SkillApp::Claude));
+    let expected = target
+        .canonicalize()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(linked.target.as_deref(), Some(expected.as_str()));
+}
+
+#[cfg(unix)]
+#[test]
+fn linked_local_skills_deploy_links_without_copying_the_source() {
+    use std::os::unix::fs::symlink;
+    let mut fixture = Fixture::new();
+    let source = fixture.home.join("vault/ob");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: ob\ndescription: Linked\n---\n",
+    )
+    .unwrap();
+    let claude_root = fixture.home.join(".claude/skills");
+    fs::create_dir_all(&claude_root).unwrap();
+    symlink(&source, claude_root.join("ob")).unwrap();
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::ImportLocal {
+                path: source.to_string_lossy().into_owned(),
+                apps: vec![SkillApp::Claude, SkillApp::Codex],
+                link: true,
+            },
+            1,
+        )
+        .unwrap();
+    let snapshot = fixture.service().snapshot();
+    let skill = &snapshot.installed[0];
+    assert!(skill.linked);
+    assert_eq!(skill.apps, vec![SkillApp::Claude, SkillApp::Codex]);
+    assert!(!fixture.master("ob").exists());
+    let codex_link = fixture.home.join(".codex/skills/ob");
+    assert!(
+        fs::symlink_metadata(&codex_link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        fs::read_link(&codex_link).unwrap(),
+        source.canonicalize().unwrap()
+    );
+
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabled {
+                skill_id: "ob".into(),
+                app: SkillApp::Codex,
+                enabled: false,
+            },
+            2,
+        )
+        .unwrap();
+    assert!(fs::symlink_metadata(&codex_link).is_err());
+    assert!(source.join("SKILL.md").is_file());
+
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::Uninstall {
+                skill_id: "ob".into(),
+            },
+            3,
+        )
+        .unwrap();
+    assert!(fs::symlink_metadata(claude_root.join("ob")).is_err());
+    assert!(source.join("SKILL.md").is_file());
+    assert!(fixture.service().snapshot().installed.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn copying_a_symlinked_local_source_uses_its_real_target() {
+    use std::os::unix::fs::symlink;
+    let mut fixture = Fixture::new();
+    let source = fixture.home.join("vault/ob");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: ob\ndescription: Copy fixture\n---\n",
+    )
+    .unwrap();
+    fs::write(source.join("example.txt"), "source data").unwrap();
+    let link = fixture.home.join("ob-link");
+    symlink(&source, &link).unwrap();
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::ImportLocal {
+                path: link.to_string_lossy().into_owned(),
+                apps: vec![],
+                link: false,
+            },
+            1,
+        )
+        .unwrap();
+    let snapshot = fixture.service().snapshot();
+    assert!(!snapshot.installed[0].linked);
+    assert_eq!(file_content(&fixture.master("ob")), "source data");
+}
+
 #[test]
 fn stale_staging_directories_are_cleaned_on_open_without_touching_unknown_entries() {
     let mut fixture = Fixture::new();
@@ -900,6 +1040,8 @@ fn snapshot_byte_budget_remains_below_ipc_limit_with_unicode_metadata() {
                 apps: SkillApp::ALL.to_vec(),
                 updated_at: 10,
                 last_error: Some("🦀".repeat(500)),
+                linked: false,
+                target: None,
             },
             fingerprint: "0".repeat(64),
         });
@@ -918,6 +1060,8 @@ fn snapshot_byte_budget_remains_below_ipc_limit_with_unicode_metadata() {
             name,
             description,
             app: Some(SkillApp::Claude),
+            linked: false,
+            target: None,
         });
     }
     let snapshot = service.snapshot();
