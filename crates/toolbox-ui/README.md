@@ -99,6 +99,13 @@ Shared rows are defined in `ui/project-types.slint`, components in
 `ui/components.slint`, and embedded icons in `ui/icons/`. The frontend uses
 Slint's Winit backend and software renderer.
 
+Every page stays mounted, and layout constraints propagate from each page up
+to the window, which Winit applies as the native minimum and maximum size. A
+`max-width`, an explicit `width` on a page, or a fixed-width direct child of a
+vertical layout caps the whole content column, so the window can no longer fill
+the screen when maximized. Let text elide inside stretching layouts, and centre
+fixed-size items inside a nested layout instead.
+
 The UI binary accepts `--page projects|windows|settings|diagnostics|skills` and
 `--endpoint <identifier>`. The endpoint identifies a current-user IPC channel.
 Ctrl/Cmd+5 opens Skills; Ctrl/Cmd+F searches the current Skills view. Existing
