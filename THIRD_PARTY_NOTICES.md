@@ -42,7 +42,19 @@ The centralized skills library, repository discovery, local import and per-app
 enable/disable workflows were informed by CC Switch's skills service and user
 manual. Sean Toolbox implements these independently in Rust and Slint, using
 copy deployments with ownership checks and a host-owned daily update scheduler.
-No CC Switch source code, frontend assets or runtime dependencies are bundled.
+No CC Switch source code or runtime dependencies are bundled. The app icons are
+used with attribution; see the next section.
+
+## CC Switch app icons
+
+Source: <https://github.com/farion1231/cc-switch>, commit
+`66e4362b60cf0d93d9776cfe549c2b625e1c6b79` (MIT, Copyright 2025 Jason Young).
+
+The Claude, OpenAI/Codex, Gemini, OpenCode and Grok icons in
+`crates/toolbox-ui/ui/icons/apps/` are adapted from CC Switch's frontend icon
+assets. Colors were adjusted for the toolbox theme. The original MIT notice is
+retained in `licenses/CC-Switch-MIT.txt`. App names and logos remain the property
+of their respective owners.
 
 ## Slint
 

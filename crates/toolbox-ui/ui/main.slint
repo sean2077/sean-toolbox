@@ -242,13 +242,13 @@ export component AppWindow inherits Window {
                     padding-bottom: 14px;
                     spacing: 20px;
                     HorizontalLayout {
-                        height: 63px;
+                        height: root.page == 4 ? 48px : 63px;
                         spacing: 16px;
                         VerticalLayout {
                             spacing: 7px;
                             horizontal-stretch: 1;
                             Text { text: root.page-title; color: Theme.text; font-size: 26px; font-weight: 700; }
-                            Caption { text: root.page-description; font-size: 13px; }
+                            Caption { visible: root.page != 4; text: root.page-description; font-size: 13px; }
                         }
                         ActionButton { text: root.english ? "Close UI · Esc" : "关闭界面 · Esc"; subtle: true; icon: @image-url("icons/close.svg"); with-icon: true; clicked => { root.dismiss(); } }
                     }
@@ -696,6 +696,8 @@ export component AppWindow inherits Window {
                             }
                         }
                         skills-page := SkillsPage {
+                            width: parent.width;
+                            horizontal-stretch: 1;
                             visible: root.page == 4;
                             english: root.english;
                             enabled: root.loaded && !root.blocked;

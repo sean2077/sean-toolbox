@@ -238,6 +238,24 @@ fn preview_command(snapshot: &mut SkillsSnapshot, command: &SkillsCommand, now: 
                 skill.last_error = None;
             }
         }
+        SkillsCommand::SetEnabledBatch {
+            skill_ids,
+            app,
+            enabled,
+        } => {
+            for skill in snapshot
+                .installed
+                .iter_mut()
+                .filter(|skill| skill_ids.iter().any(|skill_id| skill_id == &skill.id))
+            {
+                skill.apps.retain(|current| current != app);
+                if *enabled {
+                    skill.apps.push(*app);
+                    skill.apps.sort();
+                }
+                skill.last_error = None;
+            }
+        }
         _ => {}
     }
 }
@@ -457,6 +475,17 @@ mod tests {
             300,
         );
         assert!(snapshot.installed[0].apps.is_empty());
+
+        preview_command(
+            &mut snapshot,
+            &SkillsCommand::SetEnabledBatch {
+                skill_ids: vec!["review".into(), "missing".into()],
+                app: SkillApp::Claude,
+                enabled: true,
+            },
+            250,
+        );
+        assert_eq!(snapshot.installed[0].apps, vec![SkillApp::Claude]);
 
         preview_command(
             &mut snapshot,

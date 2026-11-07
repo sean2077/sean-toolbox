@@ -1,4 +1,4 @@
-import { CheckBox, LineEdit, ScrollView, Spinner, Switch } from "std-widgets.slint";
+import { CheckBox, ComboBox, LineEdit, ScrollView, Spinner, Switch } from "std-widgets.slint";
 import { Theme, ActionButton, Caption, Card, Divider, FieldLabel, Icon, SectionLabel } from "components.slint";
 
 component SkillPathHint inherits Rectangle {
@@ -12,6 +12,103 @@ component SkillPathHint inherits Rectangle {
     }
 }
 
+component SkillChip inherits Rectangle {
+    in property <string> text;
+    in property <bool> accent: false;
+    height: 18px;
+    max-width: 120px;
+    min-width: label.preferred-width + 12px;
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: root.accent ? Theme.accent-border : Theme.border;
+    background: root.accent ? Theme.accent-soft : Theme.raised;
+    label := Text {
+        text: root.text;
+        color: root.accent ? Theme.accent : Theme.muted;
+        font-size: 10px;
+        overflow: elide;
+        min-width: 0px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+component AppToggle inherits Rectangle {
+    in property <image> icon;
+    in property <string> name;
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    callback toggled(bool);
+    width: 26px;
+    height: 22px;
+    border-radius: 5px;
+    border-width: keys.has-focus ? 2px : 1px;
+    border-color: keys.has-focus ? Theme.focus : root.checked ? Theme.accent-border : Theme.border;
+    background: root.checked ? Theme.accent-soft : touch.has-hover ? Theme.hover : Theme.panel;
+    opacity: root.enabled ? 1 : 0.45;
+    Image {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: 15px;
+        height: 15px;
+        source: root.icon;
+        image-fit: contain;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { keys.focus(); root.toggled(!root.checked); }
+    }
+    keys := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == Key.Return || event.text == Key.Space { root.toggled(!root.checked); return accept; }
+            reject
+        }
+    }
+    accessible-role: checkbox;
+    accessible-label: root.name;
+    accessible-checked: root.checked;
+    Tooltip { SkillPathHint { text: root.name; } }
+}
+
+component RowMenuButton inherits Rectangle {
+    in property <string> tip;
+    in property <bool> enabled: true;
+    callback clicked;
+    width: 28px;
+    height: 24px;
+    border-radius: 5px;
+    background: touch.has-hover || keys.has-focus ? Theme.hover : transparent;
+    border-width: keys.has-focus ? 2px : 0px;
+    border-color: Theme.focus;
+    opacity: root.enabled ? 1 : 0.45;
+    Text {
+        text: "···";
+        color: Theme.muted;
+        font-size: 14px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { keys.focus(); root.clicked(); }
+    }
+    keys := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == Key.Return || event.text == Key.Space { root.clicked(); return accept; }
+            reject
+        }
+    }
+    accessible-role: button;
+    accessible-label: root.tip;
+    Tooltip { SkillPathHint { text: root.tip; } }
+}
+
 export struct SkillListRow {
     id: string,
     name: string,
@@ -20,6 +117,15 @@ export struct SkillListRow {
     installed: bool,
     problem: bool,
     linked: bool,
+    selected: bool,
+    source: string,
+    status: string,
+    enabled: bool,
+    app0: bool,
+    app1: bool,
+    app2: bool,
+    app3: bool,
+    app4: bool,
 }
 export struct SkillAppRow { index: int, name: string, path: string, enabled: bool }
 export struct SkillRepositoryRow { id: string, url: string, detail: string, error: string, removable: bool }
@@ -41,10 +147,22 @@ export global SkillsState {
     in-out property <string> selected-description;
     in-out property <string> selected-source;
     in-out property <string> selected-detail;
+    in-out property <string> selected-summary;
     in-out property <string> selected-error;
     in-out property <bool> selected-installed: false;
     in-out property <bool> selected-updatable: false;
     in-out property <bool> selected-linked: false;
+    in-out property <int> status-filter: 0;
+    in-out property <int> source-filter: 0;
+    in-out property <[string]> source-options: [];
+    in-out property <string> app-counts-text;
+    in-out property <bool> all-selected: false;
+    in-out property <int> selected-count: 0;
+    in-out property <bool> batch-app0: false;
+    in-out property <bool> batch-app1: false;
+    in-out property <bool> batch-app2: false;
+    in-out property <bool> batch-app3: false;
+    in-out property <bool> batch-app4: false;
     in-out property <bool> link-import: false;
     in-out property <string> repository-url;
     in-out property <string> repository-branch;
@@ -56,6 +174,7 @@ export global SkillsState {
     in-out property <string> empty-text;
     callback change-view(int);
     callback search(string);
+    callback filter-changed;
     callback select(string);
     callback refresh;
     callback update-all;
@@ -64,6 +183,10 @@ export global SkillsState {
     callback remove-repository(string);
     callback import-folder;
     callback toggle-app(int, bool);
+    callback toggle-row-app(string, int, bool);
+    callback toggle-select(string, bool);
+    callback toggle-select-all(bool);
+    callback batch-app(int, bool);
     callback install;
     callback update-selected;
     callback uninstall;
@@ -71,6 +194,7 @@ export global SkillsState {
 }
 
 export component SkillsPage inherits Rectangle {
+    horizontal-stretch: 1;
     in property <bool> english;
     in property <bool> enabled: true;
     private property <bool> editable: root.enabled && SkillsState.loaded && !SkillsState.busy && !SkillsState.submitting;
@@ -80,34 +204,7 @@ export component SkillsPage inherits Rectangle {
     }
 
     VerticalLayout {
-        spacing: 12px;
-        Card {
-            VerticalLayout {
-                padding: 14px;
-                spacing: 7px;
-                HorizontalLayout {
-                    spacing: 12px;
-                    FieldLabel { text: root.english ? "Daily auto-update" : "每日自动更新"; vertical-alignment: center; }
-                    Switch {
-                        checked <=> SkillsState.daily-update;
-                        enabled: root.editable;
-                        toggled => { SkillsState.set-daily(self.checked); }
-                    }
-                    Rectangle { horizontal-stretch: 1; }
-                    ActionButton {
-                        text: root.english ? "Update all" : "全部更新";
-                        with-icon: true;
-                        icon: @image-url("icons/download.svg");
-                        enabled: root.editable && SkillsState.installed-count > 0;
-                        clicked => { SkillsState.update-all(); }
-                    }
-                }
-                Caption {
-                    text: root.english ? "Updates every 24 hours while the toolbox is running in the tray; catches up at the next startup." : "工具箱在托盘运行时每 24 小时更新；错过的更新会在下次启动时补上。";
-                }
-                Text { text: SkillsState.schedule-text; color: Theme.muted; font-size: 11px; wrap: word-wrap; }
-            }
-        }
+        spacing: 8px;
 
         HorizontalLayout {
             height: 36px;
@@ -117,7 +214,29 @@ export component SkillsPage inherits Rectangle {
             ActionButton { text: root.english ? "On this device" : "本机技能"; primary: SkillsState.view == 2; subtle: SkillsState.view != 2; clicked => { SkillsState.change-view(2); } }
             ActionButton { text: root.english ? "Repositories" : "仓库"; primary: SkillsState.view == 3; subtle: SkillsState.view != 3; clicked => { SkillsState.change-view(3); } }
             Rectangle { horizontal-stretch: 1; }
+            if SkillsState.view == 0: Rectangle {
+                width: 120px;
+                height: 24px;
+                HorizontalLayout {
+                    spacing: 5px;
+                    Text { text: root.english ? "Daily update" : "每日更新"; color: Theme.secondary; font-size: 11px; vertical-alignment: center; }
+                    Switch {
+                        checked <=> SkillsState.daily-update;
+                        enabled: root.editable;
+                        toggled => { SkillsState.set-daily(self.checked); }
+                    }
+                }
+                Tooltip { SkillPathHint { text: root.english ? "Updates every 24 hours while the toolbox is running in the tray; catches up at the next startup.\n" + SkillsState.schedule-text : "工具箱在托盘运行时每 24 小时更新；错过的更新会在下次启动时补上。\n" + SkillsState.schedule-text; } }
+            }
+            if SkillsState.view == 0: ActionButton {
+                text: root.english ? "Update all" : "全部更新";
+                with-icon: true;
+                icon: @image-url("icons/download.svg");
+                enabled: root.editable && SkillsState.installed-count > 0;
+                clicked => { SkillsState.update-all(); }
+            }
             CheckBox {
+                visible: SkillsState.view == 2;
                 text: root.english ? "Link (no copy)" : "链接（不复制）";
                 checked <=> SkillsState.link-import;
                 enabled: root.editable;
@@ -125,6 +244,7 @@ export component SkillsPage inherits Rectangle {
                 Tooltip { SkillPathHint { text: root.english ? "Link keeps the source live and creates app symlinks on Windows; copy stores a private master copy. Existing app links to the same source are adopted." : "链接保留源目录并在应用目录创建符号链接（Windows 需要符号链接权限）；复制保存私有主副本。已存在且指向同一来源的应用链接会被接管。"; } }
             }
             ActionButton {
+                visible: SkillsState.view == 2;
                 text: root.english ? "Import folder" : "导入文件夹";
                 with-icon: true;
                 icon: @image-url("icons/folder.svg");
@@ -139,14 +259,16 @@ export component SkillsPage inherits Rectangle {
                 visible: SkillsState.view != 3;
                 spacing: 10px;
                 HorizontalLayout {
-                    height: 34px;
-                    spacing: 10px;
+                    height: 36px;
+                    spacing: 8px;
                     search := LineEdit {
                         text <=> SkillsState.query;
                         placeholder-text: root.english ? "Search skills or repositories…" : "搜索技能名称、描述或仓库…";
                         enabled: root.enabled;
+                        width: 420px;
                         edited => { SkillsState.search(self.text); }
                     }
+                    Rectangle { horizontal-stretch: 1; }
                     ActionButton {
                         text: SkillsState.view == 1 ? (root.english ? "Reload repositories" : "刷新仓库") : SkillsState.view == 2 ? (root.english ? "Scan this device" : "扫描本机") : (root.english ? "Refresh" : "刷新");
                         with-icon: true;
@@ -162,55 +284,218 @@ export component SkillsPage inherits Rectangle {
                         horizontal-stretch: 1;
                         min-width: 200px;
                         clip: true;
-                        ScrollView {
-                            visible: SkillsState.rows.length > 0;
-                            horizontal-scrollbar-policy: always-off;
-                            VerticalLayout {
-                                padding: 6px;
-                                spacing: 3px;
-                                for item in SkillsState.rows: Rectangle {
-                                    height: 82px;
-                                    border-radius: 6px;
-                                    background: SkillsState.selected-id == item.id ? Theme.accent-soft : row-touch.has-hover ? Theme.hover : transparent;
-                                    border-width: row-keys.has-focus ? 2px : 0px;
-                                    border-color: Theme.focus;
-                                    accessible-role: button;
-                                    accessible-label: item.name + " " + item.detail;
-                                    accessible-action-default => { SkillsState.select(item.id); }
-                                    forward-focus: row-keys;
-                                    VerticalLayout {
-                                        padding: 12px;
-                                        spacing: 4px;
-                                        HorizontalLayout {
-                                            spacing: 6px;
-                                            Text { text: item.name; color: Theme.text; font-size: 13px; font-weight: 600; overflow: elide; min-width: 0px; horizontal-stretch: 1; }
-                                            if item.problem: Icon { source: @image-url("icons/warning.svg"); width: 14px; colorize: Theme.warning; }
-                                            if item.installed && SkillsState.view == 1: Icon { source: @image-url("icons/check.svg"); width: 14px; colorize: Theme.success; }
-                                        }
-                                        Text { text: item.description; color: Theme.secondary; font-size: 11px; overflow: elide; min-width: 0px; }
-                                        Text { text: item.detail; color: Theme.muted; font-size: 10px; overflow: elide; min-width: 0px; }
+                        VerticalLayout {
+                            if SkillsState.view == 0: Rectangle {
+                                height: 34px;
+                                HorizontalLayout {
+                                    padding-left: 10px;
+                                    padding-right: 6px;
+                                    spacing: 6px;
+                                    CheckBox {
+                                        text: root.english ? "Select all" : "全选";
+                                        checked <=> SkillsState.all-selected;
+                                        enabled: root.editable && SkillsState.rows.length > 0;
+                                        toggled => { SkillsState.toggle-select-all(self.checked); }
                                     }
-                                    row-touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { row-keys.focus(); SkillsState.select(item.id); } }
-                                    row-keys := FocusScope {
+                                    Text { text: root.english ? "Selected" : "已选"; color: Theme.muted; font-size: 10px; vertical-alignment: center; }
+                                    Text { text: SkillsState.selected-count; color: Theme.text; font-size: 10px; font-weight: 600; vertical-alignment: center; }
+                                    Text { text: root.english ? "Status" : "状态"; color: Theme.muted; font-size: 10px; horizontal-stretch: 0; vertical-alignment: center; }
+                                    ComboBox {
+                                        width: 90px;
+                                        height: 26px;
+                                        horizontal-stretch: 0;
+                                        model: root.english ? ["All", "Enabled", "Disabled"] : ["全部", "已启用", "未启用"];
+                                        current-index <=> SkillsState.status-filter;
                                         enabled: root.enabled;
-                                        focus-on-click: false;
-                                        key-pressed(event) => {
-                                            if event.text == Key.Return || event.text == Key.Space { SkillsState.select(item.id); return accept; }
-                                            reject
+                                        selected => { SkillsState.filter-changed(); }
+                                    }
+                                    Text { text: root.english ? "Source" : "来源"; color: Theme.muted; font-size: 10px; horizontal-stretch: 0; vertical-alignment: center; }
+                                    ComboBox {
+                                        width: 130px;
+                                        height: 26px;
+                                        horizontal-stretch: 0;
+                                        model: SkillsState.source-options;
+                                        current-index <=> SkillsState.source-filter;
+                                        enabled: root.enabled;
+                                        selected => { SkillsState.filter-changed(); }
+                                    }
+                                    Rectangle { horizontal-stretch: 1; }
+                                    HorizontalLayout {
+                                        spacing: 10px;
+                                        HorizontalLayout {
+                                            width: 142px;
+                                            spacing: 3px;
+                                            alignment: center;
+                                            AppToggle {
+                                                icon: @image-url("icons/apps/claude.svg");
+                                                name: "Claude Code";
+                                                checked: SkillsState.batch-app0;
+                                                enabled: root.editable && SkillsState.selected-count > 0;
+                                                toggled(value) => { SkillsState.batch-app(0, value); }
+                                            }
+                                            AppToggle {
+                                                icon: @image-url("icons/apps/codex.svg");
+                                                name: "Codex";
+                                                checked: SkillsState.batch-app1;
+                                                enabled: root.editable && SkillsState.selected-count > 0;
+                                                toggled(value) => { SkillsState.batch-app(1, value); }
+                                            }
+                                            AppToggle {
+                                                icon: @image-url("icons/apps/gemini.svg");
+                                                name: "Gemini CLI";
+                                                checked: SkillsState.batch-app2;
+                                                enabled: root.editable && SkillsState.selected-count > 0;
+                                                toggled(value) => { SkillsState.batch-app(2, value); }
+                                            }
+                                            AppToggle {
+                                                icon: @image-url("icons/apps/opencode.svg");
+                                                name: "OpenCode";
+                                                checked: SkillsState.batch-app3;
+                                                enabled: root.editable && SkillsState.selected-count > 0;
+                                                toggled(value) => { SkillsState.batch-app(3, value); }
+                                            }
+                                            AppToggle {
+                                                icon: @image-url("icons/apps/grok.svg");
+                                                name: "Grok Build";
+                                                checked: SkillsState.batch-app4;
+                                                enabled: root.editable && SkillsState.selected-count > 0;
+                                                toggled(value) => { SkillsState.batch-app(4, value); }
+                                            }
+                                        }
+                                        Rectangle { width: 28px; height: 1px; }
+                                    }
+                                }
+                            }
+                            if SkillsState.view == 0: Divider {}
+                            if SkillsState.view == 0: Divider {}
+                            ScrollView {
+                                visible: SkillsState.rows.length > 0;
+                                horizontal-scrollbar-policy: always-off;
+                                vertical-stretch: 1;
+                                VerticalLayout {
+                                    padding: 6px;
+                                    spacing: 3px;
+                                    for item in SkillsState.rows: Rectangle {
+                                        height: SkillsState.view == 0 ? 54px : 82px;
+                                        border-radius: 6px;
+                                        background: SkillsState.selected-id == item.id ? Theme.accent-soft : row-touch.has-hover ? Theme.hover : transparent;
+                                        border-width: row-keys.has-focus ? 2px : 0px;
+                                        border-color: Theme.focus;
+                                        accessible-role: button;
+                                        accessible-label: item.name + " " + item.detail;
+                                        accessible-action-default => { SkillsState.select(item.id); }
+                                        forward-focus: row-keys;
+                                        row-touch := TouchArea {
+                                            enabled: root.enabled;
+                                            mouse-cursor: pointer;
+                                            clicked => { row-keys.focus(); SkillsState.select(item.id); }
+                                        }
+                                        HorizontalLayout {
+                                            padding: SkillsState.view == 0 ? 6px : 12px;
+                                            spacing: 10px;
+                                            CheckBox {
+                                                visible: SkillsState.view == 0;
+                                                width: SkillsState.view == 0 ? 22px : 0px;
+                                                checked: item.selected;
+                                                enabled: root.editable;
+                                                accessible-label: root.english ? "Select " + item.name : "选择 " + item.name;
+                                                toggled => { SkillsState.toggle-select(item.id, self.checked); }
+                                            }
+                                            VerticalLayout {
+                                                horizontal-stretch: 1;
+                                                spacing: 4px;
+                                                HorizontalLayout {
+                                                    spacing: 6px;
+                                                    Text {
+                                                        text: item.name;
+                                                        color: Theme.text;
+                                                        font-size: 13px;
+                                                        font-weight: 600;
+                                                        overflow: elide;
+                                                        min-width: 0px;
+                                                        max-width: 160px;
+                                                    }
+                                                    if SkillsState.view == 0: SkillChip { text: item.source; }
+                                                    if SkillsState.view == 0: SkillChip { text: item.status; accent: item.enabled; }
+                                                    if item.problem: Icon { source: @image-url("icons/warning.svg"); width: 14px; colorize: Theme.warning; }
+                                                    if item.installed && SkillsState.view == 1: Icon { source: @image-url("icons/check.svg"); width: 14px; colorize: Theme.success; }
+                                                    Rectangle { horizontal-stretch: 1; }
+                                                }
+                                                Text { text: item.description; color: Theme.secondary; font-size: 11px; overflow: elide; min-width: 0px; max-width: 400px; horizontal-stretch: 1; }
+                                                if SkillsState.view != 0: Text { text: item.detail; color: Theme.muted; font-size: 10px; overflow: elide; min-width: 0px; max-width: 400px; horizontal-stretch: 1; }
+                                            }
+                                            if SkillsState.view == 0: Rectangle { horizontal-stretch: 1; }
+                                            HorizontalLayout {
+                                                visible: SkillsState.view == 0;
+                                                width: SkillsState.view == 0 ? 142px : 0px;
+                                                spacing: 3px;
+                                                alignment: center;
+                                                AppToggle {
+                                                    icon: @image-url("icons/apps/claude.svg");
+                                                    name: "Claude Code";
+                                                    checked: item.app0;
+                                                    enabled: root.editable;
+                                                    toggled(value) => { SkillsState.toggle-row-app(item.id, 0, value); }
+                                                }
+                                                AppToggle {
+                                                    icon: @image-url("icons/apps/codex.svg");
+                                                    name: "Codex";
+                                                    checked: item.app1;
+                                                    enabled: root.editable;
+                                                    toggled(value) => { SkillsState.toggle-row-app(item.id, 1, value); }
+                                                }
+                                                AppToggle {
+                                                    icon: @image-url("icons/apps/gemini.svg");
+                                                    name: "Gemini CLI";
+                                                    checked: item.app2;
+                                                    enabled: root.editable;
+                                                    toggled(value) => { SkillsState.toggle-row-app(item.id, 2, value); }
+                                                }
+                                                AppToggle {
+                                                    icon: @image-url("icons/apps/opencode.svg");
+                                                    name: "OpenCode";
+                                                    checked: item.app3;
+                                                    enabled: root.editable;
+                                                    toggled(value) => { SkillsState.toggle-row-app(item.id, 3, value); }
+                                                }
+                                                AppToggle {
+                                                    icon: @image-url("icons/apps/grok.svg");
+                                                    name: "Grok Build";
+                                                    checked: item.app4;
+                                                    enabled: root.editable;
+                                                    toggled(value) => { SkillsState.toggle-row-app(item.id, 4, value); }
+                                                }
+                                            }
+                                            RowMenuButton {
+                                                visible: SkillsState.view == 0;
+                                                width: SkillsState.view == 0 ? 28px : 0px;
+                                                tip: root.english ? "Show actions" : "查看操作";
+                                                enabled: root.enabled;
+                                                clicked => { SkillsState.select(item.id); }
+                                            }
+                                        }
+                                        row-keys := FocusScope {
+                                            enabled: root.enabled;
+                                            focus-on-click: false;
+                                            key-pressed(event) => {
+                                                if event.text == Key.Return || event.text == Key.Space { SkillsState.select(item.id); return accept; }
+                                                reject
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                        if SkillsState.rows.length == 0: VerticalLayout {
-                            padding: 24px;
-                            alignment: center;
-                            spacing: 12px;
-                            Icon { source: @image-url("icons/box.svg"); width: 28px; horizontal-stretch: 0; colorize: Theme.muted; }
-                            Caption { text: SkillsState.empty-text; }
+                            if SkillsState.rows.length == 0: VerticalLayout {
+                                vertical-stretch: 1;
+                                padding: 24px;
+                                alignment: center;
+                                spacing: 12px;
+                                Icon { source: @image-url("icons/box.svg"); width: 28px; horizontal-stretch: 0; colorize: Theme.muted; }
+                                Caption { text: SkillsState.empty-text; }
+                            }
                         }
                     }
-                    Card {
+                    if SkillsState.view != 0: Card {
                         width: 282px;
                         clip: true;
                         VerticalLayout {
@@ -275,6 +560,46 @@ export component SkillsPage inherits Rectangle {
                         }
                     }
                 }
+                if SkillsState.view == 0 && SkillsState.selected-id != "": Card {
+                    height: 44px;
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 8px;
+                        spacing: 8px;
+                        Text {
+                            text: SkillsState.selected-name;
+                            color: Theme.text;
+                            font-size: 12px;
+                            font-weight: 600;
+                            overflow: elide;
+                            min-width: 0px;
+                            max-width: 220px;
+                        }
+                        Text {
+                            text: SkillsState.selected-error != "" ? SkillsState.selected-error : SkillsState.selected-summary;
+                            color: SkillsState.selected-error != "" ? Theme.danger : Theme.muted;
+                            font-size: 10px;
+                            overflow: elide;
+                            min-width: 0px;
+                            max-width: 200px;
+                            horizontal-stretch: 1;
+                        }
+                        Rectangle {
+                            width: 14px;
+                            height: 14px;
+                            Icon { source: @image-url("icons/info.svg"); width: 14px; colorize: Theme.muted; }
+                            Tooltip { SkillPathHint { text: SkillsState.selected-detail; } }
+                        }
+                        if SkillsState.selected-error != "": Rectangle {
+                            width: 14px;
+                            height: 14px;
+                            Icon { source: @image-url("icons/warning.svg"); width: 14px; colorize: Theme.warning; }
+                            Tooltip { SkillPathHint { text: SkillsState.selected-error; } }
+                        }
+                        ActionButton { text: root.english ? "Update" : "更新"; enabled: root.editable && SkillsState.selected-updatable; clicked => { SkillsState.update-selected(); } }
+                        ActionButton { text: root.english ? "Uninstall" : "卸载"; danger: true; enabled: root.editable; clicked => { SkillsState.uninstall(); } }
+                    }
+                }
             }
 
             VerticalLayout {
@@ -335,6 +660,7 @@ export component SkillsPage inherits Rectangle {
                 color: SkillsState.error-text != "" ? Theme.danger : Theme.muted;
                 font-size: 11px;
                 max-height: 48px;
+                max-width: 600px;
                 overflow: elide;
                 horizontal-stretch: 1;
             }
@@ -349,6 +675,7 @@ export component SkillsPage inherits Rectangle {
             color: Theme.warning;
             font-size: 11px;
             max-height: 48px;
+            max-width: 600px;
             overflow: elide;
             Tooltip { SkillPathHint { text: SkillsState.notice-text; } }
         }
