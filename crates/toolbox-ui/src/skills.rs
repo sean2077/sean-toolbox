@@ -94,6 +94,7 @@ fn repository_label(snapshot: &SkillsSnapshot, id: &str) -> String {
                 .url
                 .strip_prefix("https://github.com/")
                 .unwrap_or(&repository.url)
+                .trim_end_matches(".git")
                 .to_owned()
         })
         .unwrap_or_else(|| id.into())
@@ -467,10 +468,16 @@ impl Controller {
                 "No managed skills yet. Add a repository in Repositories, or import skills already on this device."
             }
             (false, false, 0) => "暂无管理中的技能。可在「仓库」添加来源，或导入本机已有技能。",
-            (true, false, 1) => {
+            (true, false, 1) if snapshot.repositories.is_empty() => {
                 "Add a source in Repositories, then reload repositories to discover skills."
             }
-            (false, false, 1) => "先在「仓库」添加来源，再点击「刷新仓库」发现技能。",
+            (false, false, 1) if snapshot.repositories.is_empty() => {
+                "先在「仓库」添加来源，再点击「刷新仓库」发现技能。"
+            }
+            (true, false, 1) => {
+                "Reload repositories to discover skills from your configured sources."
+            }
+            (false, false, 1) => "点击「刷新仓库」从已配置来源发现技能。",
             (true, false, _) => {
                 "Scan this device to find unmanaged skills. You can also import a folder containing SKILL.md."
             }
@@ -682,5 +689,22 @@ mod tests {
         );
         assert!(schedule_text(&snapshot, 10_800, false).ends_with("下次更新：已到期"));
         assert_eq!(relative_time(u64::MAX, 0, true), "in 213503982334601 d");
+    }
+
+    #[test]
+    fn repository_labels_hide_the_canonical_git_suffix() {
+        use toolbox_core::skills::SkillRepository;
+        let snapshot = SkillsSnapshot {
+            repositories: vec![SkillRepository {
+                id: "source".into(),
+                url: "https://github.com/sean2077/skills.git".into(),
+                branch: None,
+                revision: None,
+                last_error: None,
+            }],
+            ..SkillsSnapshot::default()
+        };
+        assert_eq!(repository_label(&snapshot, "source"), "sean2077/skills");
+        assert_eq!(repository_label(&snapshot, "missing"), "missing");
     }
 }

@@ -2879,6 +2879,31 @@ mod tests {
     }
 
     #[test]
+    fn discovery_empty_state_starts_from_the_configured_sources() {
+        with_test_ui(|ui, controller, _| {
+            let mut snapshot = skills_snapshot();
+            snapshot.available.clear();
+            receive_skills_snapshot(controller, snapshot);
+            controller.skills_view(1);
+            assert_eq!(
+                ui.global::<SkillsState>().get_empty_text(),
+                "点击「刷新仓库」从已配置来源发现技能。"
+            );
+
+            let mut snapshot = skills_snapshot();
+            snapshot.repositories.clear();
+            snapshot.available.clear();
+            receive_skills_snapshot(controller, snapshot);
+            controller.skills_view(0);
+            controller.skills_view(1);
+            assert_eq!(
+                ui.global::<SkillsState>().get_empty_text(),
+                "先在「仓库」添加来源，再点击「刷新仓库」发现技能。"
+            );
+        });
+    }
+
+    #[test]
     fn action_and_navigation_buttons_accept_the_first_pointer_click() {
         with_test_ui(|ui, _, _| {
             use slint::platform::{PointerEventButton, WindowEvent};
