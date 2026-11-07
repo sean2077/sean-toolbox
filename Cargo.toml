@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/toolbox-core", "crates/toolbox-ipc", "crates/toolbox-projects", "crates/toolbox-skills", "crates/toolbox-windows", "crates/toolbox-host", "crates/toolbox-ui"]
+members = ["crates/toolbox-core", "crates/toolbox-i18n", "crates/toolbox-ipc", "crates/toolbox-projects", "crates/toolbox-skills", "crates/toolbox-windows", "crates/toolbox-host", "crates/toolbox-ui"]
 exclude = ["vendor/global-hotkey"]
 resolver = "2"
 

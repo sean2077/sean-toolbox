@@ -50,7 +50,7 @@ component PanelAction inherits Rectangle {
 
 // A transient search surface. Configuration stays in the separate AppWindow.
 export component LauncherWindow inherits Window {
-    title: "Sean Toolbox · Recent Projects";
+    title: @tr("ui.launcher.title" => "Sean Toolbox · Recent Projects");
     icon: @image-url("../../../packaging/sean-toolbox.svg");
     in property <length> panel-width: 760px;
     in property <length> panel-height: 408px;
@@ -66,8 +66,6 @@ export component LauncherWindow inherits Window {
     in property <string> platform-font-family;
     default-font-family: root.platform-font-family;
     default-font-size: 13px;
-
-    in-out property <bool> english: false;
     in-out property <bool> loaded: false;
     in-out property <bool> projects-enabled: true;
     in-out property <[ProjectRow]> projects;
@@ -137,7 +135,7 @@ export component LauncherWindow inherits Window {
                                 width: 100%;
                                 height: 100%;
                                 visible: root.query == "";
-                                text: root.english ? "Search recent projects…" : "搜索最近项目…";
+                                text: @tr("ui.launcher.search_recent_projects" => "Search recent projects…");
                                 color: Theme.muted;
                                 font-size: 14px;
                                 vertical-alignment: center;
@@ -153,7 +151,7 @@ export component LauncherWindow inherits Window {
                                 vertical-alignment: center;
                                 selection-background-color: Theme.selection;
                                 selection-foreground-color: Theme.text;
-                                accessible-label: root.english ? "Search recent projects by name or path" : "按名称或路径搜索最近项目";
+                                accessible-label: @tr("ui.launcher.search_recent_projects_by_name_or_path" => "Search recent projects by name or path");
                                 edited => { root.query-changed(self.text); }
                             }
                         }
@@ -164,13 +162,13 @@ export component LauncherWindow inherits Window {
                             vertical-alignment: center;
                             font-size: 11px;
                             color: Theme.muted;
-                            accessible-label: root.english ? "Selected result and match count" : "当前选择与匹配数量";
+                            accessible-label: @tr("ui.launcher.selected_result_and_match_count" => "Selected result and match count");
                         }
                         VerticalLayout {
                             width: 28px;
                             alignment: center;
                             PanelAction {
-                                label: root.english ? "Settings · Ctrl+," : "设置 · Ctrl+,";
+                                label: @tr("ui.launcher.settings_ctrl" => "Settings · Ctrl+,");
                                 icon: @image-url("icons/settings.svg");
                                 clicked => { root.open-settings(); }
                             }
@@ -240,14 +238,14 @@ export component LauncherWindow inherits Window {
                         padding: 24px;
                         spacing: 10px;
                         Text {
-                            text: !root.loaded ? (root.english ? "Connecting…" : "正在连接…") : root.project-loading ? (root.english ? "Reading recent projects…" : "正在读取最近项目…") : !root.projects-enabled ? (root.english ? "Recent projects is turned off" : "最近项目已停用") : root.project-error ? (root.english ? "Couldn't read recent projects" : "暂时无法读取最近项目") : root.query != "" ? (root.english ? "No matching projects" : "没有匹配的项目") : (root.english ? "No recent projects yet" : "还没有最近项目");
+                            text: !root.loaded ? (@tr("ui.status.connecting" => "Connecting…")) : root.project-loading ? (@tr("ui.projects.loading" => "Reading recent projects…")) : !root.projects-enabled ? (@tr("ui.projects.disabled" => "Recent projects is turned off")) : root.project-error ? (@tr("ui.projects.read_failed" => "Couldn't read recent projects")) : root.query != "" ? (@tr("ui.projects.no_matches" => "No matching projects")) : (@tr("ui.projects.empty" => "No recent projects yet"));
                             color: Theme.secondary;
                             font-size: 14px;
                             font-weight: 600;
                             horizontal-alignment: center;
                         }
                         Text {
-                            text: !root.loaded || root.project-loading ? "" : !root.projects-enabled ? (root.english ? "Open Settings to enable this module." : "点击右上角设置，启用最近项目。") : root.project-error ? root.project-message : root.query != "" ? (root.english ? "Try a project name or part of its path." : "试试项目名称，或路径中的一部分。") : (root.english ? "Open a folder or workspace in VS Code, then refresh." : "在 VS Code 中打开文件夹或工作区，然后刷新。 ");
+                            text: !root.loaded || root.project-loading ? "" : !root.projects-enabled ? (@tr("ui.launcher.enable_hint" => "Open Settings to enable this module.")) : root.project-error ? root.project-message : root.query != "" ? (@tr("ui.launcher.search_hint" => "Try a project name or part of its path.")) : (@tr("ui.launcher.empty_hint" => "Open a folder or workspace in VS Code, then refresh."));
                             color: Theme.muted;
                             font-size: 12px;
                             horizontal-alignment: center;
@@ -264,20 +262,20 @@ export component LauncherWindow inherits Window {
                         padding-right: 10px;
                         spacing: 10px;
                         Text {
-                            text: root.project-opening ? (root.english ? "Opening in VS Code…" : "正在用 VS Code 打开…") : root.project-loading ? (root.english ? "Updating…" : "正在更新…") : root.status-error ? root.status-message : (root.english ? "↑ ↓  Select     Enter  Open     Esc  Dismiss" : "↑ ↓  选择     Enter  打开     Esc  收起");
+                            text: root.project-opening ? (@tr("ui.launcher.opening_in_vs_code" => "Opening in VS Code…")) : root.project-loading ? (@tr("ui.launcher.updating" => "Updating…")) : root.status-error ? root.status-message : (@tr("ui.launcher.keyboard_hint" => "↑ ↓  Select     Enter  Open     Esc  Dismiss"));
                             horizontal-stretch: 1;
                             min-width: 0px;
                             color: root.status-error ? Theme.danger : Theme.muted;
                             font-size: 11px;
                             vertical-alignment: center;
                             overflow: elide;
-                            Tooltip { HoverHint { text: root.status-error ? root.status-message : (root.english ? "Type to search · Double-click to open · Full path on hover" : "输入即搜索 · 双击打开 · 悬停查看完整路径"); } }
+                            Tooltip { HoverHint { text: root.status-error ? root.status-message : (@tr("ui.launcher.interaction_hint" => "Type to search · Double-click to open · Full path on hover")); } }
                         }
                         VerticalLayout {
                             width: 28px;
                             alignment: center;
                             PanelAction {
-                                label: root.english ? "Refresh projects · Ctrl+R" : "刷新项目 · Ctrl+R";
+                                label: @tr("ui.launcher.refresh_projects_ctrl_r" => "Refresh projects · Ctrl+R");
                                 icon: @image-url("icons/refresh.svg");
                                 enabled: root.loaded && root.projects-enabled && !root.project-loading && !root.project-opening;
                                 clicked => { root.refresh-projects(); search.focus(); }

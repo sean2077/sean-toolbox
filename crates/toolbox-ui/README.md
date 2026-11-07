@@ -37,6 +37,11 @@ requests. Results return through `slint::invoke_from_event_loop`.
   concurrent updates leave the draft available for correction.
 - Settings previews apply language and theme immediately. Discarding settings
   restores their saved values and preserves any application draft.
+- Static text uses Slint's bundled gettext translations. Rust-generated status
+  and confirmation messages retain their identity and arguments, so language
+  previews also refresh existing text, project summaries, imports and Skills
+  details. Local worker errors are translated on arrival using the current
+  locale; backend diagnostics and user-provided metadata remain verbatim.
 - Diagnostics refresh on request, showing capabilities, activity and errors.
   A failed refresh clears the previous capability snapshot.
 - Skills exposes installed skills, repository discovery, local imports and
@@ -117,3 +122,5 @@ process lifetime. Linux integration checks are available in
 [`scripts/smoke_appearance.py`](../../scripts/smoke_appearance.py).
 See the [development guide](../../docs/DEVELOPMENT.md) for their prerequisites and
 commands, and the [validation record](../../docs/VALIDATION.md) for dated results.
+The development guide also owns the translation resource layout, update/check
+commands and the boundary between localized UI messages and raw diagnostics.

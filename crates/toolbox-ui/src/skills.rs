@@ -1,6 +1,7 @@
 //! Presentation and request ordering for the host-owned skills manager.
 use crate::{
     ConfirmAction, Controller, SkillAppRow, SkillListRow, SkillRepositoryRow, SkillsState, UiPage,
+    i18n::UiText,
     with_controller,
     worker::{DialogKind, Work},
 };
@@ -11,6 +12,7 @@ use toolbox_core::{
     Response,
     skills::{InstalledSkill, SkillApp, SkillsCommand, SkillsSnapshot},
 };
+use toolbox_i18n::{Locale, messages};
 
 #[derive(Default)]
 pub(super) struct SkillsUiState {
@@ -18,6 +20,7 @@ pub(super) struct SkillsUiState {
     pub loading: bool,
     pub submitting: bool,
     pub selected_ids: BTreeSet<String>,
+    error: Option<UiText>,
     install_apps: Vec<SkillApp>,
 }
 
@@ -28,62 +31,44 @@ fn now_seconds() -> u64 {
         .as_secs()
 }
 
-fn relative_time(timestamp: u64, now: u64, english: bool) -> String {
+fn relative_time(timestamp: u64, now: u64, locale: Locale) -> String {
     let seconds = timestamp.abs_diff(now);
-    if seconds < 60 {
-        return if english { "now" } else { "现在" }.into();
+    match (seconds, timestamp > now) {
+        (0..=59, _) => messages::skills_time_now(),
+        (60..=3599, true) => messages::skills_time_minutes_future(seconds / 60),
+        (60..=3599, false) => messages::skills_time_minutes_past(seconds / 60),
+        (3600..=86399, true) => messages::skills_time_hours_future(seconds / 3600),
+        (3600..=86399, false) => messages::skills_time_hours_past(seconds / 3600),
+        (_, true) => messages::skills_time_days_future(seconds / 86400),
+        (_, false) => messages::skills_time_days_past(seconds / 86400),
     }
-    let (amount, unit_en, unit_zh) = if seconds < 3600 {
-        (seconds / 60, "min", "分钟")
-    } else if seconds < 86400 {
-        (seconds / 3600, "h", "小时")
-    } else {
-        (seconds / 86400, "d", "天")
-    };
-    match (english, timestamp > now) {
-        (true, true) => format!("in {amount} {unit_en}"),
-        (true, false) => format!("{amount} {unit_en} ago"),
-        (false, true) => format!("{amount} {unit_zh}后"),
-        (false, false) => format!("{amount} {unit_zh}前"),
-    }
+    .render(locale)
 }
 
-fn schedule_text(snapshot: &SkillsSnapshot, now: u64, english: bool) -> String {
-    let never = if english { "never" } else { "尚无" };
+fn schedule_text(snapshot: &SkillsSnapshot, now: u64, locale: Locale) -> String {
     let attempt = snapshot
         .last_attempt_at
-        .map(|time| relative_time(time, now, english))
-        .unwrap_or_else(|| never.into());
+        .map(|time| relative_time(time, now, locale))
+        .unwrap_or_else(|| messages::skills_schedule_never().render(locale));
     let success = snapshot
         .last_success_at
-        .map(|time| relative_time(time, now, english))
-        .unwrap_or_else(|| never.into());
+        .map(|time| relative_time(time, now, locale))
+        .unwrap_or_else(|| messages::skills_schedule_never().render(locale));
     let next = if !snapshot.daily_update {
-        if english { "off" } else { "已关闭" }.into()
+        messages::skills_schedule_off().render(locale)
     } else {
         snapshot
             .next_update_at
             .map(|time| {
                 if time <= now {
-                    if english { "due now" } else { "已到期" }.into()
+                    messages::skills_schedule_due().render(locale)
                 } else {
-                    relative_time(time, now, english)
+                    relative_time(time, now, locale)
                 }
             })
-            .unwrap_or_else(|| {
-                if english {
-                    "waiting for an installed repository skill"
-                } else {
-                    "等待安装仓库技能"
-                }
-                .into()
-            })
+            .unwrap_or_else(|| messages::skills_schedule_waiting().render(locale))
     };
-    if english {
-        format!("Last attempt: {attempt} · Last success: {success} · Next: {next}")
-    } else {
-        format!("上次尝试：{attempt} · 上次成功：{success} · 下次更新：{next}")
-    }
+    messages::skills_schedule(attempt, next, success).render(locale)
 }
 
 fn repository_label(snapshot: &SkillsSnapshot, id: &str) -> String {
@@ -183,11 +168,11 @@ fn installed_matches(
     }
 }
 
-fn source_options(snapshot: &SkillsSnapshot, english: bool) -> Vec<String> {
+fn source_options(snapshot: &SkillsSnapshot, locale: Locale) -> Vec<String> {
     let mut options = vec![
-        if english { "All" } else { "全部" }.to_owned(),
-        if english { "Local" } else { "本地" }.to_owned(),
-        if english { "Linked" } else { "链接" }.to_owned(),
+        messages::skills_source_all().render(locale),
+        messages::skills_source_local().render(locale),
+        messages::skills_source_linked().render(locale),
     ];
     options.extend(
         snapshot
@@ -198,7 +183,7 @@ fn source_options(snapshot: &SkillsSnapshot, english: bool) -> Vec<String> {
     options
 }
 
-fn app_counts_text(snapshot: &SkillsSnapshot, english: bool) -> String {
+fn app_counts_text(snapshot: &SkillsSnapshot, locale: Locale) -> String {
     let counts = SkillApp::ALL
         .iter()
         .filter_map(|app| {
@@ -207,15 +192,11 @@ fn app_counts_text(snapshot: &SkillsSnapshot, english: bool) -> String {
                 .iter()
                 .filter(|skill| skill.apps.contains(app))
                 .count();
-            (count > 0).then(|| format!("{} {count}", app.label()))
+            (count > 0).then(|| messages::skills_app_count(app.label(), count).render(locale))
         })
         .collect::<Vec<_>>();
     if counts.is_empty() {
-        if english {
-            "No app deployments".into()
-        } else {
-            "尚未部署到应用".into()
-        }
+        messages::skills_no_deployments().render(locale)
     } else {
         counts.join(" · ")
     }
@@ -225,11 +206,10 @@ fn filtered_rows(
     snapshot: &SkillsSnapshot,
     view: i32,
     query: &str,
-    english: bool,
+    locale: Locale,
     status_filter: i32,
     source_filter: i32,
 ) -> Vec<SkillListRow> {
-    let local = if english { "Local" } else { "本地" };
     let mut rows = match view {
         0 => snapshot
             .installed
@@ -237,7 +217,7 @@ fn filtered_rows(
             .filter(|skill| installed_matches(skill, snapshot, status_filter, source_filter))
             .map(|skill| {
                 let source = if skill.linked {
-                    if english { "Linked" } else { "链接" }.to_owned()
+                    messages::skills_source_linked().render(locale)
                 } else {
                     skill
                         .repository_id
@@ -247,12 +227,16 @@ fn filtered_rows(
                             let label = repository_label(snapshot, id);
                             match skill.revision.as_deref() {
                                 Some(revision) if !revision.is_empty() => {
-                                    format!("{label}@{}", short_revision(revision))
+                                    messages::skills_repository_revision(
+                                        label,
+                                        short_revision(revision),
+                                    )
+                                    .render(locale)
                                 }
                                 _ => label,
                             }
                         })
-                        .unwrap_or_else(|| local.into())
+                        .unwrap_or_else(|| messages::skills_source_local().render(locale))
                 };
                 let apps = skill
                     .apps
@@ -261,20 +245,18 @@ fn filtered_rows(
                     .collect::<Vec<_>>()
                     .join(", ");
                 let apps = if apps.is_empty() {
-                    if english {
-                        "Not deployed"
-                    } else {
-                        "尚未部署"
-                    }
+                    messages::skills_not_deployed().render(locale)
                 } else {
-                    &apps
+                    apps
                 };
                 let enabled = !skill.apps.is_empty();
                 SkillListRow {
                     id: skill.id.clone().into(),
                     name: skill.name.clone().into(),
                     description: skill.description.clone().into(),
-                    detail: format!("{source} · {apps}").into(),
+                    detail: messages::skills_source_apps(apps, &source)
+                        .render(locale)
+                        .into(),
                     installed: true,
                     problem: skill.last_error.is_some(),
                     linked: skill.linked,
@@ -283,12 +265,11 @@ fn filtered_rows(
                     source: source.into(),
                     source_target: source_target(snapshot, skill).into(),
                     status: if enabled {
-                        if english { "Enabled" } else { "已启用" }
-                    } else if english {
-                        "Disabled"
+                        messages::skills_enabled()
                     } else {
-                        "未启用"
+                        messages::skills_disabled()
                     }
+                    .render(locale)
                     .into(),
                     enabled,
                     app0: skill.apps.contains(&SkillApp::Claude),
@@ -306,11 +287,11 @@ fn filtered_rows(
                 id: skill.id.clone().into(),
                 name: skill.name.clone().into(),
                 description: skill.description.clone().into(),
-                detail: format!(
-                    "{} · {}",
+                detail: messages::skills_repository_path(
+                    &skill.path,
                     repository_label(snapshot, &skill.repository_id),
-                    skill.path
                 )
+                .render(locale)
                 .into(),
                 installed: skill.installed || directory_is_managed(snapshot, &skill.directory),
                 problem: false,
@@ -332,15 +313,15 @@ fn filtered_rows(
             .local
             .iter()
             .map(|skill| {
-                let app = skill.app.map(SkillApp::label).unwrap_or(if english {
-                    "Shared"
-                } else {
-                    "共享"
-                });
+                let app = skill
+                    .app
+                    .map(|app| app.label().to_owned())
+                    .unwrap_or_else(|| messages::skills_shared().render(locale));
                 let detail = match (&skill.target, skill.linked) {
-                    (Some(target), true) => format!("{app} · {} → {target}", skill.path),
-                    _ => format!("{app} · {}", skill.path),
-                };
+                    (Some(target), true) => messages::skills_local_link(app, &skill.path, target),
+                    _ => messages::skills_local_path(app, &skill.path),
+                }
+                .render(locale);
                 SkillListRow {
                     id: skill.path.clone().into(),
                     name: skill.name.clone().into(),
@@ -432,19 +413,20 @@ impl Controller {
     pub(super) fn submit_skills(&self, command: SkillsCommand) {
         if !self.skills_editable() {
             self.render_skills();
-            self.say(
-                "请等待当前技能操作完成。",
-                "Wait for the current skills operation to finish.",
-            );
+            self.say(messages::skills_wait_for_operation());
             return;
         }
         self.idle_timer.stop();
-        self.state.borrow_mut().skills.submitting = true;
+        {
+            let mut state = self.state.borrow_mut();
+            state.skills.submitting = true;
+            state.skills.error = None;
+        }
         let ui = self.ui();
         let skills = ui.global::<SkillsState>();
         skills.set_submitting(true);
         skills.set_error_text("".into());
-        self.say("正在提交技能操作…", "Submitting skills operation…");
+        self.say(messages::skills_submitting());
         self.send(Work::Skills(command));
     }
 
@@ -461,10 +443,10 @@ impl Controller {
         let skills = ui.global::<SkillsState>();
         skills.set_loading(self.state.borrow().skills.loading);
         skills.set_submitting(self.state.borrow().skills.submitting);
-        match result.and_then(|response| {
+        match result.map_err(UiText::from).and_then(|response| {
             response
                 .skills
-                .ok_or_else(|| "宿主未返回技能状态 / Host returned no skills state".into())
+                .ok_or_else(|| messages::skills_missing_state().into())
         }) {
             Ok(snapshot) => {
                 let new_error = snapshot.last_error.clone().filter(|error| {
@@ -478,6 +460,7 @@ impl Controller {
                 });
                 {
                     let mut state = self.state.borrow_mut();
+                    state.skills.error = None;
                     state.skills.snapshot = Some(snapshot);
                     let installed = state
                         .skills
@@ -501,15 +484,12 @@ impl Controller {
                 if let Some(error) = new_error {
                     self.error(error);
                 } else if submitted {
-                    self.say(
-                        "技能操作已交给宿主，可以关闭界面。",
-                        "The host accepted the operation. You can close this window.",
-                    );
+                    self.say(messages::skills_operation_accepted());
                 }
             }
             Err(error) => {
+                self.state.borrow_mut().skills.error = Some(error.clone());
                 self.render_skills();
-                skills.set_error_text(error.clone().into());
                 self.error(error);
             }
         }
@@ -521,53 +501,42 @@ impl Controller {
     pub(super) fn render_skills(&self) {
         let ui = self.ui();
         let skills = ui.global::<SkillsState>();
+        let locale = self.locale();
         let state = self.state.borrow();
+        let error = if state.skills.submitting {
+            String::new()
+        } else if let Some(error) = &state.skills.error {
+            error.render(locale)
+        } else {
+            state
+                .skills
+                .snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.last_error.clone())
+                .unwrap_or_default()
+        };
+        skills.set_error_text(error.into());
         let Some(snapshot) = &state.skills.snapshot else {
-            skills.set_empty_text(
-                if ui.get_english() {
-                    "Loading skills from the host…"
-                } else {
-                    "正在从宿主读取技能…"
-                }
-                .into(),
-            );
+            skills.set_empty_text(messages::skills_loading().render(locale).into());
             return;
         };
-        let english = ui.get_english();
         skills.set_loaded(true);
         skills.set_busy(snapshot.busy);
         skills.set_daily_update(snapshot.daily_update);
         skills.set_installed_count(snapshot.installed.len().min(i32::MAX as usize) as i32);
         skills.set_storage_path(snapshot.storage_path.clone().into());
-        skills.set_schedule_text(schedule_text(snapshot, now_seconds(), english).into());
+        skills.set_schedule_text(schedule_text(snapshot, now_seconds(), locale).into());
         skills.set_activity_text(snapshot.message.clone().into());
-        skills.set_error_text(snapshot.last_error.clone().unwrap_or_default().into());
         let mut notices = snapshot.warnings.clone();
         if snapshot.truncated {
-            notices.insert(
-                0,
-                if english {
-                    "This catalog is too large to display in full. Some entries are omitted; narrow the repository list and reload."
-                } else {
-                    "列表过大，当前只显示部分条目；可缩小仓库范围后重新刷新。"
-                }
-                .into(),
-            );
+            notices.insert(0, messages::skills_catalog_truncated().render(locale));
         }
         skills.set_notice_detail(notices.join("\n").into());
         skills.set_notice_text(
             if notices.is_empty() {
                 String::new()
-            } else if english {
-                format!(
-                    "{} skill notice(s). Open Details for the full message.",
-                    notices.len()
-                )
             } else {
-                format!(
-                    "有 {} 条技能提示，点击「查看详情」查看完整信息。",
-                    notices.len()
-                )
+                messages::skills_notice_count(notices.len()).render(locale)
             }
             .into(),
         );
@@ -580,16 +549,11 @@ impl Controller {
                     .iter()
                     .filter(|skill| skill.repository_id.as_deref() == Some(&repository.id))
                     .count();
-                let branch = repository.branch.as_deref().unwrap_or(if english {
-                    "default branch"
-                } else {
-                    "默认分支"
-                });
-                let detail = if english {
-                    format!("{branch} · {count} installed (uninstall before removing source)")
-                } else {
-                    format!("{branch} · 已安装 {count} 个（卸载后可移除来源）")
-                };
+                let branch = repository
+                    .branch
+                    .clone()
+                    .unwrap_or_else(|| messages::skills_default_branch().render(locale));
+                let detail = messages::skills_repository_installed(count, branch).render(locale);
                 SkillRepositoryRow {
                     id: repository.id.clone().into(),
                     url: repository.url.clone().into(),
@@ -608,7 +572,7 @@ impl Controller {
         }
 
         let view = skills.get_view();
-        let options = source_options(snapshot, english)
+        let options = source_options(snapshot, locale)
             .into_iter()
             .map(SharedString::from)
             .collect::<Vec<_>>();
@@ -624,12 +588,12 @@ impl Controller {
         if !skills.get_source_options().iter().eq(options.iter()) {
             skills.set_source_options(ModelRc::new(VecModel::from(options)));
         }
-        skills.set_app_counts_text(app_counts_text(snapshot, english).into());
+        skills.set_app_counts_text(app_counts_text(snapshot, locale).into());
         let mut rows = filtered_rows(
             snapshot,
             view,
             &skills.get_query(),
-            english,
+            locale,
             status_filter,
             source_filter,
         );
@@ -689,46 +653,21 @@ impl Controller {
                 .as_deref()
                 .map(|revision| revision.chars().take(12).collect::<String>())
                 .unwrap_or_else(|| "—".into());
-            let updated = relative_time(installed.updated_at, now_seconds(), english);
-            let link = if installed.linked {
-                installed
-                    .target
-                    .as_deref()
-                    .map(|target| {
-                        if english {
-                            format!("\nLink: {target}")
-                        } else {
-                            format!("\n链接：{target}")
-                        }
-                    })
-                    .unwrap_or_default()
-            } else {
-                String::new()
+            let updated = relative_time(installed.updated_at, now_seconds(), locale);
+            let detail = match installed.target.as_deref().filter(|_| installed.linked) {
+                Some(target) => messages::skills_linked_detail(
+                    &installed.directory,
+                    &revision,
+                    target,
+                    &updated,
+                ),
+                None => messages::skills_detail(&installed.directory, &revision, &updated),
             };
-            skills.set_selected_detail(
-                if english {
-                    format!(
-                        "Directory: {}\nRevision: {revision}\nUpdated: {updated}{link}",
-                        installed.directory
-                    )
-                } else {
-                    format!(
-                        "目录：{}\n修订：{revision}\n更新：{updated}{link}",
-                        installed.directory
-                    )
-                }
-                .into(),
-            );
+            skills.set_selected_detail(detail.render(locale).into());
             skills.set_selected_summary(
-                if english {
-                    format!(
-                        "{} · Revision {revision} · Updated {updated}",
-                        installed.directory
-                    )
-                } else {
-                    format!("{} · 修订 {revision} · 更新 {updated}", installed.directory)
-                }
-                .into(),
+                messages::skills_selected_summary(&installed.directory, revision, updated)
+                    .render(locale)
+                    .into(),
             );
             skills.set_selected_updatable(installed.repository_id.is_some());
             skills.set_selected_error(installed.last_error.clone().unwrap_or_default().into());
@@ -760,31 +699,14 @@ impl Controller {
         }
         let filtered = !skills.get_query().trim().is_empty()
             || (view == 0 && (status_filter != 0 || source_filter != 0));
-        let empty = match (english, filtered, view) {
-            (true, true, _) => "No matching skills.",
-            (false, true, _) => "没有匹配的技能。",
-            (true, false, 0) => {
-                "No managed skills yet. Add a repository in Repositories, or import skills already on this device."
-            }
-            (false, false, 0) => "暂无管理中的技能。可在「仓库」添加来源，或导入本机已有技能。",
-            (true, false, 1) if snapshot.repositories.is_empty() => {
-                "Add a source in Repositories, then reload repositories to discover skills."
-            }
-            (false, false, 1) if snapshot.repositories.is_empty() => {
-                "先在「仓库」添加来源，再点击「刷新仓库」发现技能。"
-            }
-            (true, false, 1) => {
-                "Reload repositories to discover skills from your configured sources."
-            }
-            (false, false, 1) => "点击「刷新仓库」从已配置来源发现技能。",
-            (true, false, _) => {
-                "Scan this device to find unmanaged skills. You can also import a folder containing SKILL.md."
-            }
-            (false, false, _) => {
-                "点击「扫描本机」查找尚未管理的技能，也可导入包含 SKILL.md 的文件夹。"
-            }
+        let empty = match (filtered, view) {
+            (true, _) => messages::skills_empty_matches(),
+            (false, 0) => messages::skills_empty_managed(),
+            (false, 1) if snapshot.repositories.is_empty() => messages::skills_empty_sources(),
+            (false, 1) => messages::skills_empty_discovery(),
+            (false, _) => messages::skills_empty_local(),
         };
-        skills.set_empty_text(empty.into());
+        skills.set_empty_text(empty.render(locale).into());
     }
 
     pub(super) fn skills_view(&self, view: i32) {
@@ -816,7 +738,7 @@ impl Controller {
         let skills = ui.global::<SkillsState>();
         let url = skills.get_repository_url().trim().to_owned();
         if url.is_empty() {
-            self.error("请输入 GitHub 仓库 / Enter a GitHub repository");
+            self.error(messages::skills_enter_repository());
             return;
         }
         let branch = skills.get_repository_branch().trim().to_owned();
@@ -992,14 +914,12 @@ impl Controller {
         }
         self.ask(
             ConfirmAction::UninstallSkill(skills.get_selected_id().to_string()),
-            "卸载所选技能？",
-            "Uninstall the selected skill?",
-            "将移除工具箱管理的副本或链接；链接的源目录会保留。若检测到本地修改或链接被替换，操作会停止并报告。",
-            "Remove the managed copy or tool-owned links. The linked source folder is kept. Local edits or replaced links stop the operation and are reported.",
+            messages::skills_uninstall_title(),
+            messages::skills_uninstall_body(),
         );
     }
 
-    pub(super) fn import_skill_folder(&self, path: Result<Option<String>, String>) {
+    pub(super) fn import_skill_folder(&self, path: Result<Option<String>, UiText>) {
         self.state.borrow_mut().dialog_open = false;
         self.ui().set_dialog_busy(false);
         match path {
@@ -1163,11 +1083,40 @@ mod tests {
             ..SkillsSnapshot::default()
         };
         assert_eq!(
-            schedule_text(&snapshot, 7_260, true),
+            schedule_text(&snapshot, 7_260, Locale::from_tag("en")),
             "Last attempt: 1 min ago · Last success: 1 h ago · Next: in 59 min"
         );
-        assert!(schedule_text(&snapshot, 10_800, false).ends_with("下次更新：已到期"));
-        assert_eq!(relative_time(u64::MAX, 0, true), "in 213503982334601 d");
+        assert!(
+            schedule_text(&snapshot, 10_800, Locale::from_tag("zh-CN"))
+                .ends_with("下次更新：已到期")
+        );
+        assert_eq!(
+            relative_time(u64::MAX, 0, Locale::from_tag("en")),
+            "in 213503982334601 d"
+        );
+    }
+
+    #[test]
+    fn relative_times_localize_complete_phrases_in_both_directions() {
+        for (timestamp, english, chinese) in [
+            (172_800, "now", "现在"),
+            (172_859, "now", "现在"),
+            (172_740, "1 min ago", "1 分钟前"),
+            (172_860, "in 1 min", "1 分钟后"),
+            (169_200, "1 h ago", "1 小时前"),
+            (176_400, "in 1 h", "1 小时后"),
+            (86_400, "1 d ago", "1 天前"),
+            (259_200, "in 1 d", "1 天后"),
+        ] {
+            assert_eq!(
+                relative_time(timestamp, 172_800, Locale::from_tag("en")),
+                english
+            );
+            assert_eq!(
+                relative_time(timestamp, 172_800, Locale::from_tag("zh-CN")),
+                chinese
+            );
+        }
     }
 
     #[test]
@@ -1202,7 +1151,7 @@ mod tests {
             }],
             ..SkillsSnapshot::default()
         };
-        let rows = filtered_rows(&snapshot, 2, "", true, 0, 0);
+        let rows = filtered_rows(&snapshot, 2, "", Locale::from_tag("en"), 0, 0);
         assert!(rows[0].linked);
         assert!(rows[0].detail.contains("→ /vault/ob"));
         assert!(!rows[0].installed);
@@ -1246,8 +1195,8 @@ mod tests {
             }],
             ..SkillsSnapshot::default()
         };
-        assert!(filtered_rows(&snapshot, 1, "", false, 0, 0)[0].installed);
-        assert!(filtered_rows(&snapshot, 2, "", false, 0, 0)[0].installed);
+        assert!(filtered_rows(&snapshot, 1, "", Locale::from_tag("zh-CN"), 0, 0)[0].installed);
+        assert!(filtered_rows(&snapshot, 2, "", Locale::from_tag("zh-CN"), 0, 0)[0].installed);
     }
 
     fn installed_skill(
@@ -1273,7 +1222,7 @@ mod tests {
     }
 
     fn filter_ids(snapshot: &SkillsSnapshot, status: i32, source: i32) -> Vec<String> {
-        filtered_rows(snapshot, 0, "", false, status, source)
+        filtered_rows(snapshot, 0, "", Locale::from_tag("zh-CN"), status, source)
             .into_iter()
             .map(|row| row.id.to_string())
             .collect()
@@ -1309,10 +1258,13 @@ mod tests {
         assert_eq!(filter_ids(&snapshot, 0, 3), ["alpha", "beta"]);
         assert_eq!(filter_ids(&snapshot, 1, 3), ["alpha"]);
         assert_eq!(
-            source_options(&snapshot, false),
+            source_options(&snapshot, Locale::from_tag("zh-CN")),
             ["全部", "本地", "链接", "sean2077/skills"]
         );
-        assert_eq!(app_counts_text(&snapshot, false), "Claude Code 1 · Codex 1");
+        assert_eq!(
+            app_counts_text(&snapshot, Locale::from_tag("zh-CN")),
+            "Claude Code 1 · Codex 1"
+        );
     }
 
     #[test]
@@ -1334,11 +1286,31 @@ mod tests {
             )],
             ..SkillsSnapshot::default()
         };
-        let rows = filtered_rows(&snapshot, 0, "", true, 0, 0);
+        let rows = filtered_rows(&snapshot, 0, "", Locale::from_tag("en"), 0, 0);
         assert_eq!(rows[0].source, "sean2077/skills");
         assert_eq!(rows[0].status, "Enabled");
         assert!(rows[0].enabled);
         assert!(rows[0].app0);
         assert!(!rows[0].app4);
+    }
+
+    #[test]
+    fn localization_preserves_external_skill_metadata() {
+        let mut skill = installed_skill("review", None, &[], false);
+        skill.name = "用户名称 / custom name".into();
+        skill.description = "External description / 原文 {path}".into();
+        let snapshot = SkillsSnapshot {
+            installed: vec![skill],
+            ..SkillsSnapshot::default()
+        };
+        for (language, source, status) in [("en", "Local", "Disabled"), ("zh-CN", "本地", "未启用")]
+        {
+            let rows = filtered_rows(&snapshot, 0, "", Locale::from_tag(language), 0, 0);
+            assert_eq!(rows[0].id, "review");
+            assert_eq!(rows[0].name, "用户名称 / custom name");
+            assert_eq!(rows[0].description, "External description / 原文 {path}");
+            assert_eq!(rows[0].source, source);
+            assert_eq!(rows[0].status, status);
+        }
     }
 }

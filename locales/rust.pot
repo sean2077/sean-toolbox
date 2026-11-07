@@ -1,0 +1,557 @@
+# Sean Toolbox translations.
+msgid ""
+msgstr ""
+"Project-Id-Version: Sean Toolbox\n"
+"Report-Msgid-Bugs-To: https://github.com/sean2077/sean-toolbox/issues\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgctxt "rust.import_settings"
+msgid ""
+"\n"
+"JSON settings: language={language}, theme={theme}, shortcut={shortcut}, autostart={autostart}, projects={projects}, windows={windows}, UI idle={idle} s\n"
+msgstr ""
+
+msgctxt "rust.import_notes"
+msgid ""
+"\n"
+"Review these notes:\n"
+msgstr ""
+
+msgctxt "rust.import_profile"
+msgid ""
+"\n"
+"• {name}  [{platform}]  {shortcut} · {enabled}\n"
+"  ID: {id}\n"
+"  {matcher}\n"
+msgstr ""
+
+msgctxt "rust.import_working_directory"
+msgid "     Working directory: {path}\n"
+msgstr ""
+
+msgctxt "rust.import_quake"
+msgid "  Quake: {edge}, {width}% × {height}%, display={monitor}, topmost={topmost}, auto-hide={auto_hide}\n"
+msgstr ""
+
+msgctxt "rust.skills_empty_sources"
+msgid "Add a source in Repositories, then reload repositories to discover skills."
+msgstr ""
+
+msgctxt "rust.skills_source_all"
+msgid "All"
+msgstr ""
+
+msgctxt "rust.error_app_list_changed_reload_configuration"
+msgid "App list changed; reload configuration"
+msgstr ""
+
+msgctxt "rust.invalid_arguments"
+msgid "Arguments must be a JSON string array, e.g. [\"--new-window\"]: {error}"
+msgstr ""
+
+msgctxt "rust.monitor_cursor"
+msgid "At mouse pointer"
+msgstr ""
+
+msgctxt "rust.available"
+msgid "Available"
+msgstr ""
+
+msgctxt "rust.error_background_worker_stopped_reopen_the_toolbox"
+msgid "Background worker stopped; reopen the toolbox"
+msgstr ""
+
+msgctxt "rust.edge_bottom"
+msgid "Bottom"
+msgstr ""
+
+msgctxt "rust.launch_candidate"
+msgid "Candidate {number}"
+msgstr ""
+
+msgctxt "rust.host_connection_failed"
+msgid "Cannot connect to host; start sean-toolbox first. {error}"
+msgstr ""
+
+msgctxt "rust.confirm_closing_releases_the_ui_from_memory_unsaved_changes_will"
+msgid "Closing releases the UI from memory; unsaved changes will be lost."
+msgstr ""
+
+msgctxt "rust.error_configuration_changed_externally_reload_before_saving"
+msgid "Configuration changed externally; reload before saving"
+msgstr ""
+
+msgctxt "rust.config_too_large"
+msgid "Configuration exceeds 1 MiB."
+msgstr ""
+
+msgctxt "rust.status_configuration_loaded_review_before_applying"
+msgid "Configuration loaded; review before applying."
+msgstr ""
+
+msgctxt "rust.status_configuration_saved_and_applied"
+msgid "Configuration saved and applied."
+msgstr ""
+
+msgctxt "rust.status_connected_to_the_resident_host"
+msgid "Connected to the resident host."
+msgstr ""
+
+msgctxt "rust.theme_dark"
+msgid "Dark"
+msgstr ""
+
+msgctxt "rust.confirm_delete_this_app_profile"
+msgid "Delete this app profile?"
+msgstr ""
+
+msgctxt "rust.tray_diagnostics"
+msgid "Diagnostics & about"
+msgstr ""
+
+msgctxt "rust.skills_detail"
+msgid ""
+"Directory: {directory}\n"
+"Revision: {revision}\n"
+"Updated: {updated}"
+msgstr ""
+
+msgctxt "rust.skills_linked_detail"
+msgid ""
+"Directory: {directory}\n"
+"Revision: {revision}\n"
+"Updated: {updated}\n"
+"Link: {target}"
+msgstr ""
+
+msgctxt "rust.disabled"
+msgid "Disabled"
+msgstr ""
+
+msgctxt "rust.skills_disabled"
+msgid "Disabled"
+msgstr ""
+
+msgctxt "rust.confirm_discard_app_changes"
+msgid "Discard app changes?"
+msgstr ""
+
+msgctxt "rust.confirm_discard_settings_changes"
+msgid "Discard settings changes?"
+msgstr ""
+
+msgctxt "rust.confirm_discard_unsaved_changes_first"
+msgid "Discard unsaved changes first?"
+msgstr ""
+
+msgctxt "rust.confirm_discard_unsaved_changes"
+msgid "Discard unsaved changes?"
+msgstr ""
+
+msgctxt "rust.enabled"
+msgid "Enabled"
+msgstr ""
+
+msgctxt "rust.skills_enabled"
+msgid "Enabled"
+msgstr ""
+
+msgctxt "rust.skills_enter_repository"
+msgid "Enter a GitHub repository"
+msgstr ""
+
+msgctxt "rust.match_windows"
+msgid "Enter the executable filename, e.g. Code.exe."
+msgstr ""
+
+msgctxt "rust.config_exported"
+msgid "Exported: {path}"
+msgstr ""
+
+msgctxt "rust.file_dialog_failed"
+msgid "File dialog failed: {error}"
+msgstr ""
+
+msgctxt "rust.folder_not_found"
+msgid "Folder not found: {path}"
+msgstr ""
+
+msgctxt "rust.error_host_returned_no_configuration"
+msgid "Host returned no configuration"
+msgstr ""
+
+msgctxt "rust.skills_missing_state"
+msgid "Host returned no skills state"
+msgstr ""
+
+msgctxt "rust.error_host_returned_no_status"
+msgid "Host returned no status"
+msgstr ""
+
+msgctxt "rust.invalid_idle_timeout"
+msgid "Idle timeout must be an integer from 0 to 3600."
+msgstr ""
+
+msgctxt "rust.confirm_import_uses_the_saved_configuration_and_discards_unsaved_edits"
+msgid "Import uses the saved configuration and discards unsaved edits."
+msgstr ""
+
+msgctxt "rust.config_invalid_json"
+msgid "Invalid JSON: {error}"
+msgstr ""
+
+msgctxt "rust.invalid_export_directory"
+msgid "Invalid export directory."
+msgstr ""
+
+msgctxt "rust.skills_schedule"
+msgid "Last attempt: {attempt} · Last success: {success} · Next: {next}"
+msgstr ""
+
+msgctxt "rust.edge_left"
+msgid "Left"
+msgstr ""
+
+msgctxt "rust.theme_light"
+msgid "Light"
+msgstr ""
+
+msgctxt "rust.skills_source_linked"
+msgid "Linked"
+msgstr ""
+
+msgctxt "rust.skills_loading"
+msgid "Loading skills from the host…"
+msgstr ""
+
+msgctxt "rust.skills_source_local"
+msgid "Local"
+msgstr ""
+
+msgctxt "rust.match_macos"
+msgid "Match a bundle ID, app name or executable name. Accessibility permission is required."
+msgstr ""
+
+msgctxt "rust.no"
+msgid "No"
+msgstr ""
+
+msgctxt "rust.skills_no_deployments"
+msgid "No app deployments"
+msgstr ""
+
+msgctxt "rust.skills_empty_managed"
+msgid "No managed skills yet. Add a repository in Repositories, or import skills already on this device."
+msgstr ""
+
+msgctxt "rust.projects_no_matches"
+msgid "No matching projects."
+msgstr ""
+
+msgctxt "rust.skills_empty_matches"
+msgid "No matching skills."
+msgstr ""
+
+msgctxt "rust.projects_empty"
+msgid "No recent projects yet. Open a folder or workspace in VS Code, then refresh."
+msgstr ""
+
+msgctxt "rust.skills_not_deployed"
+msgid "Not deployed"
+msgstr ""
+
+msgctxt "rust.open_failed"
+msgid "Open failed: {status}"
+msgstr ""
+
+msgctxt "rust.path_invalid_unicode"
+msgid "Path is not valid Unicode."
+msgstr ""
+
+msgctxt "rust.monitor_primary"
+msgid "Primary"
+msgstr ""
+
+msgctxt "rust.project_list_changed"
+msgid "Project list changed; refresh and retry."
+msgstr ""
+
+msgctxt "rust.status_project_open_request_sent"
+msgid "Project open request sent."
+msgstr ""
+
+msgctxt "rust.projects_disabled"
+msgid "Projects are disabled. Enable this module in Settings."
+msgstr ""
+
+msgctxt "rust.error_quake_dimensions_must_be_between_10_and_100"
+msgid "Quake dimensions must be between 10 and 100%"
+msgstr ""
+
+msgctxt "rust.tray_quit"
+msgid "Quit Sean Toolbox"
+msgstr ""
+
+msgctxt "rust.projects_reading"
+msgid "Reading recent projects…"
+msgstr ""
+
+msgctxt "rust.tray_projects"
+msgid "Recent projects"
+msgstr ""
+
+msgctxt "rust.skills_empty_discovery"
+msgid "Reload repositories to discover skills from your configured sources."
+msgstr ""
+
+msgctxt "rust.confirm_reload_saved_configuration"
+msgid "Reload saved configuration?"
+msgstr ""
+
+msgctxt "rust.skills_uninstall_body"
+msgid "Remove the managed copy or tool-owned links. The linked source folder is kept. Local edits or replaced links stop the operation and are reported."
+msgstr ""
+
+msgctxt "rust.confirm_restore_saved_settings_application_profile_edits_will_be_kept"
+msgid "Restore saved settings. Application profile edits will be kept."
+msgstr ""
+
+msgctxt "rust.edge_right"
+msgid "Right"
+msgstr ""
+
+msgctxt "rust.status_save_or_cancel_your_changes_before_opening_a_project"
+msgid "Save or cancel your changes before opening a project."
+msgstr ""
+
+msgctxt "rust.status_save_or_cancel_your_changes_before_toggling_a_window"
+msgid "Save or cancel your changes before toggling a window."
+msgstr ""
+
+msgctxt "rust.config_invalid_encoding"
+msgid "Save the configuration as UTF-8."
+msgstr ""
+
+msgctxt "rust.status_saving_and_applying"
+msgid "Saving and applying…"
+msgstr ""
+
+msgctxt "rust.skills_empty_local"
+msgid "Scan this device to find unmanaged skills. You can also import a folder containing SKILL.md."
+msgstr ""
+
+msgctxt "rust.tray_tooltip"
+msgid "Sean Toolbox · Personal toolbox"
+msgstr ""
+
+msgctxt "rust.tray_settings"
+msgid "Settings"
+msgstr ""
+
+msgctxt "rust.skills_shared"
+msgid "Shared"
+msgstr ""
+
+msgctxt "rust.tray_skills"
+msgid "Skills"
+msgstr ""
+
+msgctxt "rust.skills_submitting"
+msgid "Submitting skills operation…"
+msgstr ""
+
+msgctxt "rust.theme_system"
+msgid "System"
+msgstr ""
+
+msgctxt "rust.diagnostics_summary"
+msgid ""
+"System: {platform}\n"
+"Backend: {backend}\n"
+"Host process: {pid}\n"
+"Window control: {windows}\n"
+"Global shortcuts: {hotkeys}\n"
+"System tray: {tray}\n"
+"Configuration revision: {revision}\n"
+"\n"
+"Last action:\n"
+"{action}\n"
+"\n"
+"Notes:\n"
+"{notes}\n"
+"\n"
+"Last UI error:\n"
+"{error}"
+msgstr ""
+
+msgctxt "rust.confirm_the_current_app_has_unsaved_changes"
+msgid "The current app has unsaved changes."
+msgstr ""
+
+msgctxt "rust.skills_operation_accepted"
+msgid "The host accepted the operation. You can close this window."
+msgstr ""
+
+msgctxt "rust.match_wezterm"
+msgid "The toolbox identifies the dedicated dropdown automatically. This match is used when dropdown mode is off."
+msgstr ""
+
+msgctxt "rust.skills_catalog_truncated"
+msgid "This catalog is too large to display in full. Some entries are omitted; narrow the repository list and reload."
+msgstr ""
+
+msgctxt "rust.confirm_this_removes_the_profile_and_shortcut_the_application_remains"
+msgid "This removes the profile and shortcut. The application remains installed."
+msgstr ""
+
+msgctxt "rust.edge_top"
+msgid "Top"
+msgstr ""
+
+msgctxt "rust.activation_failed"
+msgid "UI activation service failed: {error}"
+msgstr ""
+
+msgctxt "rust.unavailable"
+msgid "Unavailable"
+msgstr ""
+
+msgctxt "rust.skills_uninstall_title"
+msgid "Uninstall the selected skill?"
+msgstr ""
+
+msgctxt "rust.confirm_unsaved_changes_will_be_discarded"
+msgid "Unsaved changes will be discarded."
+msgstr ""
+
+msgctxt "rust.status_wait_for_the_current_operation_to_finish"
+msgid "Wait for the current operation to finish."
+msgstr ""
+
+msgctxt "rust.skills_wait_for_operation"
+msgid "Wait for the current skills operation to finish."
+msgstr ""
+
+msgctxt "rust.tray_windows"
+msgid "Window shortcuts"
+msgstr ""
+
+msgctxt "rust.monitor_foreground"
+msgid "With foreground window"
+msgstr ""
+
+msgctxt "rust.match_linux"
+msgid "X11: match WM_CLASS or executable name. Wayland window control is limited."
+msgstr ""
+
+msgctxt "rust.yes"
+msgid "Yes"
+msgstr ""
+
+msgctxt "rust.skills_default_branch"
+msgid "default branch"
+msgstr ""
+
+msgctxt "rust.skills_schedule_due"
+msgid "due now"
+msgstr ""
+
+msgctxt "rust.skills_time_days_future"
+msgid "in {amount} d"
+msgstr ""
+
+msgctxt "rust.skills_time_hours_future"
+msgid "in {amount} h"
+msgstr ""
+
+msgctxt "rust.skills_time_minutes_future"
+msgid "in {amount} min"
+msgstr ""
+
+msgctxt "rust.skills_schedule_never"
+msgid "never"
+msgstr ""
+
+msgctxt "rust.skills_time_now"
+msgid "now"
+msgstr ""
+
+msgctxt "rust.skills_schedule_off"
+msgid "off"
+msgstr ""
+
+msgctxt "rust.skills_schedule_waiting"
+msgid "waiting for an installed repository skill"
+msgstr ""
+
+msgctxt "rust.skills_time_days_past"
+msgid "{amount} d ago"
+msgstr ""
+
+msgctxt "rust.skills_time_hours_past"
+msgid "{amount} h ago"
+msgstr ""
+
+msgctxt "rust.skills_time_minutes_past"
+msgid "{amount} min ago"
+msgstr ""
+
+msgctxt "rust.skills_app_count"
+msgid "{app} {count}"
+msgstr ""
+
+msgctxt "rust.skills_local_path"
+msgid "{app} · {path}"
+msgstr ""
+
+msgctxt "rust.skills_local_link"
+msgid "{app} · {path} → {target}"
+msgstr ""
+
+msgctxt "rust.skills_repository_installed"
+msgid "{branch} · {count} skill installed (uninstall before removing source)"
+msgid_plural "{branch} · {count} skills installed (uninstall before removing source)"
+msgstr[0] ""
+msgstr[1] ""
+
+msgctxt "rust.skills_notice_count"
+msgid "{count} skill notice. Open Details for the full message."
+msgid_plural "{count} skill notices. Open Details for the full message."
+msgstr[0] ""
+msgstr[1] ""
+
+msgctxt "rust.skills_selected_summary"
+msgid "{directory} · Revision {revision} · Updated {updated}"
+msgstr ""
+
+msgctxt "rust.import_heading"
+msgid ""
+"{filename}\n"
+"\n"
+"{count} application profile\n"
+msgid_plural ""
+"{filename}\n"
+"\n"
+"{count} application profiles\n"
+msgstr[0] ""
+msgstr[1] ""
+
+msgctxt "rust.skills_repository_path"
+msgid "{repository} · {path}"
+msgstr ""
+
+msgctxt "rust.skills_repository_revision"
+msgid "{repository}@{revision}"
+msgstr ""
+
+msgctxt "rust.projects_count"
+msgid "{shown} shown · {count} recent project"
+msgid_plural "{shown} shown · {count} recent projects"
+msgstr[0] ""
+msgstr[1] ""
+
+msgctxt "rust.skills_source_apps"
+msgid "{source} · {apps}"
+msgstr ""
