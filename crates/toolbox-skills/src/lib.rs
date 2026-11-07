@@ -93,6 +93,22 @@ pub fn unix_now() -> u64 {
         .as_secs()
 }
 
+/// Canonical paths on Windows carry a verbatim prefix. Display-only paths
+/// should look like the paths users type and see elsewhere.
+fn display_path(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    #[cfg(windows)]
+    {
+        if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+            return format!(r"\\{rest}");
+        }
+        if let Some(rest) = text.strip_prefix(r"\\?\") {
+            return rest.to_owned();
+        }
+    }
+    text.into_owned()
+}
+
 impl SkillsService {
     pub fn open(root: PathBuf, home: PathBuf, cancel: Arc<AtomicBool>) -> Result<Self, String> {
         if !root.is_absolute() || !home.is_absolute() {
@@ -142,23 +158,28 @@ impl SkillsService {
             _lock: lock,
         };
         service.check_roots(false)?;
-        let warnings = transaction::recover(
+        // New startup findings take precedence over older persisted warnings
+        // when the bounded list is full.
+        let mut warnings = clear_stale_staging(&service.root)?;
+        warnings.extend(transaction::recover(
             &service.root,
             &service.allowed_parents(),
             service.state.generation,
-        )?;
-        service.state.warnings.extend(warnings);
+        )?);
+        warnings.append(&mut service.state.warnings);
+        service.state.warnings = warnings;
+        service.state.warnings.truncate(16);
         Ok(service)
     }
 
     pub fn snapshot(&self) -> SkillsSnapshot {
         let mut snapshot = SkillsSnapshot {
-            storage_path: self.root.join("managed").to_string_lossy().into_owned(),
+            storage_path: display_path(&self.root.join("managed")),
             app_paths: SkillApp::ALL
                 .into_iter()
                 .map(|app| SkillAppPath {
                     app,
-                    path: self.app_root(app).to_string_lossy().into_owned(),
+                    path: display_path(&self.app_root(app)),
                 })
                 .collect(),
             repositories: self.state.repositories.clone(),
@@ -242,7 +263,7 @@ impl SkillsService {
         self.check_roots(false)?;
         let warnings =
             transaction::recover(&self.root, &self.allowed_parents(), self.state.generation)?;
-        self.state.warnings.extend(warnings);
+        self.state.warnings.splice(0..0, warnings);
         self.state.warnings.truncate(16);
         match command {
             SkillsCommand::AddRepository { url, branch } => self.add_repository(url, branch),
@@ -432,6 +453,37 @@ fn validate_state(state: &State) -> Result<(), String> {
     Ok(())
 }
 
+/// Remove staging directories abandoned by an interrupted process. The manager
+/// lock is held, so no live checkout or copy can own them. Unknown entries are
+/// left untouched, and removal failures become warnings instead of blocking
+/// startup.
+fn clear_stale_staging(root: &Path) -> Result<Vec<String>, String> {
+    let mut warnings = Vec::new();
+    for entry in files::sorted_entries(&root.join("temporary"))? {
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
+        if !(name.starts_with("checkout-") || name.starts_with("skill-")) {
+            continue;
+        }
+        let path = entry.path();
+        if !files::metadata(&path).is_ok_and(|meta| meta.is_dir()) {
+            continue;
+        }
+        if let Err(error) = fs::remove_dir_all(&path) {
+            warnings.push(files::limited(
+                &format!(
+                    "Cannot remove stale staging directory {}: {error}",
+                    path.display()
+                ),
+                500,
+            ));
+        }
+    }
+    Ok(warnings)
+}
+
 impl SkillsService {
     fn add_repository(&mut self, url: String, branch: Option<String>) -> Result<String, String> {
         let url = git::repository_url(&url)?;
@@ -522,6 +574,7 @@ impl SkillsService {
         let repositories = self.state.repositories.clone();
         self.available.clear();
         let mut failures = Vec::new();
+        let mut skipped = 0usize;
         for repository in repositories {
             self.check_cancel()?;
             if let Err(error) = self.refresh_repository(&repository.id) {
@@ -537,12 +590,34 @@ impl SkillsService {
                 checkout,
                 MAX_SKILLS.saturating_sub(self.available.len()),
             ) {
-                Ok((found, omitted)) => {
-                    self.available.extend(found);
-                    if omitted {
+                Ok(discovered) => {
+                    self.available.extend(discovered.candidates);
+                    if discovered.omitted {
                         failures.push(
                             "The catalog exceeds 250 skills; remove a source to view others".into(),
                         );
+                    }
+                    if !discovered.skipped.is_empty() {
+                        skipped += discovered.skipped.len();
+                        let sample: Vec<_> = discovered.skipped.iter().take(3).cloned().collect();
+                        let more = if discovered.skipped.len() > sample.len() {
+                            ", …"
+                        } else {
+                            ""
+                        };
+                        self.state.warnings.insert(
+                            0,
+                            files::limited(
+                                &format!(
+                                    "{}: skipped {} skill(s) with unreadable SKILL.md: {}{more}",
+                                    repository.url,
+                                    discovered.skipped.len(),
+                                    sample.join(", ")
+                                ),
+                                500,
+                            ),
+                        );
+                        self.state.warnings.truncate(16);
                     }
                 }
                 Err(error) => {
@@ -565,7 +640,11 @@ impl SkillsService {
                 .then_with(|| a.id.cmp(&b.id))
         });
         if failures.is_empty() {
-            Ok(format!("Discovered {} skills", self.available.len()))
+            let mut message = format!("Discovered {} skills", self.available.len());
+            if skipped > 0 {
+                message.push_str(&format!("; skipped {skipped} with unreadable SKILL.md"));
+            }
+            Ok(message)
         } else {
             Err(format!(
                 "Found {} skills; {}",
@@ -1016,15 +1095,24 @@ impl SkillsService {
     }
 }
 
+struct Discovered {
+    candidates: Vec<SkillCandidate>,
+    omitted: bool,
+    /// Packages whose SKILL.md could not be read. They are reported without
+    /// hiding the rest of the repository catalog.
+    skipped: Vec<String>,
+}
+
 fn candidates(
     repository: &SkillRepository,
     checkout: &git::Checkout,
     limit: usize,
-) -> Result<(Vec<SkillCandidate>, bool), String> {
+) -> Result<Discovered, String> {
     let mut pending = vec![(checkout.tree.clone(), String::new(), 0)];
     let mut found = Vec::new();
     let mut visited = 0;
     let mut omitted = false;
+    let mut skipped = Vec::new();
     while let Some((directory, relative, depth)) = pending.pop() {
         visited += 1;
         if visited > 20_000 || depth > 20 {
@@ -1042,19 +1130,27 @@ fn candidates(
                 relative.rsplit('/').next().unwrap_or("skill")
             };
             if files::name(leaf).is_ok() && !leaf.starts_with('.') {
-                let (name, description) = files::descriptor(&directory, leaf)?;
-                if found.len() < limit {
-                    found.push(SkillCandidate {
-                        id: format!("{}:{relative}", repository.id),
-                        repository_id: repository.id.clone(),
-                        path: relative.clone(),
-                        directory: leaf.into(),
-                        name,
-                        description,
-                        installed: false,
-                    });
-                } else {
-                    omitted = true;
+                match files::descriptor(&directory, leaf) {
+                    Ok((name, description)) => {
+                        if found.len() < limit {
+                            found.push(SkillCandidate {
+                                id: format!("{}:{relative}", repository.id),
+                                repository_id: repository.id.clone(),
+                                path: relative.clone(),
+                                directory: leaf.into(),
+                                name,
+                                description,
+                                installed: false,
+                            });
+                        } else {
+                            omitted = true;
+                        }
+                    }
+                    Err(_) => skipped.push(if relative.is_empty() {
+                        leaf.into()
+                    } else {
+                        relative.clone()
+                    }),
                 }
             }
             // A SKILL.md defines a package boundary. Nested examples may carry
@@ -1084,7 +1180,11 @@ fn candidates(
             }
         }
     }
-    Ok((found, omitted))
+    Ok(Discovered {
+        candidates: found,
+        omitted,
+        skipped,
+    })
 }
 
 #[cfg(test)]

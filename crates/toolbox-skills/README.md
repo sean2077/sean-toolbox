@@ -25,10 +25,12 @@ part of their trusted Git installation.
 Discovery stops at a `SKILL.md` package boundary and retains all package files,
 including nested examples. The metadata reader supports common scalar and
 multiline frontmatter name/description fields, with the directory name as a
-fallback; it is not a general YAML evaluator. Install from a repository or a
-concrete local skill directory. Local scanning includes the five app roots,
-`~/.cc-switch/skills`, and `~/.agents/skills`. Local imports keep their source
-folder and have no remote update source.
+fallback; it is not a general YAML evaluator. A package whose `SKILL.md` cannot
+be read is skipped and reported in warnings instead of hiding the rest of the
+repository catalog. Install from a repository or a concrete local skill
+directory. Local scanning includes the five app roots, `~/.cc-switch/skills`,
+and `~/.agents/skills`. Local imports keep their source folder and have no
+remote update source.
 
 ## Storage and deployment
 
@@ -37,7 +39,9 @@ The host supplies `<configuration-directory>/skills` as the private root:
 - `state.json`: source repositories, installed packages, ownership fingerprints,
   enabled app copies, update timestamps, and diagnostics.
 - `managed/<directory>`: one master copy per installed skill.
-- `temporary/`: disposable repository and skill staging directories.
+- `temporary/`: disposable repository and skill staging directories. Stale
+  `checkout-*` and `skill-*` directories left by an interrupted process are
+  removed at the next open; unknown entries are preserved.
 - `manager.lock`: single-writer exclusion.
 - `pending.json`: an interrupted filesystem transaction, when present.
 

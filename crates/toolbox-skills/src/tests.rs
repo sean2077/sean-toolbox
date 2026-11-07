@@ -736,6 +736,39 @@ fn state_lock_corruption_and_cancellation_preserve_user_files() {
 }
 
 #[test]
+fn stale_staging_directories_are_cleaned_on_open_without_touching_unknown_entries() {
+    let mut fixture = Fixture::new();
+    let temporary = fixture.root.join("temporary");
+    let checkout = temporary.join("checkout-stale");
+    let skill = temporary.join("skill-stale");
+    fs::create_dir_all(&checkout).unwrap();
+    fs::write(checkout.join("partial"), "interrupted clone").unwrap();
+    fs::create_dir_all(&skill).unwrap();
+    fs::write(temporary.join("keep.txt"), "not ours").unwrap();
+    fixture.reopen();
+    assert!(!checkout.exists());
+    assert!(!skill.exists());
+    assert_eq!(
+        fs::read_to_string(temporary.join("keep.txt")).unwrap(),
+        "not ours"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn snapshot_display_paths_drop_the_verbatim_prefix() {
+    let mut fixture = Fixture::new();
+    let snapshot = fixture.service().snapshot();
+    assert!(!snapshot.storage_path.starts_with(r"\\?\"));
+    assert!(
+        snapshot
+            .app_paths
+            .iter()
+            .all(|path| !path.path.starts_with(r"\\?\"))
+    );
+}
+
+#[test]
 fn snapshot_byte_budget_remains_below_ipc_limit_with_unicode_metadata() {
     let mut fixture = Fixture::new();
     let service = fixture.service();
@@ -813,6 +846,59 @@ fn package_examples_remain_inside_their_skill_boundary() {
         fs::read_to_string(fixture.master("authoring").join("examples/demo/SKILL.md")).unwrap(),
         "Example file, not a separate install"
     );
+}
+
+#[test]
+fn unreadable_skill_metadata_is_reported_without_hiding_the_catalog() {
+    let mut fixture = Fixture::new();
+    fixture.commit("valid", "package");
+    let broken = fixture.origin.join("skills/broken");
+    fs::create_dir_all(&broken).unwrap();
+    fs::write(broken.join("SKILL.md"), "").unwrap();
+    git_command(&fixture.origin, &["add", "."]);
+    git_command(
+        &fixture.origin,
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            "broken metadata",
+        ],
+    );
+    let message = fixture
+        .service()
+        .execute(SkillsCommand::Discover, 1)
+        .unwrap();
+    assert!(message.contains("skipped 1"), "{message}");
+    let snapshot = fixture.service().snapshot();
+    assert_eq!(snapshot.available.len(), 1);
+    assert_eq!(snapshot.available[0].directory, "valid");
+    assert!(
+        snapshot
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("broken")),
+        "{:?}",
+        snapshot.warnings
+    );
+    // The valid entries stay visible and installable through the same catalog.
+    let id = snapshot.available[0].id.clone();
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::Install {
+                candidate_id: id,
+                apps: vec![],
+            },
+            2,
+        )
+        .unwrap();
+    assert_eq!(file_content(&fixture.master("valid")), "package");
 }
 
 #[test]
