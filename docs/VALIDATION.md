@@ -424,10 +424,15 @@ GitHub Actions 沿用 Windows x64、macOS ARM/Intel、Linux x64 的完整矩阵�
 ## 2026-11-07：Skills PR 复审修复
 
 对 PR #1 的复审修复了以下行为：显式开启每日更新不再被此前全量更新失败留下的重试回退
-延迟；仓库中单个无法读取 `SKILL.md` 的条目会跳过并进入提示，不再使整个仓库发现失败；
-启动时清理上次进程中断遗留的 `checkout-*`、`skill-*` 暂存目录并保留其他文件；Windows
-快照中的显示路径去掉 verbatim 前缀；发现页空状态区分“没有来源”和“尚未刷新”，来源
-标签不再显示 `.git` 后缀。文档补充了预置的官方 `anthropics/skills` 来源及跳过条目说明。
+延迟，宿主接受命令时返回预览状态而不再让界面先回退；仓库根目录的 Skill 不再因
+`git archive` 的 pax 全局头被判为阻塞；单个无法读取 `SKILL.md` 的条目会跳过并提示，
+不再使整个仓库发现失败；单个不可读的应用根目录不再中止本机扫描；中断事务的应用目录被
+删除后恢复会跳过该项并保留其余操作；删除或禁用不会重建用户移除的应用目录；启动时清理
+中断遗留的 `checkout-*`、`skill-*` 暂存目录并保留其他文件；Windows 显示路径去掉
+verbatim 前缀；来源标签去掉 `.git` 后缀；状态上限提高到 2 MiB；恢复日志容量按
+`SkillApp::ALL` 推导；发现和本机列表标记已管理的同名目录；Git 环境变量按大小写不敏感
+清理；frontmatter 中缩进的 `---` 不再提前结束；状态写入失败不再把已提交的操作误报为
+失败；发现缓存只保留解压树。文档补充预置的官方 `anthropics/skills` 来源及跳过条目说明。
 
 本地环境为 Windows 11、固定 Rust 1.99.1 MSVC 工具链，复用主工作树的 `target`：
 
@@ -435,9 +440,9 @@ GitHub Actions 沿用 Windows x64、macOS ARM/Intel、Linux x64 的完整矩阵�
 | --- | --- |
 | `cargo fmt --all -- --check` | 通过 |
 | `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
-| `cargo test --locked -p toolbox-skills -p toolbox-host -p toolbox-ui` | 通过：Skills 20、宿主 13、UI 41 |
+| `cargo test --locked -p toolbox-skills -p toolbox-host -p toolbox-ui` | 通过：Skills 29、宿主 15、UI 42 |
 | `cargo test --locked --workspace --no-fail-fast` | 除既有 `toolbox-windows` 原生窗口用例 `native_quake_hides_reuses_and_recovers_without_activation` 外全部通过；该用例在本机以“窗口未完成置顶”失败，在未修改的 `main` 上同样复现，属于本机桌面/会话限制，未记为 PR 回归，命令退出 101 |
-| 新增回归 | 显式启用清除失败更新的重试回退；单个坏条目不清空目录；启动清理暂存目录；Windows 显示路径；发现页空状态；来源标签 |
+| 新增回归 | 仓库根 Skill；坏条目跳过；应用根不可读；删除目录后的恢复；删除/禁用不重建目录；重试回退与打开重试；接受状态预览；Windows 显示路径；暂存目录清理；状态上限与 2 MiB 保存；Git 环境变量大小写；缩进 `---`；普通扫描容错；来源标签与空状态；同名目录标记 |
 
 Linux/macOS 与桌面 smoke 的结果以本 PR 对应提交的 Actions 为准；本次没有执行 Windows
 实机的文件占用、junction、休眠恢复或文件选择器验收。
