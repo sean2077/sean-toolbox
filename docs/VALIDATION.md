@@ -446,3 +446,23 @@ verbatim 前缀；来源标签去掉 `.git` 后缀；状态上限提高到 2 MiB
 
 Linux/macOS 与桌面 smoke 的结果以本 PR 对应提交的 Actions 为准；本次没有执行 Windows
 实机的文件占用、junction、休眠恢复或文件选择器验收。
+
+## 2026-11-07：0.2.0 发布准备
+
+版本从 `0.1.0` 提升到 `0.2.0`（Skills 管理属于新功能）。Cargo 生成的锁文件只更新 7 个
+workspace 包的版本，没有升级依赖。发布说明覆盖 Skills 管理、原有功能和 0.2.0 下载资产。
+
+发布准备的本地检查：
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过，锁定依赖 |
+| `cargo test --locked --workspace --no-fail-fast` | 除既有 `toolbox-windows` 原生窗口用例 `native_quake_hides_reuses_and_recovers_without_activation` 外全部通过；该用例在本机因“窗口未完成置顶”失败，在未修改的 `main` 上同样复现，属本机桌面/会话限制，命令退出 101 |
+| 发布脚本行为测试 | 27 项通过；使用临时文件与模拟 API，不访问真实发布 |
+| `cargo metadata --locked` | 通过；锁文件仅更新 workspace 包版本 |
+
+四平台原生测试、打包与 GitHub Release 的结果以本次推送后的 Actions 发布运行及其资产为准。
+发布工作流在 `main` 的版本变化推送后创建带注解的 `v0.2.0` 标签，四平台构建/测试通过后
+上传并核对 8 个资产，再公开 Release。本次没有执行 Windows 实机的文件占用、junction、
+休眠恢复或文件选择器验收。
