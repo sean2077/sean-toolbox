@@ -288,6 +288,11 @@ impl SkillsService {
                 app,
                 enabled,
             } => self.set_enabled(&skill_id, app, enabled),
+            SkillsCommand::SetEnabledBatch {
+                skill_ids,
+                app,
+                enabled,
+            } => self.set_enabled_batch(&skill_ids, app, enabled),
             SkillsCommand::Uninstall { skill_id } => self.uninstall(&skill_id),
             SkillsCommand::Update { skill_id } => self.update(skill_id.as_deref(), now),
             SkillsCommand::SetDailyUpdate { enabled } => {
@@ -981,6 +986,44 @@ impl SkillsService {
             }
         }
         Ok(())
+    }
+
+    fn set_enabled_batch(
+        &mut self,
+        ids: &[String],
+        app: SkillApp,
+        enabled: bool,
+    ) -> Result<String, String> {
+        if ids.is_empty() {
+            return Err("Select at least one skill".into());
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        let mut updated = 0usize;
+        let mut errors = Vec::new();
+        for id in ids {
+            if !seen.insert(id.as_str()) {
+                continue;
+            }
+            self.check_cancel()?;
+            match self.set_enabled(id, app, enabled) {
+                Ok(_) => updated += 1,
+                Err(error) => errors.push(format!("{id}: {error}")),
+            }
+        }
+        if errors.is_empty() {
+            Ok(format!(
+                "{updated} skill(s) {} for {}",
+                if enabled { "enabled" } else { "disabled" },
+                app.label()
+            ))
+        } else {
+            Err(format!(
+                "{updated} skill(s) updated for {}; {} failed: {}",
+                app.label(),
+                errors.len(),
+                errors.join("; ")
+            ))
+        }
     }
 
     fn set_enabled(&mut self, id: &str, app: SkillApp, enabled: bool) -> Result<String, String> {

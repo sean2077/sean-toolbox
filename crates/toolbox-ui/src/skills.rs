@@ -4,11 +4,12 @@ use crate::{
     with_controller,
     worker::{DialogKind, Work},
 };
-use slint::{ComponentHandle, Model, ModelRc, TimerMode, VecModel};
+use slint::{ComponentHandle, Model, ModelRc, SharedString, TimerMode, VecModel};
+use std::collections::BTreeSet;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use toolbox_core::{
     Response,
-    skills::{SkillApp, SkillsCommand, SkillsSnapshot},
+    skills::{InstalledSkill, SkillApp, SkillsCommand, SkillsSnapshot},
 };
 
 #[derive(Default)]
@@ -16,6 +17,7 @@ pub(super) struct SkillsUiState {
     pub snapshot: Option<SkillsSnapshot>,
     pub loading: bool,
     pub submitting: bool,
+    pub selected_ids: BTreeSet<String>,
     install_apps: Vec<SkillApp>,
 }
 
@@ -108,21 +110,86 @@ fn directory_is_managed(snapshot: &SkillsSnapshot, directory: &str) -> bool {
         .any(|skill| skill.directory.to_lowercase() == directory)
 }
 
+fn installed_matches(
+    skill: &InstalledSkill,
+    snapshot: &SkillsSnapshot,
+    status_filter: i32,
+    source_filter: i32,
+) -> bool {
+    let enabled = !skill.apps.is_empty();
+    match status_filter {
+        1 if !enabled => return false,
+        2 if enabled => return false,
+        _ => {}
+    }
+    match source_filter {
+        0 => true,
+        1 => skill.repository_id.is_none() && !skill.linked,
+        2 => skill.linked,
+        _ => {
+            let repository = usize::try_from(source_filter)
+                .ok()
+                .and_then(|index| index.checked_sub(3))
+                .and_then(|index| snapshot.repositories.get(index));
+            repository.is_some_and(|repository| {
+                skill.repository_id.as_deref() == Some(repository.id.as_str())
+            })
+        }
+    }
+}
+
+fn source_options(snapshot: &SkillsSnapshot, english: bool) -> Vec<String> {
+    let mut options = vec![
+        if english { "All" } else { "全部" }.to_owned(),
+        if english { "Local" } else { "本地" }.to_owned(),
+        if english { "Linked" } else { "链接" }.to_owned(),
+    ];
+    options.extend(
+        snapshot
+            .repositories
+            .iter()
+            .map(|repository| repository_label(snapshot, &repository.id)),
+    );
+    options
+}
+
+fn app_counts_text(snapshot: &SkillsSnapshot, english: bool) -> String {
+    let counts = SkillApp::ALL
+        .iter()
+        .filter_map(|app| {
+            let count = snapshot
+                .installed
+                .iter()
+                .filter(|skill| skill.apps.contains(app))
+                .count();
+            (count > 0).then(|| format!("{} {count}", app.label()))
+        })
+        .collect::<Vec<_>>();
+    if counts.is_empty() {
+        if english {
+            "No app deployments".into()
+        } else {
+            "尚未部署到应用".into()
+        }
+    } else {
+        counts.join(" · ")
+    }
+}
+
 fn filtered_rows(
     snapshot: &SkillsSnapshot,
     view: i32,
     query: &str,
     english: bool,
+    status_filter: i32,
+    source_filter: i32,
 ) -> Vec<SkillListRow> {
-    let local = if english {
-        "Local import"
-    } else {
-        "本机导入"
-    };
+    let local = if english { "Local" } else { "本地" };
     let mut rows = match view {
         0 => snapshot
             .installed
             .iter()
+            .filter(|skill| installed_matches(skill, snapshot, status_filter, source_filter))
             .map(|skill| {
                 let source = if skill.linked {
                     if english { "Linked" } else { "链接" }.to_owned()
@@ -148,6 +215,7 @@ fn filtered_rows(
                 } else {
                     &apps
                 };
+                let enabled = !skill.apps.is_empty();
                 SkillListRow {
                     id: skill.id.clone().into(),
                     name: skill.name.clone().into(),
@@ -156,6 +224,22 @@ fn filtered_rows(
                     installed: true,
                     problem: skill.last_error.is_some(),
                     linked: skill.linked,
+                    selected: false,
+                    source: source.into(),
+                    status: if enabled {
+                        if english { "Enabled" } else { "已启用" }
+                    } else if english {
+                        "Disabled"
+                    } else {
+                        "未启用"
+                    }
+                    .into(),
+                    enabled,
+                    app0: skill.apps.contains(&SkillApp::Claude),
+                    app1: skill.apps.contains(&SkillApp::Codex),
+                    app2: skill.apps.contains(&SkillApp::Gemini),
+                    app3: skill.apps.contains(&SkillApp::OpenCode),
+                    app4: skill.apps.contains(&SkillApp::Grok),
                 }
             })
             .collect::<Vec<_>>(),
@@ -175,6 +259,15 @@ fn filtered_rows(
                 installed: skill.installed || directory_is_managed(snapshot, &skill.directory),
                 problem: false,
                 linked: false,
+                selected: false,
+                source: "".into(),
+                status: "".into(),
+                enabled: false,
+                app0: false,
+                app1: false,
+                app2: false,
+                app3: false,
+                app4: false,
             })
             .collect(),
         2 => snapshot
@@ -198,6 +291,15 @@ fn filtered_rows(
                     installed: directory_is_managed(snapshot, &skill.directory),
                     problem: false,
                     linked: skill.linked,
+                    selected: false,
+                    source: "".into(),
+                    status: "".into(),
+                    enabled: false,
+                    app0: false,
+                    app1: false,
+                    app2: false,
+                    app3: false,
+                    app4: false,
                 }
             })
             .collect(),
@@ -314,7 +416,26 @@ impl Controller {
                         .and_then(|previous| previous.last_error.as_ref())
                         != Some(error)
                 });
-                self.state.borrow_mut().skills.snapshot = Some(snapshot);
+                {
+                    let mut state = self.state.borrow_mut();
+                    state.skills.snapshot = Some(snapshot);
+                    let installed = state
+                        .skills
+                        .snapshot
+                        .as_ref()
+                        .map(|snapshot| {
+                            snapshot
+                                .installed
+                                .iter()
+                                .map(|skill| skill.id.clone())
+                                .collect::<BTreeSet<_>>()
+                        })
+                        .unwrap_or_default();
+                    state
+                        .skills
+                        .selected_ids
+                        .retain(|id| installed.contains(id));
+                }
                 self.render_skills();
                 self.sync_diagnostics();
                 if let Some(error) = new_error {
@@ -411,7 +532,54 @@ impl Controller {
         }
 
         let view = skills.get_view();
-        let rows = filtered_rows(snapshot, view, &skills.get_query(), english);
+        let options = source_options(snapshot, english)
+            .into_iter()
+            .map(SharedString::from)
+            .collect::<Vec<_>>();
+        let source_count = options.len().max(1).min(i32::MAX as usize) as i32;
+        let status_filter = skills.get_status_filter().clamp(0, 2);
+        let source_filter = skills.get_source_filter().clamp(0, source_count - 1);
+        if skills.get_status_filter() != status_filter {
+            skills.set_status_filter(status_filter);
+        }
+        if skills.get_source_filter() != source_filter {
+            skills.set_source_filter(source_filter);
+        }
+        if !skills.get_source_options().iter().eq(options.iter()) {
+            skills.set_source_options(ModelRc::new(VecModel::from(options)));
+        }
+        skills.set_app_counts_text(app_counts_text(snapshot, english).into());
+        let mut rows = filtered_rows(
+            snapshot,
+            view,
+            &skills.get_query(),
+            english,
+            status_filter,
+            source_filter,
+        );
+        for row in &mut rows {
+            row.selected = state.skills.selected_ids.contains(row.id.as_str());
+        }
+        let all_selected = !rows.is_empty() && rows.iter().all(|row| row.selected);
+        skills.set_selected_count(state.skills.selected_ids.len().min(i32::MAX as usize) as i32);
+        skills.set_all_selected(all_selected);
+        let selected_skills = snapshot
+            .installed
+            .iter()
+            .filter(|skill| state.skills.selected_ids.contains(&skill.id))
+            .collect::<Vec<_>>();
+        let has_selection = !selected_skills.is_empty();
+        let batch_app = |app: SkillApp| {
+            has_selection
+                && selected_skills
+                    .iter()
+                    .all(|skill| skill.apps.contains(&app))
+        };
+        skills.set_batch_app0(batch_app(SkillApp::Claude));
+        skills.set_batch_app1(batch_app(SkillApp::Codex));
+        skills.set_batch_app2(batch_app(SkillApp::Gemini));
+        skills.set_batch_app3(batch_app(SkillApp::OpenCode));
+        skills.set_batch_app4(batch_app(SkillApp::Grok));
         let selected = skills.get_selected_id();
         let selected = rows
             .iter()
@@ -429,6 +597,7 @@ impl Controller {
         skills.set_selected_linked(selected.is_some_and(|row| row.linked));
         skills.set_selected_detail("".into());
         skills.set_selected_error("".into());
+        skills.set_selected_summary("".into());
         skills.set_selected_updatable(false);
         let installed = (view == 0)
             .then(|| {
@@ -474,6 +643,17 @@ impl Controller {
                 }
                 .into(),
             );
+            skills.set_selected_summary(
+                if english {
+                    format!(
+                        "{} · Revision {revision} · Updated {updated}",
+                        installed.directory
+                    )
+                } else {
+                    format!("{} · 修订 {revision} · 更新 {updated}", installed.directory)
+                }
+                .into(),
+            );
             skills.set_selected_updatable(installed.repository_id.is_some());
             skills.set_selected_error(installed.last_error.clone().unwrap_or_default().into());
         }
@@ -502,7 +682,8 @@ impl Controller {
         if !skills.get_rows().iter().eq(rows.iter().cloned()) {
             skills.set_rows(ModelRc::new(VecModel::from(rows)));
         }
-        let filtered = !skills.get_query().trim().is_empty();
+        let filtered = !skills.get_query().trim().is_empty()
+            || (view == 0 && (status_filter != 0 || source_filter != 0));
         let empty = match (english, filtered, view) {
             (true, true, _) => "No matching skills.",
             (false, true, _) => "没有匹配的技能。",
@@ -601,6 +782,96 @@ impl Controller {
             drop(state);
             self.render_skills();
         }
+    }
+
+    pub(super) fn toggle_skill_row_app(&self, id: String, index: i32, enabled: bool) {
+        let Some(app) = usize::try_from(index)
+            .ok()
+            .and_then(|index| SkillApp::ALL.get(index))
+            .copied()
+        else {
+            return;
+        };
+        if !self.skills_editable() {
+            self.render_skills();
+            return;
+        }
+        let ui = self.ui();
+        let skills = ui.global::<SkillsState>();
+        if skills.get_view() != 0
+            || !skills
+                .get_rows()
+                .iter()
+                .any(|row| row.id.as_str() == id.as_str())
+        {
+            return;
+        }
+        skills.set_selected_id(id.clone().into());
+        self.render_skills();
+        self.submit_skills(SkillsCommand::SetEnabled {
+            skill_id: id,
+            app,
+            enabled,
+        });
+    }
+
+    pub(super) fn toggle_skill_selection(&self, id: String, selected: bool) {
+        let mut state = self.state.borrow_mut();
+        if selected {
+            state.skills.selected_ids.insert(id);
+        } else {
+            state.skills.selected_ids.remove(&id);
+        }
+        drop(state);
+        self.render_skills();
+    }
+
+    pub(super) fn toggle_skill_selection_all(&self, selected: bool) {
+        let ids = self
+            .ui()
+            .global::<SkillsState>()
+            .get_rows()
+            .iter()
+            .map(|row| row.id.to_string())
+            .collect::<Vec<_>>();
+        let mut state = self.state.borrow_mut();
+        if selected {
+            state.skills.selected_ids.extend(ids);
+        } else {
+            state.skills.selected_ids.clear();
+        }
+        drop(state);
+        self.render_skills();
+    }
+
+    pub(super) fn batch_set_skill_app(&self, index: i32, enabled: bool) {
+        let Some(app) = usize::try_from(index)
+            .ok()
+            .and_then(|index| SkillApp::ALL.get(index))
+            .copied()
+        else {
+            return;
+        };
+        let ids = self
+            .state
+            .borrow()
+            .skills
+            .selected_ids
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
+        if ids.is_empty() {
+            return;
+        }
+        if !self.skills_editable() {
+            self.render_skills();
+            return;
+        }
+        self.submit_skills(SkillsCommand::SetEnabledBatch {
+            skill_ids: ids,
+            app,
+            enabled,
+        });
     }
 
     pub(super) fn install_selected_skill(&self) {
@@ -710,6 +981,19 @@ pub(super) fn connect_callbacks(ui: &crate::AppWindow) {
     skills.on_toggle_app(|index, enabled| {
         with_controller(|controller| controller.toggle_skill_app(index, enabled));
     });
+    skills.on_toggle_row_app(|id, index, enabled| {
+        with_controller(|controller| controller.toggle_skill_row_app(id.into(), index, enabled));
+    });
+    skills.on_filter_changed(|| with_controller(Controller::render_skills));
+    skills.on_toggle_select(|id, selected| {
+        with_controller(|controller| controller.toggle_skill_selection(id.into(), selected));
+    });
+    skills.on_toggle_select_all(|selected| {
+        with_controller(|controller| controller.toggle_skill_selection_all(selected));
+    });
+    skills.on_batch_app(|index, enabled| {
+        with_controller(|controller| controller.batch_set_skill_app(index, enabled));
+    });
     skills.on_install(|| with_controller(Controller::install_selected_skill));
     skills.on_update_selected(|| with_controller(Controller::update_selected_skill));
     skills.on_uninstall(|| with_controller(Controller::uninstall_selected_skill));
@@ -771,7 +1055,7 @@ mod tests {
             }],
             ..SkillsSnapshot::default()
         };
-        let rows = filtered_rows(&snapshot, 2, "", true);
+        let rows = filtered_rows(&snapshot, 2, "", true, 0, 0);
         assert!(rows[0].linked);
         assert!(rows[0].detail.contains("→ /vault/ob"));
         assert!(!rows[0].installed);
@@ -815,7 +1099,99 @@ mod tests {
             }],
             ..SkillsSnapshot::default()
         };
-        assert!(filtered_rows(&snapshot, 1, "", false)[0].installed);
-        assert!(filtered_rows(&snapshot, 2, "", false)[0].installed);
+        assert!(filtered_rows(&snapshot, 1, "", false, 0, 0)[0].installed);
+        assert!(filtered_rows(&snapshot, 2, "", false, 0, 0)[0].installed);
+    }
+
+    fn installed_skill(
+        id: &str,
+        repository_id: Option<&str>,
+        apps: &[SkillApp],
+        linked: bool,
+    ) -> InstalledSkill {
+        InstalledSkill {
+            id: id.into(),
+            directory: id.into(),
+            name: id.into(),
+            description: String::new(),
+            repository_id: repository_id.map(Into::into),
+            source_path: None,
+            revision: None,
+            apps: apps.to_vec(),
+            updated_at: 0,
+            last_error: None,
+            linked,
+            target: linked.then(|| format!("/vault/{id}")),
+        }
+    }
+
+    fn filter_ids(snapshot: &SkillsSnapshot, status: i32, source: i32) -> Vec<String> {
+        filtered_rows(snapshot, 0, "", false, status, source)
+            .into_iter()
+            .map(|row| row.id.to_string())
+            .collect()
+    }
+
+    #[test]
+    fn installed_rows_filter_by_status_and_source() {
+        use toolbox_core::skills::SkillRepository;
+        let snapshot = SkillsSnapshot {
+            repositories: vec![SkillRepository {
+                id: "repo".into(),
+                url: "https://github.com/sean2077/skills.git".into(),
+                branch: None,
+                revision: None,
+                last_error: None,
+            }],
+            installed: vec![
+                installed_skill("alpha", Some("repo"), &[SkillApp::Claude], false),
+                installed_skill("beta", Some("repo"), &[], false),
+                installed_skill("gamma", None, &[SkillApp::Codex], true),
+                installed_skill("delta", None, &[], false),
+            ],
+            ..SkillsSnapshot::default()
+        };
+        assert_eq!(
+            filter_ids(&snapshot, 0, 0),
+            ["alpha", "beta", "delta", "gamma"]
+        );
+        assert_eq!(filter_ids(&snapshot, 1, 0), ["alpha", "gamma"]);
+        assert_eq!(filter_ids(&snapshot, 2, 0), ["beta", "delta"]);
+        assert_eq!(filter_ids(&snapshot, 0, 1), ["delta"]);
+        assert_eq!(filter_ids(&snapshot, 0, 2), ["gamma"]);
+        assert_eq!(filter_ids(&snapshot, 0, 3), ["alpha", "beta"]);
+        assert_eq!(filter_ids(&snapshot, 1, 3), ["alpha"]);
+        assert_eq!(
+            source_options(&snapshot, false),
+            ["全部", "本地", "链接", "sean2077/skills"]
+        );
+        assert_eq!(app_counts_text(&snapshot, false), "Claude Code 1 · Codex 1");
+    }
+
+    #[test]
+    fn installed_rows_expose_source_status_and_app_flags() {
+        use toolbox_core::skills::SkillRepository;
+        let snapshot = SkillsSnapshot {
+            repositories: vec![SkillRepository {
+                id: "repo".into(),
+                url: "https://github.com/sean2077/skills.git".into(),
+                branch: None,
+                revision: None,
+                last_error: None,
+            }],
+            installed: vec![installed_skill(
+                "alpha",
+                Some("repo"),
+                &[SkillApp::Claude],
+                false,
+            )],
+            ..SkillsSnapshot::default()
+        };
+        let rows = filtered_rows(&snapshot, 0, "", true, 0, 0);
+        assert_eq!(rows[0].source, "sean2077/skills");
+        assert_eq!(rows[0].status, "Enabled");
+        assert!(rows[0].enabled);
+        assert!(rows[0].app0);
+        assert!(!rows[0].app4);
     }
 }

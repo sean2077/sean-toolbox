@@ -563,8 +563,24 @@ impl Controller {
         if !modal {
             ui.set_page(page_index(page));
         }
-        ui.window().set_minimized(false);
+        if ui
+            .window()
+            .with_winit_window(|window| window.is_minimized().unwrap_or(false))
+            .unwrap_or(false)
+        {
+            ui.window().set_minimized(false);
+        }
+        let scale = ui.window().scale_factor();
+        let size = ui.window().size().to_logical(scale);
+        if size.width < 900.0 || size.height < 650.0 {
+            ui.window().set_size(slint::LogicalSize::new(900.0, 650.0));
+        }
         ui.show().map_err(|e| e.to_string())?;
+        let scale = ui.window().scale_factor();
+        let size = ui.window().size().to_logical(scale);
+        if size.width < 900.0 || size.height < 650.0 {
+            ui.window().set_size(slint::LogicalSize::new(900.0, 650.0));
+        }
         self.apply_native_theme();
         ui.window()
             .with_winit_window(|window| window.focus_window());
@@ -2930,6 +2946,99 @@ mod tests {
                 Work::Skills(SkillsCommand::ImportLocal { path, apps, link: true })
                     if path == "/vault/ob" && apps.is_empty()
             ));
+        });
+    }
+
+    #[test]
+    fn row_app_toggles_target_their_own_skill() {
+        use toolbox_core::skills::{SkillApp, SkillsCommand};
+        with_test_ui(|ui, controller, receive| {
+            receive_skills_snapshot(controller, skills_snapshot());
+            controller.toggle_skill_row_app("source:alpha".into(), 1, true);
+            let skills = ui.global::<SkillsState>();
+            assert_eq!(skills.get_selected_id(), "source:alpha");
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Skills(SkillsCommand::SetEnabled {
+                    skill_id,
+                    app: SkillApp::Codex,
+                    enabled: true
+                }) if skill_id == "source:alpha"
+            ));
+        });
+    }
+
+    #[test]
+    fn installed_filters_hide_rows_and_explain_an_empty_result() {
+        with_test_ui(|ui, controller, _| {
+            receive_skills_snapshot(controller, skills_snapshot());
+            let skills = ui.global::<SkillsState>();
+            assert_eq!(skills.get_rows().row_count(), 2);
+            skills.set_status_filter(2);
+            controller.render_skills();
+            assert_eq!(skills.get_rows().row_count(), 0);
+            assert_eq!(skills.get_empty_text(), "没有匹配的技能。");
+            skills.set_status_filter(0);
+            skills.set_source_filter(1);
+            controller.render_skills();
+            assert_eq!(skills.get_rows().row_count(), 0);
+            assert_eq!(skills.get_source_options().row_count(), 4);
+            assert_eq!(
+                skills.get_source_options().row_data(3).unwrap(),
+                "sean2077/skills"
+            );
+            assert_eq!(skills.get_app_counts_text(), "Claude Code 2");
+        });
+    }
+
+    #[test]
+    fn batch_selection_covers_visible_rows_and_sends_one_command() {
+        use toolbox_core::skills::{SkillApp, SkillsCommand};
+        with_test_ui(|ui, controller, receive| {
+            receive_skills_snapshot(controller, skills_snapshot());
+            let skills = ui.global::<SkillsState>();
+            controller.toggle_skill_selection("source:alpha".into(), true);
+            assert_eq!(skills.get_selected_count(), 1);
+            assert!(skills.get_batch_app0());
+            assert!(!skills.get_batch_app1());
+            controller.toggle_skill_selection_all(true);
+            assert_eq!(skills.get_selected_count(), 2);
+            assert!(skills.get_all_selected());
+            assert!(skills.get_batch_app0());
+            assert!(!skills.get_batch_app1());
+            controller.toggle_skill_selection_all(false);
+            assert_eq!(skills.get_selected_count(), 0);
+            assert!(!skills.get_batch_app0());
+            controller.toggle_skill_selection("source:beta".into(), true);
+            assert!(skills.get_batch_app0());
+            controller.batch_set_skill_app(1, true);
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Skills(SkillsCommand::SetEnabledBatch {
+                    skill_ids,
+                    app: SkillApp::Codex,
+                    enabled: true
+                }) if skill_ids == vec!["source:beta".to_string()]
+            ));
+        });
+    }
+
+    #[test]
+    fn select_all_respects_the_active_query() {
+        with_test_ui(|ui, controller, _| {
+            receive_skills_snapshot(controller, skills_snapshot());
+            let skills = ui.global::<SkillsState>();
+            skills.set_query("beta".into());
+            controller.render_skills();
+            controller.toggle_skill_selection_all(true);
+            assert_eq!(skills.get_selected_count(), 1);
+            assert!(skills.get_rows().row_data(0).unwrap().selected);
+            skills.set_query("".into());
+            controller.render_skills();
+            assert_eq!(skills.get_selected_count(), 1);
+            assert!(!skills.get_rows().row_data(0).unwrap().selected);
+            assert!(skills.get_rows().row_data(1).unwrap().selected);
+            assert!(!skills.get_all_selected());
         });
     }
 

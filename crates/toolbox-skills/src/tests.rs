@@ -191,6 +191,77 @@ fn file_content(path: &Path) -> String {
 }
 
 #[test]
+fn batch_enable_is_authoritative_for_every_selected_skill() {
+    let mut fixture = Fixture::new();
+    fixture.commit("alpha", "alpha");
+    fixture.commit("beta", "beta");
+    fixture.install("alpha", vec![SkillApp::Claude], 10);
+    fixture.install("beta", vec![SkillApp::Claude], 10);
+
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabledBatch {
+                skill_ids: vec!["alpha".into(), "beta".into(), "alpha".into()],
+                app: SkillApp::Codex,
+                enabled: true,
+            },
+            11,
+        )
+        .unwrap();
+    for name in ["alpha", "beta"] {
+        assert!(fixture.app(SkillApp::Codex, name).exists());
+    }
+    let snapshot = fixture.service().snapshot();
+    for name in ["alpha", "beta"] {
+        let skill = snapshot
+            .installed
+            .iter()
+            .find(|skill| skill.id == name)
+            .unwrap();
+        assert_eq!(skill.apps, vec![SkillApp::Claude, SkillApp::Codex]);
+    }
+
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabledBatch {
+                skill_ids: vec!["alpha".into(), "beta".into()],
+                app: SkillApp::Codex,
+                enabled: false,
+            },
+            12,
+        )
+        .unwrap();
+    for name in ["alpha", "beta"] {
+        assert!(!fixture.app(SkillApp::Codex, name).exists());
+        assert!(fixture.app(SkillApp::Claude, name).exists());
+    }
+
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabledBatch {
+                skill_ids: vec!["alpha".into(), "beta".into()],
+                app: SkillApp::Claude,
+                enabled: false,
+            },
+            13,
+        )
+        .unwrap();
+    let snapshot = fixture.service().snapshot();
+    for name in ["alpha", "beta"] {
+        let skill = snapshot
+            .installed
+            .iter()
+            .find(|skill| skill.id == name)
+            .unwrap();
+        assert!(skill.apps.is_empty());
+        assert!(!fixture.app(SkillApp::Claude, name).exists());
+    }
+}
+
+#[test]
 fn repository_install_switch_update_and_restart_preserve_disabled_apps() {
     let mut fixture = Fixture::new();
     fixture.commit("review", "old revision");

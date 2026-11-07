@@ -145,6 +145,12 @@ pub enum SkillsCommand {
         app: SkillApp,
         enabled: bool,
     },
+    /// Apply one app state to every listed installed skill.
+    SetEnabledBatch {
+        skill_ids: Vec<String>,
+        app: SkillApp,
+        enabled: bool,
+    },
     Uninstall {
         skill_id: String,
     },
