@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Sean Toolbox\n"
 "Report-Msgid-Bugs-To: https://github.com/sean2077/sean-toolbox/issues\n"
-"POT-Creation-Date: 2026-11-07 13:56+0000\n"
+"POT-Creation-Date: 2026-11-07 14:16+0000\n"
 "PO-Revision-Date: 2026-11-07 19:07+0800\n"
 "Last-Translator: Sean Toolbox contributors\n"
 "Language-Team: Simplified Chinese\n"
@@ -203,7 +203,7 @@ msgctxt "ui.main.search_results"
 msgid "SEARCH RESULTS"
 msgstr "搜索结果"
 
-#: crates/toolbox-ui/ui/main.slint:277 crates/toolbox-ui/ui/skills.slint:340
+#: crates/toolbox-ui/ui/main.slint:277 crates/toolbox-ui/ui/skills.slint:342
 msgctxt "ui.action.refresh"
 msgid "Refresh"
 msgstr "刷新"
@@ -859,7 +859,7 @@ msgctxt "ui.main.slint_website"
 msgid "Slint website"
 msgstr "Slint 网站"
 
-#: crates/toolbox-ui/ui/main.slint:797 crates/toolbox-ui/ui/skills.slint:791
+#: crates/toolbox-ui/ui/main.slint:797 crates/toolbox-ui/ui/skills.slint:809
 msgctxt "ui.action.details"
 msgid "Details"
 msgstr "查看详情"
@@ -909,32 +909,32 @@ msgctxt "ui.dialog.file_chooser_hint"
 msgid "Continue in the file chooser"
 msgstr "请在文件选择窗口中继续"
 
-#: crates/toolbox-ui/ui/skills.slint:278
+#: crates/toolbox-ui/ui/skills.slint:280
 msgctxt "ui.skills.installed"
 msgid "Installed"
 msgstr "已安装"
 
-#: crates/toolbox-ui/ui/skills.slint:279
+#: crates/toolbox-ui/ui/skills.slint:281
 msgctxt "ui.skills.discover"
 msgid "Discover"
 msgstr "发现"
 
-#: crates/toolbox-ui/ui/skills.slint:280
+#: crates/toolbox-ui/ui/skills.slint:282
 msgctxt "ui.skills.local"
 msgid "On this device"
 msgstr "本机技能"
 
-#: crates/toolbox-ui/ui/skills.slint:281
+#: crates/toolbox-ui/ui/skills.slint:283
 msgctxt "ui.skills.repositories"
 msgid "Repositories"
 msgstr "仓库"
 
-#: crates/toolbox-ui/ui/skills.slint:288 crates/toolbox-ui/ui/skills.slint:294
+#: crates/toolbox-ui/ui/skills.slint:290 crates/toolbox-ui/ui/skills.slint:296
 msgctxt "ui.skills.daily_update"
 msgid "Daily update"
 msgstr "每日更新"
 
-#: crates/toolbox-ui/ui/skills.slint:299
+#: crates/toolbox-ui/ui/skills.slint:301
 msgctxt "ui.skills.daily_update_hint"
 msgid ""
 "Updates every 24 hours while the toolbox is running in the tray; catches up at the next startup.\n"
@@ -943,220 +943,235 @@ msgstr ""
 "工具箱在托盘运行时每 24 小时更新；错过的更新会在下次启动时补上。\n"
 "{0}"
 
-#: crates/toolbox-ui/ui/skills.slint:302
+#: crates/toolbox-ui/ui/skills.slint:304
 msgctxt "ui.skills.update_all"
 msgid "Update all"
 msgstr "全部更新"
 
-#: crates/toolbox-ui/ui/skills.slint:309
+#: crates/toolbox-ui/ui/skills.slint:311
 msgctxt "ui.skills.link_import"
 msgid "Link (no copy)"
 msgstr "链接（不复制）"
 
-#: crates/toolbox-ui/ui/skills.slint:312
+#: crates/toolbox-ui/ui/skills.slint:314
 msgctxt "ui.skills.link_import_accessible"
 msgid "Import local folders as links instead of copies"
 msgstr "本地目录以链接方式导入而不是复制"
 
-#: crates/toolbox-ui/ui/skills.slint:313
+#: crates/toolbox-ui/ui/skills.slint:315
 msgctxt "ui.skills.link_import_hint"
 msgid "Link keeps the source live and creates app symlinks on Windows; copy stores a private master copy. Existing app links to the same source are adopted."
 msgstr "链接保留源目录并在应用目录创建符号链接（Windows 需要符号链接权限）；复制保存私有主副本。已存在且指向同一来源的应用链接会被接管。"
 
-#: crates/toolbox-ui/ui/skills.slint:316
+#: crates/toolbox-ui/ui/skills.slint:318
 msgctxt "ui.skills.import_folder"
 msgid "Import folder"
 msgstr "导入文件夹"
 
-#: crates/toolbox-ui/ui/skills.slint:334
+#: crates/toolbox-ui/ui/skills.slint:336
 msgctxt "ui.skills.search_skills_or_repositories"
 msgid "Search skills or repositories…"
 msgstr "搜索技能名称、描述或仓库…"
 
-#: crates/toolbox-ui/ui/skills.slint:340
+#: crates/toolbox-ui/ui/skills.slint:342
 msgctxt "ui.skills.reload_repositories"
 msgid "Reload repositories"
 msgstr "刷新仓库"
 
-#: crates/toolbox-ui/ui/skills.slint:340
+#: crates/toolbox-ui/ui/skills.slint:342
 msgctxt "ui.skills.scan_this_device"
 msgid "Scan this device"
 msgstr "扫描本机"
 
-#: crates/toolbox-ui/ui/skills.slint:362
+#: crates/toolbox-ui/ui/skills.slint:364
 msgctxt "ui.skills.select_all"
 msgid "Select all"
 msgstr "全选"
 
-#: crates/toolbox-ui/ui/skills.slint:367
+#: crates/toolbox-ui/ui/skills.slint:369
 msgctxt "ui.skills.selected"
 msgid "Selected"
 msgstr "已选"
 
-#: crates/toolbox-ui/ui/skills.slint:370
+#: crates/toolbox-ui/ui/skills.slint:372
 msgctxt "ui.skills.status"
 msgid "Status"
 msgstr "状态"
 
-#: crates/toolbox-ui/ui/skills.slint:377
+#: crates/toolbox-ui/ui/skills.slint:379
 msgctxt "ui.common.all"
 msgid "All"
 msgstr "全部"
 
-#: crates/toolbox-ui/ui/skills.slint:377
+#: crates/toolbox-ui/ui/skills.slint:379
 msgctxt "ui.common.enabled"
 msgid "Enabled"
 msgstr "已启用"
 
-#: crates/toolbox-ui/ui/skills.slint:377
+#: crates/toolbox-ui/ui/skills.slint:379
 msgctxt "ui.common.disabled"
 msgid "Disabled"
 msgstr "未启用"
 
-#: crates/toolbox-ui/ui/skills.slint:383
+#: crates/toolbox-ui/ui/skills.slint:385
 msgctxt "ui.skills.source"
 msgid "Source"
 msgstr "来源"
 
-#: crates/toolbox-ui/ui/skills.slint:477
+#: crates/toolbox-ui/ui/skills.slint:479
 msgctxt "ui.skills.select_named"
 msgid "Select {0}"
 msgstr "选择 {0}"
 
-#: crates/toolbox-ui/ui/skills.slint:499
+#: crates/toolbox-ui/ui/skills.slint:501
 msgctxt "ui.skills.open_repository"
 msgid "Open repository: {0}"
 msgstr "打开仓库：{0}"
 
-#: crates/toolbox-ui/ui/skills.slint:499
+#: crates/toolbox-ui/ui/skills.slint:501
 msgctxt "ui.skills.open_folder"
 msgid "Open folder: {0}"
 msgstr "打开目录：{0}"
 
-#: crates/toolbox-ui/ui/skills.slint:556
+#: crates/toolbox-ui/ui/skills.slint:558
 msgctxt "ui.skills.more_actions"
 msgid "More actions"
 msgstr "更多操作"
 
-#: crates/toolbox-ui/ui/skills.slint:585 crates/toolbox-ui/ui/skills.slint:693
+#: crates/toolbox-ui/ui/skills.slint:587 crates/toolbox-ui/ui/skills.slint:695
 msgctxt "ui.action.update"
 msgid "Update"
 msgstr "更新"
 
-#: crates/toolbox-ui/ui/skills.slint:586
+#: crates/toolbox-ui/ui/skills.slint:588
 msgctxt "ui.common.local"
 msgid "Local"
 msgstr "本地"
 
-#: crates/toolbox-ui/ui/skills.slint:597
+#: crates/toolbox-ui/ui/skills.slint:599
 msgctxt "ui.action.confirm_uninstall"
 msgid "Uninstall..."
 msgstr "卸载…"
 
-#: crates/toolbox-ui/ui/skills.slint:647
+#: crates/toolbox-ui/ui/skills.slint:649
 msgctxt "ui.skills.select_hint"
 msgid "Select a skill to view details and choose deployment directories."
 msgstr "选择一个技能，查看详情并管理部署目录。"
 
-#: crates/toolbox-ui/ui/skills.slint:654
+#: crates/toolbox-ui/ui/skills.slint:656
 msgctxt "ui.skills.deploy_to_app_directories"
 msgid "DEPLOY TO APP DIRECTORIES"
 msgstr "应用目录部署"
 
-#: crates/toolbox-ui/ui/skills.slint:654
+#: crates/toolbox-ui/ui/skills.slint:656
 msgctxt "ui.skills.deploy_after_import"
 msgid "DEPLOY AFTER IMPORT"
 msgstr "安装后部署到"
 
-#: crates/toolbox-ui/ui/skills.slint:672
+#: crates/toolbox-ui/ui/skills.slint:674
 msgctxt "ui.skills.deployment_hint"
 msgid "Hover an app for its path. Switches manage only these directories; apps may also read Claude, project or other skills directories."
 msgstr "悬停应用可查看路径。开关只管理这些目录；应用也可能读取 Claude 或项目等其他 Skills 目录。"
 
-#: crates/toolbox-ui/ui/skills.slint:676
+#: crates/toolbox-ui/ui/skills.slint:678
 msgctxt "ui.skills.no_deployment_hint"
 msgid "Leave all unchecked to keep only a managed copy or link."
 msgstr "可不勾选应用，仅保存管理副本或链接。"
 
-#: crates/toolbox-ui/ui/skills.slint:677
+#: crates/toolbox-ui/ui/skills.slint:679
 msgctxt "ui.skills.source_link_hint"
 msgid "This source is a link. “Link (no copy)” keeps it live; importing a copy reads its real target."
 msgstr "该来源是链接。“链接（不复制）”保留实时源；复制会读取其真实目标。"
 
-#: crates/toolbox-ui/ui/skills.slint:678
+#: crates/toolbox-ui/ui/skills.slint:680
 msgctxt "ui.skills.source_copy_hint"
 msgid "The original folder is kept. Move it aside before deploying to the same directory."
 msgstr "导入会保留原文件夹；部署到同名目录前，请先手动移开原目录。"
 
-#: crates/toolbox-ui/ui/skills.slint:679
+#: crates/toolbox-ui/ui/skills.slint:681
 msgctxt "ui.skills.managed_link_hint"
 msgid "Managed as a link: app switches create or remove symlinks, and the source is not copied."
 msgstr "以链接方式管理：应用开关创建或移除符号链接，不复制源目录。"
 
-#: crates/toolbox-ui/ui/skills.slint:680
+#: crates/toolbox-ui/ui/skills.slint:682
 msgctxt "ui.skills.local_update_hint"
 msgid "Local imports have no remote update source."
 msgstr "本机导入的技能没有远程更新来源。"
 
-#: crates/toolbox-ui/ui/skills.slint:686
+#: crates/toolbox-ui/ui/skills.slint:688
 msgctxt "ui.skills.already_installed"
 msgid "Already installed"
 msgstr "已安装"
 
-#: crates/toolbox-ui/ui/skills.slint:686
+#: crates/toolbox-ui/ui/skills.slint:688
 msgctxt "ui.skills.import_as_link"
 msgid "Import as link"
 msgstr "以链接导入"
 
-#: crates/toolbox-ui/ui/skills.slint:686
+#: crates/toolbox-ui/ui/skills.slint:688
 msgctxt "ui.skills.import_as_copy"
 msgid "Import as copy"
 msgstr "以复制导入"
 
-#: crates/toolbox-ui/ui/skills.slint:686
+#: crates/toolbox-ui/ui/skills.slint:688
 msgctxt "ui.skills.install_selected"
 msgid "Install selected"
 msgstr "安装所选技能"
 
-#: crates/toolbox-ui/ui/skills.slint:694
+#: crates/toolbox-ui/ui/skills.slint:696
 msgctxt "ui.action.uninstall"
 msgid "Uninstall"
 msgstr "卸载"
 
-#: crates/toolbox-ui/ui/skills.slint:709
+#: crates/toolbox-ui/ui/skills.slint:711
 msgctxt "ui.skills.github_skill_repository"
 msgid "GitHub skill repository"
 msgstr "GitHub 技能仓库"
 
-#: crates/toolbox-ui/ui/skills.slint:713
+#: crates/toolbox-ui/ui/skills.slint:715
 msgctxt "ui.skills.branch_blank_default"
 msgid "Branch (blank = default)"
 msgstr "分支（留空使用默认分支）"
 
-#: crates/toolbox-ui/ui/skills.slint:714
+#: crates/toolbox-ui/ui/skills.slint:716
 msgctxt "ui.skills.add_repository"
 msgid "Add repository"
 msgstr "添加仓库"
 
-#: crates/toolbox-ui/ui/skills.slint:716
+#: crates/toolbox-ui/ui/skills.slint:718
 msgctxt "ui.skills.repository_added_hint"
 msgid "After adding a source, open Discover and reload repositories. Git must be installed."
 msgstr "添加后前往「发现」刷新仓库，即可选择安装。需已安装 Git。"
 
-#: crates/toolbox-ui/ui/skills.slint:727
+#: crates/toolbox-ui/ui/skills.slint:729
 msgctxt "ui.skills.no_repository_hint"
 msgid "Add a repository above to discover its skills."
 msgstr "在上方添加仓库，开始发现技能。"
 
-#: crates/toolbox-ui/ui/skills.slint:738
+#: crates/toolbox-ui/ui/skills.slint:740
 msgctxt "ui.action.remove"
 msgid "Remove"
 msgstr "移除"
 
-#: crates/toolbox-ui/ui/skills.slint:747
+#: crates/toolbox-ui/ui/skills.slint:749
 msgctxt "ui.skills.managed_copies"
 msgid "Managed copies: {0}"
 msgstr "管理副本：{0}"
+
+#: crates/toolbox-ui/ui/skills.slint:800
+msgctxt "ui.skills.deploy_symlink"
+msgid "Symbolic link"
+msgstr "符号链接"
+
+#: crates/toolbox-ui/ui/skills.slint:800
+msgctxt "ui.skills.deploy_copy"
+msgid "Copy"
+msgstr "复制"
+
+#: crates/toolbox-ui/ui/skills.slint:805
+msgctxt "ui.skills.deploy_mode_hint"
+msgid "New app deployments use this mode. Existing deployments stay as they are; turn an app switch off and on to change it."
+msgstr "新启用的应用目录使用该方式；已有部署保持不变，关闭再启用对应应用即可切换。"
 
 msgctxt "rust.import_settings"
 msgid ""

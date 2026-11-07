@@ -92,7 +92,17 @@ impl Fixture {
                 0,
             )
             .unwrap();
+        // Windows CI cannot assume the symlink privilege, so cross-platform
+        // tests exercise the copy path; Unix tests cover the symlink default.
+        #[cfg(windows)]
+        fixture.set_mode(SkillDeployMode::Copy);
         fixture
+    }
+
+    fn set_mode(&mut self, mode: SkillDeployMode) {
+        self.service()
+            .execute(SkillsCommand::SetDeployMode { mode }, 0)
+            .unwrap();
     }
 
     fn service(&mut self) -> &mut SkillsService {
@@ -313,6 +323,7 @@ fn repository_install_switch_update_and_restart_preserve_disabled_apps() {
 #[test]
 fn local_edit_rejects_update_disable_and_uninstall_without_partial_changes() {
     let mut fixture = Fixture::new();
+    fixture.set_mode(SkillDeployMode::Copy);
     fixture.commit("review", "old");
     fixture.install("review", vec![SkillApp::Claude, SkillApp::Codex], 0);
     fs::write(
@@ -348,6 +359,208 @@ fn local_edit_rejects_update_disable_and_uninstall_without_partial_changes() {
             .last_error
             .is_some()
     );
+}
+
+#[test]
+fn deploy_mode_defaults_to_symlink_and_persists_the_choice() {
+    assert_eq!(State::default().deploy_mode, SkillDeployMode::Symlink);
+    let mut fixture = Fixture::new();
+    fixture.set_mode(SkillDeployMode::Copy);
+    fixture.reopen();
+    assert_eq!(
+        fixture.service().snapshot().deploy_mode,
+        SkillDeployMode::Copy
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn managed_skills_link_app_directories_by_default() {
+    let mut fixture = Fixture::new();
+    fixture.set_mode(SkillDeployMode::Symlink);
+    fixture.commit("review", "linked");
+    fixture.install("review", vec![SkillApp::Claude], 1);
+    let master = fixture.master("review");
+    let link = fixture.app(SkillApp::Claude, "review");
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert!(files::links_to(&link, &master).unwrap());
+    assert_eq!(file_content(&link), "linked");
+
+    // An update replaces the master in place; app links keep following it.
+    fixture.commit("review", "linked v2");
+    fixture
+        .service()
+        .execute(SkillsCommand::Update { skill_id: None }, 2)
+        .unwrap();
+    assert_eq!(file_content(&link), "linked v2");
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabled {
+                skill_id: "review".into(),
+                app: SkillApp::Claude,
+                enabled: false,
+            },
+            3,
+        )
+        .unwrap();
+    assert!(fs::symlink_metadata(&link).is_err());
+    assert_eq!(file_content(&master), "linked v2");
+
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabled {
+                skill_id: "review".into(),
+                app: SkillApp::Claude,
+                enabled: true,
+            },
+            4,
+        )
+        .unwrap();
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::Uninstall {
+                skill_id: "review".into(),
+            },
+            5,
+        )
+        .unwrap();
+    assert!(!master.exists());
+    assert!(fs::symlink_metadata(&link).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn switching_to_copy_changes_new_enables_and_mixed_deployments_uninstall() {
+    let mut fixture = Fixture::new();
+    fixture.set_mode(SkillDeployMode::Symlink);
+    fixture.commit("review", "mixed");
+    fixture.install("review", vec![SkillApp::Claude], 1);
+    let claude = fixture.app(SkillApp::Claude, "review");
+    assert!(
+        fs::symlink_metadata(&claude)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+
+    fixture.set_mode(SkillDeployMode::Copy);
+    // Existing links stay as they are until the switch is cycled.
+    assert!(
+        fs::symlink_metadata(&claude)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabled {
+                skill_id: "review".into(),
+                app: SkillApp::Codex,
+                enabled: true,
+            },
+            2,
+        )
+        .unwrap();
+    let codex = fixture.app(SkillApp::Codex, "review");
+    assert!(
+        !fs::symlink_metadata(&codex)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(file_content(&codex), "mixed");
+
+    // Re-enabling the linked app now deploys a copy.
+    for enabled in [false, true] {
+        fixture
+            .service()
+            .execute(
+                SkillsCommand::SetEnabled {
+                    skill_id: "review".into(),
+                    app: SkillApp::Claude,
+                    enabled,
+                },
+                3,
+            )
+            .unwrap();
+    }
+    assert!(
+        !fs::symlink_metadata(&claude)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(file_content(&claude), "mixed");
+
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::Uninstall {
+                skill_id: "review".into(),
+            },
+            4,
+        )
+        .unwrap();
+    assert!(!fixture.master("review").exists());
+    assert!(fs::symlink_metadata(&claude).is_err());
+    assert!(fs::symlink_metadata(&codex).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_missing_master_copy_does_not_block_link_cleanup() {
+    let mut fixture = Fixture::new();
+    fixture.set_mode(SkillDeployMode::Symlink);
+    fixture.commit("review", "cleanup");
+    fixture.install("review", vec![SkillApp::Claude], 1);
+    let link = fixture.app(SkillApp::Claude, "review");
+    fs::remove_dir_all(fixture.master("review")).unwrap();
+
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabled {
+                skill_id: "review".into(),
+                app: SkillApp::Claude,
+                enabled: false,
+            },
+            2,
+        )
+        .unwrap();
+    assert!(fs::symlink_metadata(&link).is_err());
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::Uninstall {
+                skill_id: "review".into(),
+            },
+            3,
+        )
+        .unwrap();
+    assert!(fixture.service().snapshot().installed.is_empty());
 }
 
 #[test]

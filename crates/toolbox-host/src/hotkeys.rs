@@ -132,10 +132,10 @@ impl Hotkeys {
 fn desired(config: &Config) -> Result<Bindings, String> {
     config.validate()?;
     let mut keys = Bindings::new();
-    let launcher = native_key(&config.launcher_hotkey)?;
+    let launcher = native_key(&config.projects.hotkey)?;
     keys.insert(launcher.id(), (launcher, Binding::Launcher));
-    if config.windows_enabled {
-        for profile in &config.profiles {
+    if config.windows.enabled {
+        for profile in &config.windows.profiles {
             if profile.enabled
                 && profile.platform == Platform::current()
                 && !profile.hotkey.is_empty()
@@ -211,10 +211,10 @@ mod tests {
         keys.commit(keys.prepare(&initial).unwrap());
         let old = held.borrow().clone();
         let mut changed = initial.clone();
-        changed.launcher_hotkey = "F12".into();
+        changed.projects.hotkey = "F12".into();
         assert!(keys.prepare(&changed).is_err());
         assert_eq!(*held.borrow(), old);
-        changed.launcher_hotkey = "Ctrl+Alt+P".into();
+        changed.projects.hotkey = "Ctrl+Alt+P".into();
         let pending = keys.prepare(&changed).unwrap();
         keys.rollback(pending);
         assert_eq!(*held.borrow(), old);

@@ -201,6 +201,7 @@ export global SkillsState {
     in-out property <bool> submitting: false;
     in-out property <bool> busy: false;
     in-out property <bool> daily-update: false;
+    in-out property <int> deploy-mode: 0;
     in-out property <int> view: 0;
     in-out property <string> query;
     in-out property <[SkillListRow]> rows;
@@ -245,6 +246,7 @@ export global SkillsState {
     callback refresh;
     callback update-all;
     callback set-daily(bool);
+    callback set-deploy-mode(int);
     callback add-repository;
     callback remove-repository(string);
     callback import-folder;
@@ -786,6 +788,22 @@ export component SkillsPage inherits Rectangle {
                     }
                 }
                 Tooltip { SkillPathHint { text: SkillsState.notice-detail; } }
+            }
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 118px;
+                    height: 26px;
+                    ComboBox {
+                        width: parent.width;
+                        height: parent.height;
+                        model: [@tr("ui.skills.deploy_symlink" => "Symbolic link"), @tr("ui.skills.deploy_copy" => "Copy")];
+                        current-index <=> SkillsState.deploy-mode;
+                        enabled: root.editable;
+                        selected => { SkillsState.set-deploy-mode(self.current-index); }
+                    }
+                    Tooltip { SkillPathHint { text: @tr("ui.skills.deploy_mode_hint" => "New app deployments use this mode. Existing deployments stay as they are; turn an app switch off and on to change it."); } }
+                }
             }
             if SkillsState.error-text != "" || SkillsState.notice-text != "": ActionButton {
                 text: @tr("ui.action.details" => "Details");

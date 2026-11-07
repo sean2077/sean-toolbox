@@ -730,7 +730,7 @@ impl Controller {
         Some(Duration::from_secs(if state.release_requested {
             0
         } else {
-            state.config.ui_idle_seconds
+            state.config.ui.idle_seconds
         }))
     }
 
@@ -756,17 +756,18 @@ impl Controller {
         let ui = self.ui();
         let state = self.state.borrow();
         let config = &state.config;
-        ui.set_setting_language(Locale::from_tag(&config.language).index());
-        ui.set_setting_theme(theme_index(config.theme));
+        ui.set_setting_language(Locale::from_tag(&config.general.language).index());
+        ui.set_setting_theme(theme_index(config.general.theme));
         self.apply_theme();
-        ui.set_setting_hotkey(config.launcher_hotkey.clone().into());
-        ui.set_setting_autostart(config.autostart);
-        ui.set_setting_projects(config.projects_enabled);
-        ui.set_setting_windows(config.windows_enabled);
-        ui.set_setting_idle(config.ui_idle_seconds.to_string().into());
+        ui.set_setting_hotkey(config.projects.hotkey.clone().into());
+        ui.set_setting_autostart(config.general.autostart);
+        ui.set_setting_projects(config.projects.enabled);
+        ui.set_setting_windows(config.windows.enabled);
+        ui.set_setting_idle(config.ui.idle_seconds.to_string().into());
         ui.set_setting_code_path(
             config
-                .vscode_path_override
+                .projects
+                .vscode_path
                 .clone()
                 .unwrap_or_default()
                 .into(),
@@ -778,12 +779,13 @@ impl Controller {
 
     fn sync_profiles(&self) {
         let ui = self.ui();
-        ui.set_projects_enabled(self.state.borrow().config.projects_enabled);
-        ui.set_windows_enabled(self.state.borrow().config.windows_enabled);
+        ui.set_projects_enabled(self.state.borrow().config.projects.enabled);
+        ui.set_windows_enabled(self.state.borrow().config.windows.enabled);
         let rows = self
             .state
             .borrow()
             .config
+            .windows
             .profiles
             .iter()
             .map(|profile| ProfileRow {
@@ -815,7 +817,7 @@ impl Controller {
         let state = self.state.borrow();
         let generation = self.query_generation.fetch_add(1, Ordering::Relaxed) + 1;
         ui.set_project_error(false);
-        if !state.config.projects_enabled {
+        if !state.config.projects.enabled {
             ui.set_projects(ModelRc::default());
             ui.set_selected_project(-1);
             ui.set_project_loading(false);
@@ -826,7 +828,7 @@ impl Controller {
         ui.set_project_loading(true);
         ui.set_selected_project(-1);
         self.sync_project_message();
-        let code_path = state.config.vscode_path_override.clone();
+        let code_path = state.config.projects.vscode_path.clone();
         drop(state);
         self.send(Work::Discover {
             generation,
@@ -865,7 +867,7 @@ impl Controller {
         // A cold launcher accepts typing while its saved configuration loads.
         // Discovery will consume this exact query once the worker is ready.
         ui.set_query(query.clone().into());
-        if !self.ui().get_loaded() || !self.state.borrow().config.projects_enabled {
+        if !self.ui().get_loaded() || !self.state.borrow().config.projects.enabled {
             return;
         }
         let generation = self.query_generation.fetch_add(1, Ordering::Relaxed) + 1;
@@ -925,7 +927,7 @@ impl Controller {
             || ui.get_import_visible()
             || ui.get_dialog_busy()
             || index < 0
-            || !self.state.borrow().config.projects_enabled
+            || !self.state.borrow().config.projects.enabled
             || self.state.borrow().rendered_generation
                 != self.query_generation.load(Ordering::Relaxed)
         {
@@ -937,7 +939,7 @@ impl Controller {
         ui.set_selected_project(index);
         ui.set_project_opening(true);
         self.state.borrow_mut().project_open_target = Some(target);
-        let code_path = self.state.borrow().config.vscode_path_override.clone();
+        let code_path = self.state.borrow().config.projects.vscode_path.clone();
         self.send(Work::Open {
             id: item.id.into(),
             code_path,
@@ -991,19 +993,19 @@ impl Controller {
     fn settings_config(&self) -> Result<Config, UiText> {
         let ui = self.ui();
         let mut config = self.state.borrow().config.clone();
-        config.language = self.locale().tag().into();
-        config.theme = theme_from_index(ui.get_setting_theme());
-        config.launcher_hotkey = ui.get_setting_hotkey().trim().to_owned();
-        config.autostart = ui.get_setting_autostart();
-        config.projects_enabled = ui.get_setting_projects();
-        config.windows_enabled = ui.get_setting_windows();
-        config.ui_idle_seconds = ui
+        config.general.language = self.locale().tag().into();
+        config.general.theme = theme_from_index(ui.get_setting_theme());
+        config.projects.hotkey = ui.get_setting_hotkey().trim().to_owned();
+        config.general.autostart = ui.get_setting_autostart();
+        config.projects.enabled = ui.get_setting_projects();
+        config.windows.enabled = ui.get_setting_windows();
+        config.ui.idle_seconds = ui
             .get_setting_idle()
             .trim()
             .parse()
             .map_err(|_| UiText::from(messages::invalid_idle_timeout()))?;
         let code = ui.get_setting_code_path().trim().to_owned();
-        config.vscode_path_override = (!code.is_empty()).then_some(code);
+        config.projects.vscode_path = (!code.is_empty()).then_some(code);
         config.validate()?;
         Ok(config)
     }
@@ -1099,7 +1101,7 @@ impl Controller {
         let profile = if index < 0 {
             let state = self.state.borrow();
             AppProfile {
-                id: next_profile_id(&state.config.profiles),
+                id: next_profile_id(&state.config.windows.profiles),
                 name: String::new(),
                 platform: Platform::current(),
                 matcher: String::new(),
@@ -1116,7 +1118,7 @@ impl Controller {
             }
         } else {
             let state = self.state.borrow();
-            let Some(profile) = state.config.profiles.get(index as usize) else {
+            let Some(profile) = state.config.windows.profiles.get(index as usize) else {
                 return;
             };
             profile.clone()
@@ -1324,13 +1326,13 @@ impl Controller {
             hide_on_focus_loss: ui.get_form_quake_auto_hide(),
         };
         if let Some(index) = index {
-            let Some(existing) = config.profiles.get_mut(index) else {
+            let Some(existing) = config.windows.profiles.get_mut(index) else {
                 self.error(messages::error_app_list_changed_reload_configuration());
                 return;
             };
             *existing = profile;
         } else {
-            config.profiles.push(profile);
+            config.windows.profiles.push(profile);
         }
         self.save(config, SaveKind::Profile);
     }
@@ -1368,10 +1370,10 @@ impl Controller {
     fn toggle_profile(&self, index: i32) {
         let id = {
             let state = self.state.borrow();
-            if state.toggling || !state.config.windows_enabled {
+            if state.toggling || !state.config.windows.enabled {
                 return;
             }
-            let Some(profile) = state.config.profiles.get(index as usize) else {
+            let Some(profile) = state.config.windows.profiles.get(index as usize) else {
                 return;
             };
             if !profile.enabled || profile.platform != Platform::current() {
@@ -1440,7 +1442,7 @@ impl Controller {
                 let index = self.state.borrow().editor_index;
                 if let Some(index) = index {
                     let mut config = self.state.borrow().config.clone();
-                    config.profiles.remove(index);
+                    config.windows.profiles.remove(index);
                     self.save(config, SaveKind::Delete);
                 }
             }
@@ -2131,7 +2133,7 @@ mod tests {
             controller.settings_changed();
             assert_eq!(ui.get_status_message(), "Connecting…");
             assert_eq!(controller.launcher().get_status_message(), "Connecting…");
-            assert_eq!(controller.state.borrow().config.language, "zh-CN");
+            assert_eq!(controller.state.borrow().config.general.language, "zh-CN");
 
             controller.reset_settings();
             assert_eq!(ui.get_confirm_title(), "Discard settings changes?");
@@ -2259,7 +2261,7 @@ mod tests {
     #[test]
     fn theme_preview_reaches_both_surfaces_and_discard_preserves_app_drafts() {
         with_test_ui(|ui, controller, _| {
-            controller.state.borrow_mut().config.theme = ThemePreference::Light;
+            controller.state.borrow_mut().config.general.theme = ThemePreference::Light;
             controller.sync_settings();
             controller.begin_edit(0);
             ui.set_launch_args("[unfinished".into());
@@ -2271,11 +2273,11 @@ mod tests {
             assert!(controller.launcher().global::<Theme>().get_dark());
             assert!(ui.get_settings_dirty());
             assert_eq!(
-                controller.state.borrow().config.theme,
+                controller.state.borrow().config.general.theme,
                 ThemePreference::Light
             );
             assert_eq!(
-                controller.settings_config().unwrap().theme,
+                controller.settings_config().unwrap().general.theme,
                 ThemePreference::Dark
             );
 
@@ -2324,8 +2326,8 @@ mod tests {
                 panic!("Expected a validated app save");
             };
             assert_eq!(kind, SaveKind::Profile);
-            assert_eq!(config.theme, ThemePreference::System);
-            let profile = &config.profiles[0];
+            assert_eq!(config.general.theme, ThemePreference::System);
+            let profile = &config.windows.profiles[0];
             assert!(profile.quake.enabled);
             assert_eq!(profile.quake.edge, toolbox_core::QuakeEdge::Right);
             assert_eq!(profile.quake.alignment, toolbox_core::QuakeAlignment::End);
@@ -2394,14 +2396,14 @@ mod tests {
             let Work::Save { config, .. } = receive.try_recv().unwrap() else {
                 panic!("Expected a validated app save");
             };
-            let profile = &config.profiles[0];
+            let profile = &config.windows.profiles[0];
             assert_eq!(profile.hotkey, "Ctrl+Alt+T");
             assert_eq!(profile.launch[0].executable, r"D:\Terminal\wezterm-gui.exe");
             assert_eq!(profile.launch[0].args, ["start", "--", "bash", "-l"]);
             assert_eq!(profile.launch[0].cwd.as_deref(), Some(r"D:\My Projects"));
             assert_eq!(
                 profile.matcher,
-                controller.state.borrow().config.profiles[0].matcher
+                controller.state.borrow().config.windows.profiles[0].matcher
             );
         });
     }
@@ -2447,7 +2449,7 @@ mod tests {
     #[test]
     fn explicit_close_bypasses_cache_but_never_unloads_a_visible_or_busy_surface() {
         with_test_ui(|ui, controller, _| {
-            controller.state.borrow_mut().config.ui_idle_seconds = 60;
+            controller.state.borrow_mut().config.ui.idle_seconds = 60;
             controller.state.borrow_mut().visible = false;
             controller.state.borrow_mut().launcher_visible = true;
             controller.hide_launcher();
@@ -2481,7 +2483,7 @@ mod tests {
     #[test]
     fn cancelling_close_keeps_drafts_and_confirming_releases_memory() {
         with_test_ui(|ui, controller, _| {
-            controller.state.borrow_mut().config.ui_idle_seconds = 60;
+            controller.state.borrow_mut().config.ui.idle_seconds = 60;
             controller.begin_edit(0);
             ui.set_form_name("Unsaved application".into());
             controller.profile_changed();
@@ -2583,7 +2585,7 @@ mod tests {
                 response: Ok(Response {
                     ok: true,
                     config: Some(Config {
-                        ui_idle_seconds: 30,
+                        ui: toolbox_core::UiConfig { idle_seconds: 30 },
                         ..Config::default()
                     }),
                     revision: 2,
@@ -3060,6 +3062,18 @@ mod tests {
                 Work::Skills(SkillsCommand::Install { candidate_id, apps })
                     if candidate_id == "source:gamma" && apps == [SkillApp::Codex]
             ));
+        });
+    }
+
+    #[test]
+    fn deploy_mode_snapshot_reaches_the_skills_control() {
+        use toolbox_core::skills::SkillDeployMode;
+        with_test_ui(|ui, controller, _| {
+            assert_eq!(ui.global::<SkillsState>().get_deploy_mode(), 0);
+            let mut snapshot = skills_snapshot();
+            snapshot.deploy_mode = SkillDeployMode::Copy;
+            receive_skills_snapshot(controller, snapshot);
+            assert_eq!(ui.global::<SkillsState>().get_deploy_mode(), 1);
         });
     }
 

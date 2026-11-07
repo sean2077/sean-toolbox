@@ -163,20 +163,48 @@ impl AppProfile {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct Config {
-    pub schema_version: u32,
+pub struct GeneralConfig {
     pub language: String,
     pub theme: ThemePreference,
-    pub launcher_hotkey: String,
     pub autostart: bool,
-    pub projects_enabled: bool,
-    pub windows_enabled: bool,
-    pub ui_idle_seconds: u64,
-    pub vscode_path_override: Option<String>,
+}
+
+impl Default for GeneralConfig {
+    fn default() -> Self {
+        Self {
+            language: "zh-CN".into(),
+            theme: ThemePreference::System,
+            autostart: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ProjectsConfig {
+    pub enabled: bool,
+    pub hotkey: String,
+    pub vscode_path: Option<String>,
+}
+
+impl Default for ProjectsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            hotkey: "Ctrl+Alt+Space".into(),
+            vscode_path: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WindowsConfig {
+    pub enabled: bool,
     pub profiles: Vec<AppProfile>,
 }
 
-impl Default for Config {
+impl Default for WindowsConfig {
     fn default() -> Self {
         let platform = Platform::current();
         let (code, chrome) = match platform {
@@ -204,15 +232,7 @@ impl Default for Config {
             }],
         };
         Self {
-            schema_version: 1,
-            language: "zh-CN".into(),
-            theme: ThemePreference::System,
-            launcher_hotkey: "Ctrl+Alt+Space".into(),
-            autostart: false,
-            projects_enabled: true,
-            windows_enabled: true,
-            ui_idle_seconds: 0,
-            vscode_path_override: None,
+            enabled: true,
             profiles: vec![
                 AppProfile::wezterm(platform),
                 make(
@@ -242,25 +262,174 @@ impl Default for Config {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct UiConfig {
+    pub idle_seconds: u64,
+}
+
+/// Configuration grouped by the component that owns each setting. Version 1
+/// files stored these settings as top-level fields; they are migrated on load.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Config {
+    pub schema_version: u32,
+    pub general: GeneralConfig,
+    pub projects: ProjectsConfig,
+    pub windows: WindowsConfig,
+    pub ui: UiConfig,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            schema_version: 2,
+            general: GeneralConfig::default(),
+            projects: ProjectsConfig::default(),
+            windows: WindowsConfig::default(),
+            ui: UiConfig::default(),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Config {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let version = value
+            .get("schema_version")
+            .and_then(serde_json::Value::as_u64)
+            .unwrap_or(0);
+        let grouped = version >= 2
+            || ["general", "projects", "windows", "ui"]
+                .iter()
+                .any(|key| value.get(*key).is_some());
+        if grouped {
+            let mut config: GroupedConfig =
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+            if config.schema_version == 0 {
+                config.schema_version = 2;
+            }
+            Ok(config.into())
+        } else {
+            let legacy: LegacyConfig =
+                serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+            Ok(legacy.into())
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GroupedConfig {
+    #[serde(default)]
+    schema_version: u32,
+    #[serde(default)]
+    general: GeneralConfig,
+    #[serde(default)]
+    projects: ProjectsConfig,
+    #[serde(default)]
+    windows: WindowsConfig,
+    #[serde(default)]
+    ui: UiConfig,
+}
+
+impl From<GroupedConfig> for Config {
+    fn from(config: GroupedConfig) -> Self {
+        Self {
+            schema_version: config.schema_version,
+            general: config.general,
+            projects: config.projects,
+            windows: config.windows,
+            ui: config.ui,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct LegacyConfig {
+    schema_version: u32,
+    language: String,
+    theme: ThemePreference,
+    launcher_hotkey: String,
+    autostart: bool,
+    projects_enabled: bool,
+    windows_enabled: bool,
+    ui_idle_seconds: u64,
+    vscode_path_override: Option<String>,
+    profiles: Vec<AppProfile>,
+}
+
+impl Default for LegacyConfig {
+    fn default() -> Self {
+        let config = Config::default();
+        Self {
+            schema_version: 0,
+            language: config.general.language,
+            theme: config.general.theme,
+            launcher_hotkey: config.projects.hotkey,
+            autostart: config.general.autostart,
+            projects_enabled: config.projects.enabled,
+            windows_enabled: config.windows.enabled,
+            ui_idle_seconds: config.ui.idle_seconds,
+            vscode_path_override: config.projects.vscode_path,
+            profiles: config.windows.profiles,
+        }
+    }
+}
+
+impl From<LegacyConfig> for Config {
+    fn from(config: LegacyConfig) -> Self {
+        let mut next = Self {
+            schema_version: config.schema_version,
+            general: GeneralConfig {
+                language: config.language,
+                theme: config.theme,
+                autostart: config.autostart,
+            },
+            projects: ProjectsConfig {
+                enabled: config.projects_enabled,
+                hotkey: config.launcher_hotkey,
+                vscode_path: config.vscode_path_override,
+            },
+            windows: WindowsConfig {
+                enabled: config.windows_enabled,
+                profiles: config.profiles,
+            },
+            ui: UiConfig {
+                idle_seconds: config.ui_idle_seconds,
+            },
+        };
+        // Version 1 files are the last flat layout; a missing version stays
+        // invalid instead of being silently adopted.
+        if next.schema_version == 1 {
+            next.schema_version = 2;
+        }
+        next
+    }
+}
+
 impl Config {
     pub fn validate(&self) -> Result<(), String> {
-        if self.schema_version != 1 {
+        if self.schema_version != 2 {
             return Err("Unsupported configuration version / 不支持的配置版本".into());
         }
-        if !matches!(self.language.as_str(), "zh-CN" | "en") {
+        if !matches!(self.general.language.as_str(), "zh-CN" | "en") {
             return Err("Invalid language".into());
         }
-        if self.profiles.len() > 100 {
+        if self.windows.profiles.len() > 100 {
             return Err("At most 100 application profiles are supported".into());
         }
-        if self.ui_idle_seconds > 3600 {
+        if self.ui.idle_seconds > 3600 {
             return Err("UI idle timeout must be between 0 and 3600 seconds".into());
         }
-        let launcher = HotkeySpec::parse(&self.launcher_hotkey)?;
+        let launcher = HotkeySpec::parse(&self.projects.hotkey)?;
         let mut hotkeys = HashSet::new();
         hotkeys.insert(launcher.canonical());
         let mut ids = HashSet::new();
-        for p in &self.profiles {
+        for p in &self.windows.profiles {
             if !(10..=100).contains(&p.quake.width_percent)
                 || !(10..=100).contains(&p.quake.height_percent)
             {
@@ -292,7 +461,7 @@ impl Config {
             } else {
                 Some(HotkeySpec::parse(&p.hotkey)?.canonical())
             };
-            if self.windows_enabled
+            if self.windows.enabled
                 && p.enabled
                 && p.platform == Platform::current()
                 && key.is_some_and(|k| !hotkeys.insert(k))
@@ -321,7 +490,8 @@ impl Config {
             }
         }
         if self
-            .vscode_path_override
+            .projects
+            .vscode_path
             .as_ref()
             .is_some_and(|s| s.contains('\0') || s.len() > 4096)
         {
@@ -511,30 +681,51 @@ mod tests {
     #[test]
     fn active_shortcut_conflicts_and_duplicate_ids_are_rejected() {
         let mut config = Config::default();
-        config.profiles[0].hotkey = config.launcher_hotkey.clone();
+        config.windows.profiles[0].hotkey = config.projects.hotkey.clone();
         assert!(config.validate().is_err());
-        config.profiles[0].enabled = false;
+        config.windows.profiles[0].enabled = false;
         assert!(config.validate().is_ok());
-        config.profiles[1].id = config.profiles[0].id.to_uppercase();
+        config.windows.profiles[1].id = config.windows.profiles[0].id.to_uppercase();
         assert!(config.validate().is_err());
     }
 
-    #[test]
-    fn legacy_configuration_keeps_normal_windows_and_uses_system_theme() {
-        let mut value = serde_json::to_value(Config::default()).unwrap();
+    fn legacy_value() -> serde_json::Value {
+        let mut value = serde_json::json!({
+            "schema_version": 1,
+            "language": "zh-CN",
+            "theme": "system",
+            "launcher_hotkey": "Ctrl+Alt+Space",
+            "autostart": false,
+            "projects_enabled": true,
+            "windows_enabled": true,
+            "ui_idle_seconds": 0,
+            "vscode_path_override": null,
+            "profiles": serde_json::to_value(Config::default().windows.profiles).unwrap(),
+        });
         value.as_object_mut().unwrap().remove("theme");
         for profile in value["profiles"].as_array_mut().unwrap() {
             profile.as_object_mut().unwrap().remove("quake");
         }
-        let config: Config = serde_json::from_value(value).unwrap();
+        value
+    }
+
+    #[test]
+    fn legacy_configuration_keeps_normal_windows_and_migrates_to_grouped_schema() {
+        let config: Config = serde_json::from_value(legacy_value()).unwrap();
         config.validate().unwrap();
-        assert_eq!(config.theme, ThemePreference::System);
+        assert_eq!(config.schema_version, 2);
+        assert_eq!(config.general.theme, ThemePreference::System);
         assert!(
             config
+                .windows
                 .profiles
                 .iter()
                 .all(|p| p.quake == QuakeConfig::default())
         );
+        let encoded = serde_json::to_value(&config).unwrap();
+        assert_eq!(encoded["schema_version"], 2);
+        assert!(encoded.get("language").is_none());
+        assert_eq!(encoded["general"]["language"], "zh-CN");
         let partial: QuakeConfig = serde_json::from_str(r#"{"enabled":true}"#).unwrap();
         assert!(partial.enabled);
         assert_eq!(partial.edge, QuakeEdge::Top);
@@ -546,12 +737,41 @@ mod tests {
     }
 
     #[test]
+    fn grouped_configuration_fills_missing_components() {
+        let config: Config =
+            serde_json::from_str(r#"{"schema_version":2,"general":{"language":"en"}}"#).unwrap();
+        config.validate().unwrap();
+        assert_eq!(config.general.language, "en");
+        assert_eq!(config.general.theme, ThemePreference::System);
+        assert!(config.projects.enabled);
+        assert_eq!(config.projects.hotkey, "Ctrl+Alt+Space");
+        assert!(config.windows.enabled);
+        assert!(!config.windows.profiles.is_empty());
+        assert_eq!(config.ui.idle_seconds, 0);
+    }
+
+    #[test]
+    fn missing_schema_version_and_unknown_fields_are_still_rejected() {
+        let mut missing = legacy_value();
+        missing.as_object_mut().unwrap().remove("schema_version");
+        let missing: Config = serde_json::from_value(missing).unwrap();
+        assert!(missing.validate().is_err());
+
+        let mut unknown = serde_json::to_value(Config::default()).unwrap();
+        unknown["general"]["langauge"] = "en".into();
+        assert!(serde_json::from_value::<Config>(unknown).is_err());
+    }
+
+    #[test]
     fn theme_and_quake_preferences_round_trip_and_validate_strictly() {
         let mut config = Config {
-            theme: ThemePreference::Dark,
+            general: GeneralConfig {
+                theme: ThemePreference::Dark,
+                ..Default::default()
+            },
             ..Default::default()
         };
-        config.profiles[0].quake = QuakeConfig {
+        config.windows.profiles[0].quake = QuakeConfig {
             enabled: true,
             edge: QuakeEdge::Right,
             alignment: QuakeAlignment::End,
@@ -567,10 +787,10 @@ mod tests {
         assert_eq!(serde_json::from_str::<Config>(&encoded).unwrap(), config);
         for value in [0, 9, 101, 255] {
             let mut bad = config.clone();
-            bad.profiles[0].quake.width_percent = value;
+            bad.windows.profiles[0].quake.width_percent = value;
             assert!(bad.validate().is_err());
-            bad.profiles[0].quake.width_percent = 50;
-            bad.profiles[0].quake.height_percent = value;
+            bad.windows.profiles[0].quake.width_percent = 50;
+            bad.windows.profiles[0].quake.height_percent = value;
             assert!(bad.validate().is_err());
         }
         assert!(serde_json::from_str::<QuakeConfig>(r#"{"edge":"diagonal"}"#).is_err());

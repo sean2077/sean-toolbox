@@ -521,9 +521,37 @@ UI 行为测试使用真实 Slint 组件与软件渲染测试平台，不访问�
 本地未执行 Windows/macOS 实机桌面或 Linux 原生桌面 smoke。四平台构建、完整 IPC 与 Linux 原生窗口/界面 smoke
 以 PR 对应提交的 Actions 结果为准；测试平台通过不代表完成跨系统字体、缩放或文件选择器的人工视觉验收。
 
+## 2026-11-07：Skills 默认软链部署与配置分组
+
+在 `feat/skills-symlink-config` 工作树验证。环境为 Windows 11 Pro 10.0.26200、Rust/Cargo 1.99.1 MSVC、Slint 1.18.1；
+未修改用户配置，未执行真实 GitHub 网络下载。
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace --no-fail-fast` | Windows 下 208 项通过、0 失败 |
+| 翻译目录检查 | 通过；126 条 Rust 消息、234 条界面文案在 en/zh-CN 下完整，占位符一致 |
+| `python -m unittest discover -s scripts -p 'test_*.py' -v` | 27 项通过 |
+| `git diff --check` | 通过 |
+
+新增回归覆盖默认软链接安装、软链接随主副本更新、停用/重新启用、主副本缺失时的链接清理、
+复制模式与混合部署卸载、部署方式持久化、配置分组反序列化及旧版扁平配置迁移、CLI 与宿主预览。
+三个软链接用例在最终树中沿用仓库既有做法标为 `#[cfg(unix)]`；本次在具备符号链接权限的 Windows 环境临时
+解除标记后单独运行通过。Windows CI 的符号链接权限仍需以具体工作流结果为准。
+
+一次全量并行运行中 `toolbox-windows` 的原生窗口用例
+`native_quake_hides_reuses_and_recovers_without_activation` 失败；单独重跑及随后的全量重跑均通过。
+该用例与本次改动无关，但真实窗口焦点行为仍应在对应桌面环境复核。
+
+`scripts/smoke_host.py` 与 `scripts/smoke_appearance.py` 已改为分组配置结构并通过语法检查；
+两者需要隔离的 Linux X11 桌面，未在本机执行，由 CI 的 Linux 集成任务复核。
+
+本地未执行完整界面人工验收、真实仓库下载和 macOS/Linux 实机运行；这些结果以 PR 对应提交的 CI 为准。
+
 ## 2026-11-07：翻译目录去重、共享消息与生成 API 加固
 
-基于合并 PR #2/#3 后的 `main`（`1d2e996`），继续处理复核建议：
+基于合并 PR #2/#3 后的 `main`，继续处理复核建议，并同步最新的 Skills 部署与配置分组改动：
 
 - 将 Rust 与 Slint 共用的 20 个无参数消息统一为 `.slint` 中的 `ui.common.*` 上下文；构建期为 Rust 生成 `messages::common_*`，`rust.pot` 移除 22 条重复条目，中文 PO 每个概念只保留一条译文。
 - 四个及以上参数的消息改为具名参数结构体（`DiagnosticsSummaryArgs`、`ImportProfileArgs` 等）；以 `sync_diagnostics` 回归测试校验字段映射。
@@ -537,8 +565,8 @@ UI 行为测试使用真实 Slint 组件与软件渲染测试平台，不访问�
 | --- | --- |
 | `cargo fmt --all -- --check` | 通过 |
 | `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
-| `cargo test --locked --workspace` | 通过；UI 60 项、`toolbox-i18n` 16 项 |
-| `python scripts/translations.py check` | 通过；104 条 Rust + 227 条界面 = 331 条活动条目，20 条 `ui.common.*` 均有中文译文 |
+| `cargo test --locked --workspace` | 通过；UI 61 项、`toolbox-i18n` 16 项 |
+| `python scripts/translations.py check` | 通过；104 条 Rust + 230 条界面 = 334 条活动条目，20 条 `ui.common.*` 均有中文译文 |
 | `python -m py_compile scripts/translations.py` | 通过 |
 | 跨目录重复检查 | 共享英文标签的跨目录重复为 0；`ui.common.*` 共 20 条 |
 | 生成 API 回归 | 10 项目录测试通过，含共享消息生成、拒绝占位符/复数、具名参数结构体编译执行 |

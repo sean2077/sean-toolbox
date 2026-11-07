@@ -58,8 +58,13 @@ _Equivalent (en)_: idle release
 _Equivalent (en)_: toolbox
 
 **Skills 主副本（managed skill）**：
-工具箱独立数据目录内管理的一份 Skill 副本，来源可以是 GitHub 仓库或本机复制导入。各应用启用时使用复制部署；主副本不放在会被多个应用自动读取的共享 Skills 目录。
+工具箱独立数据目录内管理的一份 Skill 副本，来源可以是 GitHub 仓库或本机复制导入。各应用启用时默认以符号链接指向主副本，也可切换为复制部署；主副本不放在会被多个应用自动读取的共享 Skills 目录。
 _Equivalent (en)_: managed skill, master copy
+
+**部署方式（deploy mode）**：
+Skills 的全局设置，决定新启用的应用目录使用符号链接（默认）还是复制主副本。已有部署保持原方式；停用再启用后按当前方式部署。链接方式的本机导入不受此设置影响。
+_Equivalent (en)_: deploy mode
+_Avoid_: 同步方式、安装方式（安装方式也指仓库安装或本机导入）
 
 **链接技能（linked skill）**：
 以本机目录为源、不保存主副本的 Skill。应用目录使用指向源目录的符号链接部署；源目录的修改立即生效，不参与远程更新，卸载只移除工具箱创建的链接并保留源目录。

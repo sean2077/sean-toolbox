@@ -140,6 +140,18 @@ mod tests {
                 }}
             })
         );
+        let request = Request::new(HostCommand::Skills(SkillsCommand::SetDeployMode {
+            mode: crate::skills::SkillDeployMode::Copy,
+        }));
+        assert_eq!(
+            serde_json::to_value(request).unwrap(),
+            serde_json::json!({
+                "version": 1,
+                "command": {"type": "skills", "data": {
+                    "type": "set_deploy_mode", "data": {"mode": "copy"}
+                }}
+            })
+        );
         let page: UiRequest = serde_json::from_str(r#"{"page":"skills"}"#).unwrap();
         assert_eq!(page.page, UiPage::Skills);
     }

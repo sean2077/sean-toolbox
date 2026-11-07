@@ -47,8 +47,9 @@ requests. Results return through `slint::invoke_from_event_loop`.
 - Skills exposes installed skills, repository discovery, local imports and
   repository settings. Commands run in the host; the UI worker only performs
   IPC and folder selection. App selections are explicit and folder imports
-  initially keep only a managed copy. Daily updates and manual updates share
-  the host's serialized worker and persisted status.
+  initially keep only a managed copy. A global deploy-mode selector chooses
+  symlinks (default) or copies for new app deployments. Daily updates and manual
+  updates share the host's serialized worker and persisted status.
 - While the Skills page is visible, a single outstanding request polls the
   snapshot every 15 seconds, or every second while the host is busy. Navigation
   and closing stop polling. The UI waits for a command acknowledgement before

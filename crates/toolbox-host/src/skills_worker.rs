@@ -220,6 +220,9 @@ fn preview_command(snapshot: &mut SkillsSnapshot, command: &SkillsCommand, now: 
             snapshot.daily_update = *enabled;
             snapshot.next_update_at = enabled.then_some(now);
         }
+        SkillsCommand::SetDeployMode { mode } => {
+            snapshot.deploy_mode = *mode;
+        }
         SkillsCommand::SetEnabled {
             skill_id,
             app,
@@ -454,6 +457,18 @@ mod tests {
         );
         assert!(snapshot.daily_update);
         assert_eq!(snapshot.next_update_at, Some(100));
+
+        preview_command(
+            &mut snapshot,
+            &SkillsCommand::SetDeployMode {
+                mode: toolbox_core::skills::SkillDeployMode::Copy,
+            },
+            150,
+        );
+        assert_eq!(
+            snapshot.deploy_mode,
+            toolbox_core::skills::SkillDeployMode::Copy
+        );
 
         preview_command(
             &mut snapshot,
