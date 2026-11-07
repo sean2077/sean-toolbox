@@ -50,7 +50,10 @@ def extract(destination: Path) -> None:
             "The extractor must match the application's Slint version."
         )
     files = sorted(
-        str(path.relative_to(ROOT))
+        # Keep candidate paths in the same forward-slash form on every platform:
+        # the extractor records them verbatim in the PO "#:" references, so a
+        # Windows run must not rewrite the catalogs with backslashes.
+        path.relative_to(ROOT).as_posix()
         for path in (ROOT / "crates/toolbox-ui/ui").rglob("*.slint")
     )
     if not files:

@@ -18,7 +18,7 @@ fn run() -> Result<(), String> {
             catalog::compare_ui(&root.join("ui.pot"), std::path::Path::new(extracted))
         }
         _ => Err(
-            "usage: cargo run -p toolbox-i18n --example catalogs -- [compare-ui EXTRACTED.pot]"
+            "usage: cargo run --locked -p toolbox-i18n --example catalogs -- [compare-ui EXTRACTED.pot]"
                 .into(),
         ),
     }
