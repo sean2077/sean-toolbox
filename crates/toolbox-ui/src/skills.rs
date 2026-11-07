@@ -101,10 +101,11 @@ fn repository_label(snapshot: &SkillsSnapshot, id: &str) -> String {
 }
 
 fn directory_is_managed(snapshot: &SkillsSnapshot, directory: &str) -> bool {
+    let directory = directory.to_lowercase();
     snapshot
         .installed
         .iter()
-        .any(|skill| skill.directory.eq_ignore_ascii_case(directory))
+        .any(|skill| skill.directory.to_lowercase() == directory)
 }
 
 fn filtered_rows(
