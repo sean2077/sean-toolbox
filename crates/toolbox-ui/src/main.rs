@@ -2708,7 +2708,6 @@ mod tests {
             ui.set_setting_idle("120".into());
             controller.settings_changed();
             controller.navigate(page_index(UiPage::Skills));
-            controller.refresh_skills();
             controller.navigate(page_index(UiPage::Skills));
             assert!(matches!(receive.try_recv().unwrap(), Work::GetSkills));
             assert!(receive.try_recv().is_err());

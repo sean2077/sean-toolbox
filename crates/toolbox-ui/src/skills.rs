@@ -100,6 +100,13 @@ fn repository_label(snapshot: &SkillsSnapshot, id: &str) -> String {
         .unwrap_or_else(|| id.into())
 }
 
+fn directory_is_managed(snapshot: &SkillsSnapshot, directory: &str) -> bool {
+    snapshot
+        .installed
+        .iter()
+        .any(|skill| skill.directory.eq_ignore_ascii_case(directory))
+}
+
 fn filtered_rows(
     snapshot: &SkillsSnapshot,
     view: i32,
@@ -159,7 +166,7 @@ fn filtered_rows(
                     skill.path
                 )
                 .into(),
-                installed: skill.installed,
+                installed: skill.installed || directory_is_managed(snapshot, &skill.directory),
                 problem: false,
             })
             .collect(),
@@ -171,7 +178,7 @@ fn filtered_rows(
                 name: skill.name.clone().into(),
                 description: skill.description.clone().into(),
                 detail: skill.path.clone().into(),
-                installed: false,
+                installed: directory_is_managed(snapshot, &skill.directory),
                 problem: false,
             })
             .collect(),
@@ -706,5 +713,43 @@ mod tests {
         };
         assert_eq!(repository_label(&snapshot, "source"), "sean2077/skills");
         assert_eq!(repository_label(&snapshot, "missing"), "missing");
+    }
+
+    #[test]
+    fn shadowed_directory_names_are_not_offered_for_import_or_install() {
+        use toolbox_core::skills::{InstalledSkill, LocalSkill, SkillCandidate};
+        let snapshot = SkillsSnapshot {
+            installed: vec![InstalledSkill {
+                id: "alpha".into(),
+                directory: "alpha".into(),
+                name: "Alpha".into(),
+                description: String::new(),
+                repository_id: Some("source".into()),
+                source_path: Some("alpha".into()),
+                revision: Some("a".repeat(40)),
+                apps: Vec::new(),
+                updated_at: 0,
+                last_error: None,
+            }],
+            available: vec![SkillCandidate {
+                id: "other:alpha".into(),
+                repository_id: "other".into(),
+                path: "alpha".into(),
+                directory: "alpha".into(),
+                name: "Alpha".into(),
+                description: String::new(),
+                installed: false,
+            }],
+            local: vec![LocalSkill {
+                path: "/tmp/alpha".into(),
+                directory: "ALPHA".into(),
+                name: "Alpha".into(),
+                description: String::new(),
+                app: None,
+            }],
+            ..SkillsSnapshot::default()
+        };
+        assert!(filtered_rows(&snapshot, 1, "", false)[0].installed);
+        assert!(filtered_rows(&snapshot, 2, "", false)[0].installed);
     }
 }
