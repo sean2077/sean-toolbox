@@ -64,7 +64,7 @@ python scripts/smoke_appearance.py --binary target/release/sean-toolbox
 | crate | 职责 |
 | --- | --- |
 | `toolbox-core` | 配置模型、校验、原子存储、INI 导入和 IPC 消息定义 |
-| `toolbox-i18n` | 共享 PO 资源校验、构建期消息生成、显式语言选择；运行时不依赖 Slint |
+| [toolbox-i18n](../crates/toolbox-i18n/README.md) | 共享 PO 资源校验、构建期消息生成、显式语言选择；运行时不依赖 Slint |
 | `toolbox-ipc` | 当前用户的本地 socket / named pipe 通信、消息大小和超时控制 |
 | [toolbox-windows](../crates/toolbox-windows/README.md) | 应用窗口切换和 Quake 状态、Win32 / Accessibility / X11 适配 |
 | [toolbox-projects](../crates/toolbox-projects/README.md) | VS Code 历史读取、项目身份、排序和打开方式 |
