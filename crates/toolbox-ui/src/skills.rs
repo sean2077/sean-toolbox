@@ -10,7 +10,7 @@ use std::collections::BTreeSet;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use toolbox_core::{
     Response,
-    skills::{InstalledSkill, SkillApp, SkillsCommand, SkillsSnapshot},
+    skills::{InstalledSkill, SkillApp, SkillDeployMode, SkillsCommand, SkillsSnapshot},
 };
 use toolbox_i18n::{Locale, messages};
 
@@ -523,6 +523,10 @@ impl Controller {
         skills.set_loaded(true);
         skills.set_busy(snapshot.busy);
         skills.set_daily_update(snapshot.daily_update);
+        skills.set_deploy_mode(match snapshot.deploy_mode {
+            SkillDeployMode::Symlink => 0,
+            SkillDeployMode::Copy => 1,
+        });
         skills.set_installed_count(snapshot.installed.len().min(i32::MAX as usize) as i32);
         skills.set_storage_path(snapshot.storage_path.clone().into());
         skills.set_schedule_text(schedule_text(snapshot, now_seconds(), locale).into());
@@ -959,6 +963,17 @@ pub(super) fn connect_callbacks(ui: &crate::AppWindow) {
     skills.on_set_daily(|enabled| {
         with_controller(|controller| {
             controller.submit_skills(SkillsCommand::SetDailyUpdate { enabled })
+        });
+    });
+    skills.on_set_deploy_mode(|mode| {
+        with_controller(|controller| {
+            controller.submit_skills(SkillsCommand::SetDeployMode {
+                mode: if mode == 0 {
+                    SkillDeployMode::Symlink
+                } else {
+                    SkillDeployMode::Copy
+                },
+            })
         });
     });
     skills.on_add_repository(|| with_controller(Controller::add_skill_repository));

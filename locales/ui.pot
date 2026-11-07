@@ -1206,3 +1206,20 @@ msgstr ""
 msgctxt "ui.skills.managed_copies"
 msgid "Managed copies: {0}"
 msgstr ""
+
+#: crates/toolbox-ui/ui/skills.slint:800
+msgctxt "ui.skills.deploy_symlink"
+msgid "Symbolic link"
+msgstr ""
+
+#: crates/toolbox-ui/ui/skills.slint:800
+msgctxt "ui.skills.deploy_copy"
+msgid "Copy"
+msgstr ""
+
+#: crates/toolbox-ui/ui/skills.slint:805
+msgctxt "ui.skills.deploy_mode_hint"
+msgid ""
+"New app deployments use this mode. Existing deployments stay as they are; "
+"turn an app switch off and on to change it."
+msgstr ""

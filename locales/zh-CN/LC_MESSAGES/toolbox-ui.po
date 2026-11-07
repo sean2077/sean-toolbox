@@ -1756,3 +1756,21 @@ msgstr[0] "显示 {shown} 项 · 共 {count} 个最近项目"
 msgctxt "rust.skills_source_apps"
 msgid "{source} · {apps}"
 msgstr "{source} · {apps}"
+
+#: crates/toolbox-ui/ui/skills.slint:800
+msgctxt "ui.skills.deploy_symlink"
+msgid "Symbolic link"
+msgstr "符号链接"
+
+#: crates/toolbox-ui/ui/skills.slint:800
+msgctxt "ui.skills.deploy_copy"
+msgid "Copy"
+msgstr "复制"
+
+#: crates/toolbox-ui/ui/skills.slint:805
+msgctxt "ui.skills.deploy_mode_hint"
+msgid ""
+"New app deployments use this mode. Existing deployments stay as they are; "
+"turn an app switch off and on to change it."
+msgstr ""
+"新启用的应用目录使用该方式；已有部署保持不变，关闭再启用对应应用即可切换。"

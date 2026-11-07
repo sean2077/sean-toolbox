@@ -1,7 +1,7 @@
 # toolbox-skills
 
-Host-owned agent skill storage, GitHub discovery, safe per-app copy deployment,
-and persistent update scheduling. This crate has no GUI, SQLite, HTTP runtime,
+Host-owned agent skill storage, GitHub discovery, safe per-app symlink or copy
+deployment, and persistent update scheduling. This crate has no GUI, SQLite, HTTP runtime,
 or resident network loop. The host owns the worker and exposes the models from
 `toolbox_core::skills` through IPC.
 
@@ -36,12 +36,21 @@ no remote update source. Existing app links to the same source are adopted;
 other paths are refused. Uninstall removes only owned links and keeps the
 source. Link creation needs the OS symlink capability on Windows.
 
+Managed skills deploy to app directories as symbolic links by default. The
+global deploy mode can be switched to copies for installations, new enables,
+and re-enables; it is stored in `state.json` and applies to repository installs
+and "copy" local imports. Link-mode local imports always use symlinks. Changing
+the mode does not rewrite existing deployments: disable and re-enable an app to
+deploy it with the current mode. Symlink deployment needs the OS symlink
+capability on Windows; copy deployment does not.
+
 ## Storage and deployment
 
 The host supplies `<configuration-directory>/skills` as the private root:
 
 - `state.json`: source repositories, installed packages, ownership fingerprints,
-  enabled app copies, linked source paths, update timestamps, and diagnostics.
+  enabled app deployments, deploy mode, linked source paths, update timestamps,
+  and diagnostics.
 - `managed/<directory>`: one master copy per copied installed skill. Linked
   skills have no managed copy; their recorded source is the master.
 - `temporary/`: disposable repository and skill staging directories. Stale
@@ -53,22 +62,25 @@ The host supplies `<configuration-directory>/skills` as the private root:
 The default app destinations are `~/.claude/skills`, `~/.codex/skills`,
 `~/.gemini/skills`, `~/.config/opencode/skills`, and `~/.grok/skills`.
 These are per-user default paths, not project-local roots or custom harness
-configuration directories. Copies work on Windows without Developer Mode.
-The shared `.agents/skills` directory is only a read-only import source.
-Some harnesses also discover another harness's directory: switches report
-Sean Toolbox's managed copies, rather than guaranteeing a skill cannot be
+configuration directories. Copy deployment works on Windows without Developer
+Mode; symlink deployment needs Developer Mode or the symlink privilege. The
+shared `.agents/skills` directory is only a read-only import source. Some
+harnesses also discover another harness's directory: switches report Sean
+Toolbox's managed deployments, rather than guaranteeing a skill cannot be
 discovered through another location.
 
-New copy deployments require an absent destination, including when an existing
+New deployments require an absent destination, including when an existing
 unmanaged folder has identical content. Existing files are never silently
 adopted. Imported originals therefore survive uninstall. Linked deployments
 adopt only an existing link that resolves to the recorded source and refuse any
-other path. Updating or removing an owned copy checks its SHA-256 tree
-fingerprint first; local edits, links, reparse points, and conflicting names
-produce errors without overwriting them. POSIX executable bits are preserved
-and included in the fingerprint. Linked skills verify that every enabled app
-entry is still a link to the recorded source; a replaced entry stops the
-operation.
+other path. Managed symlink deployments verify that an enabled app entry still
+resolves to the master copy; managed copies are checked by their SHA-256 tree
+fingerprint. Updating or removing an owned copy checks the fingerprint first;
+local edits, links, reparse points, and conflicting names produce errors
+without overwriting them. Updating a symlinked deployment replaces the master
+copy and leaves the app links in place. POSIX executable bits are preserved and
+included in the fingerprint. Linked skills verify that every enabled app entry
+is still a link to the recorded source; a replaced entry stops the operation.
 
 Each skill transaction stages all requested copies before changing any live
 directory, records a journal, swaps directories by rename, then atomically
@@ -111,8 +123,9 @@ is possible; this is a bounded-work safeguard, not an OS disk quota.
 Run `cargo test --locked -p toolbox-skills` from the workspace. Fixtures create
 real local Git repositories and exercise the production archive and file
 transaction paths without contacting GitHub. Coverage includes installation,
-per-app disable, updates and restart, offline retry, local edits, identical
-unmanaged collisions, local imports, source changes, path/link rejection,
-executable files, lock/corrupt-state handling, IPC limits, and interrupted or
-partially cleaned transactions. These tests do not certify real GitHub
-authentication or platform-specific desktop behavior.
+per-app disable, symlink and copy deployment, mode switching, updates and
+restart, offline retry, local edits, identical unmanaged collisions, local
+imports, source changes, path/link rejection, executable files, lock/corrupt-
+state handling, IPC limits, and interrupted or partially cleaned transactions.
+These tests do not certify real GitHub authentication or platform-specific
+desktop behavior.

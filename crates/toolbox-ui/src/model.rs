@@ -27,7 +27,7 @@ impl ImportedConfig {
                 serde_json::from_str(text).map_err(messages::config_invalid_json)?;
             config.validate()?;
             Ok(Self {
-                profiles: config.profiles.clone(),
+                profiles: config.windows.profiles.clone(),
                 config: Some(config),
                 warnings: vec![],
                 filename,
@@ -50,17 +50,18 @@ impl ImportedConfig {
             current.clone()
         };
         if replace {
-            next.profiles.clone_from(&self.profiles);
+            next.windows.profiles.clone_from(&self.profiles);
         } else {
             for imported in &self.profiles {
                 if let Some(existing) = next
+                    .windows
                     .profiles
                     .iter_mut()
                     .find(|p| p.id.eq_ignore_ascii_case(&imported.id))
                 {
                     *existing = imported.clone();
                 } else {
-                    next.profiles.push(imported.clone());
+                    next.windows.profiles.push(imported.clone());
                 }
             }
         }
@@ -133,20 +134,20 @@ impl ImportedConfig {
             }
         }
         if let Some(config) = &self.config {
-            let theme = match config.theme {
+            let theme = match config.general.theme {
                 ThemePreference::System => messages::theme_system(),
                 ThemePreference::Light => messages::theme_light(),
                 ThemePreference::Dark => messages::theme_dark(),
             };
             out.push_str(
                 &messages::import_settings(
-                    boolean(config.autostart),
-                    config.ui_idle_seconds,
-                    &config.language,
-                    boolean(config.projects_enabled),
-                    &config.launcher_hotkey,
+                    boolean(config.general.autostart),
+                    config.ui.idle_seconds,
+                    &config.general.language,
+                    boolean(config.projects.enabled),
+                    &config.projects.hotkey,
                     theme.render(locale),
-                    boolean(config.windows_enabled),
+                    boolean(config.windows.enabled),
                 )
                 .render(locale),
             );
@@ -298,10 +299,11 @@ pub fn page_from_index(index: i32) -> UiPage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use toolbox_core::{GeneralConfig, ProjectsConfig, UiConfig, WindowsConfig};
 
     #[test]
     fn new_profile_ids_respect_case_insensitive_imported_ids() {
-        let mut profiles = Config::default().profiles;
+        let mut profiles = Config::default().windows.profiles;
         profiles[0].id = "APP-1".into();
         profiles[1].id = "app-3".into();
         assert_eq!(next_profile_id(&profiles), "app-2");
@@ -330,7 +332,7 @@ mod tests {
     #[test]
     fn merge_replaces_ids_case_insensitively_and_preserves_settings() {
         let current = Config::default();
-        let mut profile = current.profiles[0].clone();
+        let mut profile = current.windows.profiles[0].clone();
         profile.id = profile.id.to_ascii_uppercase();
         profile.name = "Changed terminal".into();
         let imported = ImportedConfig {
@@ -340,20 +342,23 @@ mod tests {
             filename: "test.ini".into(),
         };
         let merged = imported.apply(&current, false).unwrap();
-        assert_eq!(merged.profiles.len(), current.profiles.len());
-        assert_eq!(merged.profiles[0].name, "Changed terminal");
-        assert_eq!(merged.launcher_hotkey, current.launcher_hotkey);
+        assert_eq!(
+            merged.windows.profiles.len(),
+            current.windows.profiles.len()
+        );
+        assert_eq!(merged.windows.profiles[0].name, "Changed terminal");
+        assert_eq!(merged.projects.hotkey, current.projects.hotkey);
         let replaced = imported.apply(&current, true).unwrap();
-        assert_eq!(replaced.profiles.len(), 1);
-        assert_eq!(replaced.ui_idle_seconds, current.ui_idle_seconds);
+        assert_eq!(replaced.windows.profiles.len(), 1);
+        assert_eq!(replaced.ui.idle_seconds, current.ui.idle_seconds);
     }
 
     #[test]
     fn a_merge_cannot_activate_a_duplicate_shortcut() {
         let current = Config::default();
-        let mut profile = current.profiles[0].clone();
+        let mut profile = current.windows.profiles[0].clone();
         profile.id = "another-app".into();
-        profile.hotkey = current.launcher_hotkey.clone();
+        profile.hotkey = current.projects.hotkey.clone();
         let imported = ImportedConfig {
             profiles: vec![profile],
             config: None,
@@ -367,30 +372,36 @@ mod tests {
     fn json_replacement_restores_settings_but_merge_only_changes_apps() {
         let current = Config::default();
         let mut incoming = Config {
-            language: "en".into(),
-            autostart: true,
-            ui_idle_seconds: 0,
+            general: GeneralConfig {
+                language: "en".into(),
+                autostart: true,
+                ..Default::default()
+            },
+            ui: UiConfig { idle_seconds: 0 },
             ..Config::default()
         };
-        incoming.profiles.truncate(1);
-        incoming.profiles[0].enabled = false;
+        incoming.windows.profiles.truncate(1);
+        incoming.windows.profiles[0].enabled = false;
         let imported = ImportedConfig::parse(
             &serde_json::to_string(&incoming).unwrap(),
             "backup.json".into(),
         )
         .unwrap();
         let merged = imported.apply(&current, false).unwrap();
-        assert_eq!(merged.language, current.language);
-        assert_eq!(merged.autostart, current.autostart);
-        assert_eq!(merged.profiles.len(), current.profiles.len());
-        assert!(!merged.profiles[0].enabled);
+        assert_eq!(merged.general.language, current.general.language);
+        assert_eq!(merged.general.autostart, current.general.autostart);
+        assert_eq!(
+            merged.windows.profiles.len(),
+            current.windows.profiles.len()
+        );
+        assert!(!merged.windows.profiles[0].enabled);
         assert_eq!(imported.apply(&current, true).unwrap(), incoming);
         assert!(imported.summary(Locale::En).contains("Disabled"));
     }
 
     #[test]
     fn import_summary_keeps_named_fields_in_their_translated_positions() {
-        let mut profile = Config::default().profiles.remove(0);
+        let mut profile = Config::default().windows.profiles.remove(0);
         profile.name = "Distinct {name}".into();
         profile.id = "unique-id".into();
         profile.matcher = "Matcher.exe".into();
@@ -407,13 +418,21 @@ mod tests {
         let imported = ImportedConfig {
             profiles: vec![profile],
             config: Some(Config {
-                language: "en".into(),
-                theme: ThemePreference::Dark,
-                launcher_hotkey: "Ctrl+Alt+S".into(),
-                autostart: true,
-                projects_enabled: false,
-                windows_enabled: true,
-                ui_idle_seconds: 120,
+                general: GeneralConfig {
+                    language: "en".into(),
+                    theme: ThemePreference::Dark,
+                    autostart: true,
+                },
+                projects: ProjectsConfig {
+                    enabled: false,
+                    hotkey: "Ctrl+Alt+S".into(),
+                    ..Default::default()
+                },
+                windows: WindowsConfig {
+                    enabled: true,
+                    ..Default::default()
+                },
+                ui: UiConfig { idle_seconds: 120 },
                 ..Config::default()
             }),
             warnings: Vec::new(),

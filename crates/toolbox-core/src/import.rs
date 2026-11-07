@@ -197,8 +197,10 @@ pub fn parse_ini(text: &str) -> Result<ImportPreview, String> {
     // Validate structural bounds independently of the running OS and current
     // launcher shortcut. The UI validates the merged config before committing it.
     Config {
-        profiles: profiles.clone(),
-        windows_enabled: false,
+        windows: crate::WindowsConfig {
+            enabled: false,
+            profiles: profiles.clone(),
+        },
         ..Config::default()
     }
     .validate()?;

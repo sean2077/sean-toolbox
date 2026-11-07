@@ -31,6 +31,16 @@ impl SkillApp {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillDeployMode {
+    /// Link each app directory to the managed master copy.
+    #[default]
+    Symlink,
+    /// Copy the managed master into each app directory.
+    Copy,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillAppPath {
     pub app: SkillApp,
@@ -100,6 +110,7 @@ pub struct LocalSkill {
 pub struct SkillsSnapshot {
     pub storage_path: String,
     pub app_paths: Vec<SkillAppPath>,
+    pub deploy_mode: SkillDeployMode,
     pub repositories: Vec<SkillRepository>,
     pub installed: Vec<InstalledSkill>,
     pub available: Vec<SkillCandidate>,
@@ -160,5 +171,10 @@ pub enum SkillsCommand {
     },
     SetDailyUpdate {
         enabled: bool,
+    },
+    /// Choose how managed skills are deployed into app directories.
+    /// Existing deployments keep their current form.
+    SetDeployMode {
+        mode: SkillDeployMode,
     },
 }

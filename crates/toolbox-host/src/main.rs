@@ -137,7 +137,19 @@ fn parse_skills_command(args: &[String]) -> Result<HostCommand, String> {
             })),
             _ => Err("Usage: sean-toolbox skills daily on|off".into()),
         },
-        _ => Err("Usage: sean-toolbox skills [list|status|update|discover|daily on|off]".into()),
+        Some("deploy") if args.len() == 2 => match args[1].as_str() {
+            "symlink" => Ok(HostCommand::Skills(SkillsCommand::SetDeployMode {
+                mode: toolbox_core::skills::SkillDeployMode::Symlink,
+            })),
+            "copy" => Ok(HostCommand::Skills(SkillsCommand::SetDeployMode {
+                mode: toolbox_core::skills::SkillDeployMode::Copy,
+            })),
+            _ => Err("Usage: sean-toolbox skills deploy symlink|copy".into()),
+        },
+        _ => Err(
+            "Usage: sean-toolbox skills [list|status|update|discover|daily on|off|deploy symlink|copy]"
+                .into(),
+        ),
     }
 }
 
@@ -291,9 +303,23 @@ mod cli_tests {
             parse_skills_command(&args(&["daily", "off"])).unwrap(),
             HostCommand::Skills(SkillsCommand::SetDailyUpdate { enabled: false })
         ));
+        assert!(matches!(
+            parse_skills_command(&args(&["deploy", "symlink"])).unwrap(),
+            HostCommand::Skills(SkillsCommand::SetDeployMode {
+                mode: toolbox_core::skills::SkillDeployMode::Symlink
+            })
+        ));
+        assert!(matches!(
+            parse_skills_command(&args(&["deploy", "copy"])).unwrap(),
+            HostCommand::Skills(SkillsCommand::SetDeployMode {
+                mode: toolbox_core::skills::SkillDeployMode::Copy
+            })
+        ));
         for invalid in [
             args(&["daily"]),
             args(&["daily", "yes"]),
+            args(&["deploy"]),
+            args(&["deploy", "junction"]),
             args(&["update", "extra"]),
             args(&["status", "extra"]),
         ] {
