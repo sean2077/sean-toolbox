@@ -19,6 +19,7 @@ export struct SkillListRow {
     description: string,
     installed: bool,
     problem: bool,
+    linked: bool,
 }
 export struct SkillAppRow { index: int, name: string, path: string, enabled: bool }
 export struct SkillRepositoryRow { id: string, url: string, detail: string, error: string, removable: bool }
@@ -43,6 +44,8 @@ export global SkillsState {
     in-out property <string> selected-error;
     in-out property <bool> selected-installed: false;
     in-out property <bool> selected-updatable: false;
+    in-out property <bool> selected-linked: false;
+    in-out property <bool> link-import: false;
     in-out property <string> repository-url;
     in-out property <string> repository-branch;
     in-out property <string> schedule-text;
@@ -114,6 +117,13 @@ export component SkillsPage inherits Rectangle {
             ActionButton { text: root.english ? "On this device" : "本机技能"; primary: SkillsState.view == 2; subtle: SkillsState.view != 2; clicked => { SkillsState.change-view(2); } }
             ActionButton { text: root.english ? "Repositories" : "仓库"; primary: SkillsState.view == 3; subtle: SkillsState.view != 3; clicked => { SkillsState.change-view(3); } }
             Rectangle { horizontal-stretch: 1; }
+            CheckBox {
+                text: root.english ? "Link (no copy)" : "链接（不复制）";
+                checked <=> SkillsState.link-import;
+                enabled: root.editable;
+                accessible-label: root.english ? "Import local folders as links instead of copies" : "本地目录以链接方式导入而不是复制";
+                Tooltip { SkillPathHint { text: root.english ? "Link keeps the source live and creates app symlinks on Windows; copy stores a private master copy. Existing app links to the same source are adopted." : "链接保留源目录并在应用目录创建符号链接（Windows 需要符号链接权限）；复制保存私有主副本。已存在且指向同一来源的应用链接会被接管。"; } }
+            }
             ActionButton {
                 text: root.english ? "Import folder" : "导入文件夹";
                 with-icon: true;
@@ -241,15 +251,17 @@ export component SkillsPage inherits Rectangle {
                                         Divider {}
                                         Caption { text: SkillsState.selected-description; color: Theme.secondary; }
                                         if SkillsState.selected-detail != "": Caption { text: SkillsState.selected-detail; font-size: 11px; }
-                                        if SkillsState.view != 0: Caption { text: root.english ? "Leave all unchecked to keep only a managed copy." : "可不勾选应用，仅保存管理副本。"; font-size: 11px; }
-                                        if SkillsState.view == 2: Caption { text: root.english ? "The original folder is kept. Move it aside before deploying to the same directory." : "导入会保留原文件夹；部署到同名目录前，请先手动移开原目录。"; font-size: 11px; }
+                                        if SkillsState.view != 0: Caption { text: root.english ? "Leave all unchecked to keep only a managed copy or link." : "可不勾选应用，仅保存管理副本或链接。"; font-size: 11px; }
+                                        if SkillsState.view == 2 && SkillsState.selected-linked: Caption { text: root.english ? "This source is a link. “Link (no copy)” keeps it live; importing a copy reads its real target." : "该来源是链接。“链接（不复制）”保留实时源；复制会读取其真实目标。"; font-size: 11px; }
+                                        if SkillsState.view == 2 && !SkillsState.selected-linked: Caption { text: root.english ? "The original folder is kept. Move it aside before deploying to the same directory." : "导入会保留原文件夹；部署到同名目录前，请先手动移开原目录。"; font-size: 11px; }
+                                        if SkillsState.view == 0 && SkillsState.selected-linked: Caption { text: root.english ? "Managed as a link: app switches create or remove symlinks, and the source is not copied." : "以链接方式管理：应用开关创建或移除符号链接，不复制源目录。"; font-size: 11px; }
                                         if SkillsState.view == 0 && !SkillsState.selected-updatable: Caption { text: root.english ? "Local imports have no remote update source." : "本机导入的技能没有远程更新来源。"; font-size: 11px; }
                                     }
                                     Rectangle { min-height: 0px; vertical-stretch: 1; }
                                 }
                             }
                             if SkillsState.selected-id != "" && SkillsState.view != 0: ActionButton {
-                                text: SkillsState.selected-installed ? (root.english ? "Already installed" : "已安装") : SkillsState.view == 2 ? (root.english ? "Import selected" : "导入所选技能") : (root.english ? "Install selected" : "安装所选技能");
+                                text: SkillsState.selected-installed ? (root.english ? "Already installed" : "已安装") : SkillsState.view == 2 ? (SkillsState.link-import ? (root.english ? "Import as link" : "以链接导入") : (root.english ? "Import as copy" : "以复制导入")) : (root.english ? "Install selected" : "安装所选技能");
                                 primary: true;
                                 enabled: root.editable && !SkillsState.selected-installed;
                                 clicked => { SkillsState.install(); }

@@ -2673,6 +2673,8 @@ mod tests {
                     apps: vec![SkillApp::Claude],
                     updated_at: 1,
                     last_error: None,
+                    linked: false,
+                    target: None,
                 })
                 .collect(),
             available: vec![SkillCandidate {
@@ -2847,7 +2849,7 @@ mod tests {
             assert!(ui.get_settings_dirty());
             assert!(matches!(
                 receive.try_recv().unwrap(),
-                Work::Skills(SkillsCommand::ImportLocal { path, apps })
+                Work::Skills(SkillsCommand::ImportLocal { path, apps, link: false })
                     if path == "/tmp/selected skill" && apps.is_empty()
             ));
         });
@@ -2899,6 +2901,35 @@ mod tests {
                 ui.global::<SkillsState>().get_empty_text(),
                 "先在「仓库」添加来源，再点击「刷新仓库」发现技能。"
             );
+        });
+    }
+
+    #[test]
+    fn linked_local_folders_can_be_imported_as_links() {
+        with_test_ui(|ui, controller, receive| {
+            use toolbox_core::skills::{LocalSkill, SkillApp, SkillsCommand};
+            let mut snapshot = skills_snapshot();
+            snapshot.local = vec![LocalSkill {
+                path: "/vault/ob".into(),
+                directory: "ob".into(),
+                name: "ob".into(),
+                description: "Linked folder".into(),
+                app: Some(SkillApp::Claude),
+                linked: true,
+                target: Some("/vault/ob".into()),
+            }];
+            receive_skills_snapshot(controller, snapshot);
+            controller.skills_view(2);
+            let skills = ui.global::<SkillsState>();
+            assert!(skills.get_selected_linked());
+            assert!(skills.get_rows().row_data(0).unwrap().linked);
+            skills.set_link_import(true);
+            controller.install_selected_skill();
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Skills(SkillsCommand::ImportLocal { path, apps, link: true })
+                    if path == "/vault/ob" && apps.is_empty()
+            ));
         });
     }
 

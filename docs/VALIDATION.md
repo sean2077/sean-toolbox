@@ -466,3 +466,25 @@ workspace 包的版本，没有升级依赖。发布说明覆盖 Skills 管理�
 发布工作流在 `main` 的版本变化推送后创建带注解的 `v0.2.0` 标签，四平台构建/测试通过后
 上传并核对 8 个资产，再公开 Release。本次没有执行 Windows 实机的文件占用、junction、
 休眠恢复或文件选择器验收。
+
+## 2026-11-07：本机链接导入与链接条目
+
+本机添加（文件夹选择或“本机技能”导入）增加“链接（不复制）”选项：
+
+- 链接技能不创建主副本，保留源目录，并在所选应用目录创建符号链接；源目录修改立即生效，不参与远程更新。已有指向同一来源的应用链接会被接管，指向其他位置的路径会被拒绝。
+- 停用或卸载只移除工具箱登记的链接，源目录始终保留；应用链接被替换时操作停止并报告。
+- 本机扫描会把应用目录中的符号链接/reparse 条目标记为链接并显示目标。
+- Windows 创建链接需要 Developer Mode 或符号链接权限；失败时返回明确错误。
+
+本地门禁（Windows 11、Rust 1.99.1 MSVC）：
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked -p toolbox-skills -p toolbox-host -p toolbox-ui` | 通过：Skills 29（Windows；Unix 另有 2 项链接测试）、宿主 15、UI 44 |
+| `cargo test --locked --workspace --no-fail-fast` | 除既有 `toolbox-windows` 原生窗口用例在本机因置顶确认失败外全部通过；该用例在未修改的 `main` 上同样失败，属本机桌面/会话限制，命令退出 101 |
+| Windows 实机链接导入 | 通过：将 `ob` 以链接方式导入并接管 `.claude/skills/ob`、`.codex/skills/ob` 指向 Obsidian vault 的现有链接；状态为 5 个复制副本加 1 个链接技能，vault 未被复制或修改 |
+
+该改动位于 `v0.2.0` 发布后的 `main`，不包含在 0.2.0 Release 资产中；后续版本将包含。
+Windows 的符号链接权限、源目录被移动/删除后的恢复仍需在对应桌面环境验收。
