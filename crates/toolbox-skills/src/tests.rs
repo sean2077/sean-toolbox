@@ -728,6 +728,21 @@ fn an_indented_rule_inside_a_block_description_does_not_end_frontmatter() {
     assert_eq!(description, "First line --- Last line");
 }
 
+#[test]
+fn a_long_skill_body_still_yields_its_frontmatter() {
+    let directory = tempfile::tempdir().unwrap();
+    // A multi-byte body crossing the read limit must not make the file unreadable.
+    let body = "参考".repeat(40 * 1024);
+    fs::write(
+        directory.path().join("SKILL.md"),
+        format!("---\nname: claude-api\ndescription: |-\n  Reference\n---\n{body}"),
+    )
+    .unwrap();
+    let (name, description) = files::descriptor(directory.path(), "fallback").unwrap();
+    assert_eq!(name, "claude-api");
+    assert_eq!(description, "Reference");
+}
+
 #[cfg(unix)]
 #[test]
 fn symlink_sources_and_redirected_targets_fail_without_touching_victims() {
@@ -1237,6 +1252,84 @@ fn unreadable_skill_metadata_is_reported_without_hiding_the_catalog() {
         )
         .unwrap();
     assert_eq!(file_content(&fixture.master("valid")), "package");
+
+    // Once the source is fixed, the next scan drops the stale skip report.
+    fs::write(broken.join("SKILL.md"), "---\nname: broken\n---\n").unwrap();
+    git_command(&fixture.origin, &["add", "."]);
+    git_command(
+        &fixture.origin,
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            "fixed metadata",
+        ],
+    );
+    fixture
+        .service()
+        .execute(SkillsCommand::Discover, 3)
+        .unwrap();
+    let snapshot = fixture.service().snapshot();
+    assert_eq!(snapshot.available.len(), 2);
+    assert!(
+        !snapshot
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("skipped")),
+        "{:?}",
+        snapshot.warnings
+    );
+}
+
+#[test]
+fn removing_a_source_drops_its_skip_report() {
+    let mut fixture = Fixture::new();
+    let broken = fixture.origin.join("skills/broken");
+    fs::create_dir_all(&broken).unwrap();
+    fs::write(broken.join("SKILL.md"), "").unwrap();
+    git_command(&fixture.origin, &["add", "."]);
+    git_command(
+        &fixture.origin,
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            "broken metadata",
+        ],
+    );
+    fixture
+        .service()
+        .execute(SkillsCommand::Discover, 1)
+        .unwrap();
+    let skipped = |fixture: &mut Fixture| {
+        fixture
+            .service()
+            .snapshot()
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("skipped"))
+    };
+    assert!(skipped(&mut fixture));
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::RemoveRepository {
+                id: "repo-2".into(),
+            },
+            2,
+        )
+        .unwrap();
+    assert!(!skipped(&mut fixture), "a removed source leaves no notice");
 }
 
 #[test]

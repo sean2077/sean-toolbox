@@ -365,9 +365,33 @@ pub fn read_limited(path: &Path, max: u64) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+/// Reads at most `max` bytes from the start of a regular file.
+fn read_prefix(path: &Path, max: u64) -> Result<(Vec<u8>, bool), String> {
+    if !metadata(path)?.is_file() {
+        return Err(format!("Not a regular file: {}", path.display()));
+    }
+    let mut bytes = Vec::new();
+    fs::File::open(path)
+        .map_err(|e| e.to_string())?
+        .take(max + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    let truncated = bytes.len() as u64 > max;
+    bytes.truncate(max as usize);
+    Ok((bytes, truncated))
+}
+
 pub fn descriptor(directory: &Path, fallback: &str) -> Result<(String, String), String> {
-    let bytes = read_limited(&directory.join("SKILL.md"), 64 * 1024)?;
-    let text = std::str::from_utf8(&bytes).map_err(|_| "SKILL.md must be UTF-8")?;
+    // Only the frontmatter is needed; long reference bodies must not hide a skill.
+    let (bytes, truncated) = read_prefix(&directory.join("SKILL.md"), 64 * 1024)?;
+    let text = match std::str::from_utf8(&bytes) {
+        Ok(text) => text,
+        // A truncated read may split a multi-byte character at the end.
+        Err(error) if truncated && error.error_len().is_none() => {
+            std::str::from_utf8(&bytes[..error.valid_up_to()]).unwrap_or_default()
+        }
+        Err(_) => return Err("SKILL.md must be UTF-8".into()),
+    };
     let text = text.trim_start_matches('\u{feff}');
     if text.trim().is_empty() {
         return Err("SKILL.md is empty".into());

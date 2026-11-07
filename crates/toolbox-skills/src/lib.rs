@@ -566,9 +566,18 @@ impl SkillsService {
         }
         let mut next = self.state.clone();
         let length = next.repositories.len();
+        let removed = next
+            .repositories
+            .iter()
+            .find(|repo| repo.id == id)
+            .map(|repo| format!("{}: skipped ", repo.url));
         next.repositories.retain(|repo| repo.id != id);
         if length == next.repositories.len() {
             return Err("Unknown repository".into());
+        }
+        if let Some(prefix) = removed {
+            next.warnings
+                .retain(|warning| !(is_skip_report(warning) && warning.starts_with(&prefix)));
         }
         self.save(next)?;
         self.caches.remove(id);
@@ -612,6 +621,11 @@ impl SkillsService {
     fn discover(&mut self) -> Result<String, String> {
         let repositories = self.state.repositories.clone();
         self.available.clear();
+        // A fresh scan re-reports skipped entries for the current sources, so
+        // earlier reports, including those of removed sources, are superseded.
+        self.state
+            .warnings
+            .retain(|warning| !is_skip_report(warning));
         let mut failures = Vec::new();
         let mut skipped = 0usize;
         for repository in repositories {
@@ -1451,6 +1465,11 @@ impl SkillsService {
         self.commit(next, changes)?;
         Ok(changed)
     }
+}
+
+/// Matches the warning written by `discover` for packages it had to skip.
+fn is_skip_report(warning: &str) -> bool {
+    warning.contains(": skipped ") && warning.contains(" skill(s) with unreadable SKILL.md")
 }
 
 struct Discovered {

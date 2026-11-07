@@ -15,16 +15,30 @@ component SkillPathHint inherits Rectangle {
 component SkillChip inherits Rectangle {
     in property <string> text;
     in property <bool> accent: false;
+    // When set, the chip is a link: a URL or a local folder opened on click.
+    in property <string> link;
+    in property <string> link-hint;
+    callback clicked;
+    private property <bool> hovered: root.link != "" && touch.has-hover;
     height: 18px;
-    max-width: 120px;
+    max-width: 240px;
     min-width: label.preferred-width + 12px;
     border-radius: 5px;
     border-width: 1px;
-    border-color: root.accent ? Theme.accent-border : Theme.border;
-    background: root.accent ? Theme.accent-soft : Theme.raised;
+    border-color: root.hovered ? Theme.accent : root.accent ? Theme.accent-border : Theme.border;
+    background: root.hovered ? Theme.accent-soft : root.accent ? Theme.accent-soft : Theme.raised;
+    accessible-role: button;
+    accessible-label: root.link != "" ? root.link-hint : root.text;
+    accessible-action-default => { if root.link != "" { root.clicked(); } }
+    touch := TouchArea {
+        enabled: root.link != "";
+        mouse-cursor: root.link != "" ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+    if root.link != "": Tooltip { SkillPathHint { text: root.link-hint; } }
     label := Text {
         text: root.text;
-        color: root.accent ? Theme.accent : Theme.muted;
+        color: root.hovered || root.accent ? Theme.accent : Theme.muted;
         font-size: 10px;
         overflow: elide;
         min-width: 0px;
@@ -109,6 +123,55 @@ component RowMenuButton inherits Rectangle {
     Tooltip { SkillPathHint { text: root.tip; } }
 }
 
+// One entry of a row's action menu: icon, label and an optional right-side hint.
+component SkillMenuItem inherits Rectangle {
+    in property <image> icon;
+    in property <string> text;
+    in property <string> hint;
+    in property <bool> danger: false;
+    in property <bool> enabled: true;
+    callback activated;
+    height: 32px;
+    border-radius: 5px;
+    background: root.enabled && touch.has-hover ? (root.danger ? Theme.danger-soft : Theme.hover) : transparent;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.activated(); } }
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 9px;
+        VerticalLayout {
+            alignment: center;
+            Icon {
+                width: 15px;
+                height: 15px;
+                source: root.icon;
+                colorize: !root.enabled ? Theme.disabled : root.danger ? Theme.danger : Theme.secondary;
+            }
+        }
+        Text {
+            text: root.text;
+            color: !root.enabled ? Theme.disabled : root.danger ? Theme.danger : Theme.text;
+            font-size: 12px;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+        }
+        if root.hint != "": Text {
+            text: root.hint;
+            color: Theme.disabled;
+            font-size: 10px;
+            vertical-alignment: center;
+        }
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.activated(); }
+    }
+}
+
 export struct SkillListRow {
     id: string,
     name: string,
@@ -118,7 +181,9 @@ export struct SkillListRow {
     problem: bool,
     linked: bool,
     selected: bool,
+    updatable: bool,
     source: string,
+    source-target: string,
     status: string,
     enabled: bool,
     app0: bool,
@@ -170,6 +235,7 @@ export global SkillsState {
     in-out property <string> activity-text;
     in-out property <string> error-text;
     in-out property <string> notice-text;
+    in-out property <string> notice-detail;
     in-out property <string> storage-path;
     in-out property <string> empty-text;
     callback change-view(int);
@@ -191,6 +257,7 @@ export global SkillsState {
     callback update-selected;
     callback uninstall;
     callback show-details;
+    callback open-source(string);
 }
 
 export component SkillsPage inherits Rectangle {
@@ -215,15 +282,19 @@ export component SkillsPage inherits Rectangle {
             ActionButton { text: root.english ? "Repositories" : "仓库"; primary: SkillsState.view == 3; subtle: SkillsState.view != 3; clicked => { SkillsState.change-view(3); } }
             Rectangle { horizontal-stretch: 1; }
             if SkillsState.view == 0: Rectangle {
-                width: 120px;
-                height: 24px;
+                horizontal-stretch: 0;
                 HorizontalLayout {
-                    spacing: 5px;
-                    Text { text: root.english ? "Daily update" : "每日更新"; color: Theme.secondary; font-size: 11px; vertical-alignment: center; }
-                    Switch {
-                        checked <=> SkillsState.daily-update;
-                        enabled: root.editable;
-                        toggled => { SkillsState.set-daily(self.checked); }
+                    spacing: 8px;
+                    padding-right: 4px;
+                    Text { text: root.english ? "Daily update" : "每日更新"; color: Theme.secondary; font-size: 12px; vertical-alignment: center; }
+                    VerticalLayout {
+                        alignment: center;
+                        Switch {
+                            checked <=> SkillsState.daily-update;
+                            enabled: root.editable;
+                            accessible-label: root.english ? "Daily update" : "每日更新";
+                            toggled => { SkillsState.set-daily(self.checked); }
+                        }
                     }
                 }
                 Tooltip { SkillPathHint { text: root.english ? "Updates every 24 hours while the toolbox is running in the tray; catches up at the next startup.\n" + SkillsState.schedule-text : "工具箱在托盘运行时每 24 小时更新；错过的更新会在下次启动时补上。\n" + SkillsState.schedule-text; } }
@@ -235,16 +306,14 @@ export component SkillsPage inherits Rectangle {
                 enabled: root.editable && SkillsState.installed-count > 0;
                 clicked => { SkillsState.update-all(); }
             }
-            CheckBox {
-                visible: SkillsState.view == 2;
+            if SkillsState.view == 2: CheckBox {
                 text: root.english ? "Link (no copy)" : "链接（不复制）";
                 checked <=> SkillsState.link-import;
                 enabled: root.editable;
                 accessible-label: root.english ? "Import local folders as links instead of copies" : "本地目录以链接方式导入而不是复制";
                 Tooltip { SkillPathHint { text: root.english ? "Link keeps the source live and creates app symlinks on Windows; copy stores a private master copy. Existing app links to the same source are adopted." : "链接保留源目录并在应用目录创建符号链接（Windows 需要符号链接权限）；复制保存私有主副本。已存在且指向同一来源的应用链接会被接管。"; } }
             }
-            ActionButton {
-                visible: SkillsState.view == 2;
+            if SkillsState.view == 2: ActionButton {
                 text: root.english ? "Import folder" : "导入文件夹";
                 with-icon: true;
                 icon: @image-url("icons/folder.svg");
@@ -265,10 +334,9 @@ export component SkillsPage inherits Rectangle {
                         text <=> SkillsState.query;
                         placeholder-text: root.english ? "Search skills or repositories…" : "搜索技能名称、描述或仓库…";
                         enabled: root.enabled;
-                        width: 420px;
+                        horizontal-stretch: 1;
                         edited => { SkillsState.search(self.text); }
                     }
-                    Rectangle { horizontal-stretch: 1; }
                     ActionButton {
                         text: SkillsState.view == 1 ? (root.english ? "Reload repositories" : "刷新仓库") : SkillsState.view == 2 ? (root.english ? "Scan this device" : "扫描本机") : (root.english ? "Refresh" : "刷新");
                         with-icon: true;
@@ -286,10 +354,10 @@ export component SkillsPage inherits Rectangle {
                         clip: true;
                         VerticalLayout {
                             if SkillsState.view == 0: Rectangle {
-                                height: 34px;
+                                height: 38px;
                                 HorizontalLayout {
-                                    padding-left: 10px;
-                                    padding-right: 6px;
+                                    padding-left: 12px;
+                                    padding-right: 12px;
                                     spacing: 6px;
                                     CheckBox {
                                         text: root.english ? "Select all" : "全选";
@@ -297,27 +365,34 @@ export component SkillsPage inherits Rectangle {
                                         enabled: root.editable && SkillsState.rows.length > 0;
                                         toggled => { SkillsState.toggle-select-all(self.checked); }
                                     }
-                                    Text { text: root.english ? "Selected" : "已选"; color: Theme.muted; font-size: 10px; vertical-alignment: center; }
-                                    Text { text: SkillsState.selected-count; color: Theme.text; font-size: 10px; font-weight: 600; vertical-alignment: center; }
-                                    Text { text: root.english ? "Status" : "状态"; color: Theme.muted; font-size: 10px; horizontal-stretch: 0; vertical-alignment: center; }
-                                    ComboBox {
-                                        width: 90px;
-                                        height: 26px;
-                                        horizontal-stretch: 0;
-                                        model: root.english ? ["All", "Enabled", "Disabled"] : ["全部", "已启用", "未启用"];
-                                        current-index <=> SkillsState.status-filter;
-                                        enabled: root.enabled;
-                                        selected => { SkillsState.filter-changed(); }
+                                    Text { text: root.english ? "Selected" : "已选"; color: Theme.muted; font-size: 11px; vertical-alignment: center; }
+                                    Text { text: SkillsState.selected-count; color: Theme.text; font-size: 11px; font-weight: 600; vertical-alignment: center; }
+                                    Rectangle { width: 10px; }
+                                    Text { text: root.english ? "Status" : "状态"; color: Theme.muted; font-size: 11px; horizontal-stretch: 0; vertical-alignment: center; }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        ComboBox {
+                                            width: 90px;
+                                            height: 26px;
+                                            horizontal-stretch: 0;
+                                            model: root.english ? ["All", "Enabled", "Disabled"] : ["全部", "已启用", "未启用"];
+                                            current-index <=> SkillsState.status-filter;
+                                            enabled: root.enabled;
+                                            selected => { SkillsState.filter-changed(); }
+                                        }
                                     }
-                                    Text { text: root.english ? "Source" : "来源"; color: Theme.muted; font-size: 10px; horizontal-stretch: 0; vertical-alignment: center; }
-                                    ComboBox {
-                                        width: 130px;
-                                        height: 26px;
-                                        horizontal-stretch: 0;
-                                        model: SkillsState.source-options;
-                                        current-index <=> SkillsState.source-filter;
-                                        enabled: root.enabled;
-                                        selected => { SkillsState.filter-changed(); }
+                                    Text { text: root.english ? "Source" : "来源"; color: Theme.muted; font-size: 11px; horizontal-stretch: 0; vertical-alignment: center; }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        ComboBox {
+                                            width: 160px;
+                                            height: 26px;
+                                            horizontal-stretch: 0;
+                                            model: SkillsState.source-options;
+                                            current-index <=> SkillsState.source-filter;
+                                            enabled: root.enabled;
+                                            selected => { SkillsState.filter-changed(); }
+                                        }
                                     }
                                     Rectangle { horizontal-stretch: 1; }
                                     HorizontalLayout {
@@ -326,6 +401,8 @@ export component SkillsPage inherits Rectangle {
                                             width: 142px;
                                             spacing: 3px;
                                             alignment: center;
+                                            padding-top: 8px;
+                                            padding-bottom: 8px;
                                             AppToggle {
                                                 icon: @image-url("icons/apps/claude.svg");
                                                 name: "Claude Code";
@@ -367,7 +444,6 @@ export component SkillsPage inherits Rectangle {
                                 }
                             }
                             if SkillsState.view == 0: Divider {}
-                            if SkillsState.view == 0: Divider {}
                             ScrollView {
                                 visible: SkillsState.rows.length > 0;
                                 horizontal-scrollbar-policy: always-off;
@@ -390,19 +466,22 @@ export component SkillsPage inherits Rectangle {
                                             mouse-cursor: pointer;
                                             clicked => { row-keys.focus(); SkillsState.select(item.id); }
                                         }
+                                        // Columns: [select 22] text... [apps 142] [menu 28]. The batch
+                                        // header uses the same widths and 12px edges, so icons line up.
                                         HorizontalLayout {
                                             padding: SkillsState.view == 0 ? 6px : 12px;
                                             spacing: 10px;
-                                            CheckBox {
-                                                visible: SkillsState.view == 0;
-                                                width: SkillsState.view == 0 ? 22px : 0px;
+                                            if SkillsState.view == 0: CheckBox {
+                                                width: 22px;
                                                 checked: item.selected;
                                                 enabled: root.editable;
                                                 accessible-label: root.english ? "Select " + item.name : "选择 " + item.name;
                                                 toggled => { SkillsState.toggle-select(item.id, self.checked); }
                                             }
-                                            VerticalLayout {
-                                                horizontal-stretch: 1;
+                                            Rectangle {
+                                              horizontal-stretch: 1;
+                                              if item.description != "": Tooltip { SkillPathHint { text: item.description; } }
+                                              VerticalLayout {
                                                 spacing: 4px;
                                                 HorizontalLayout {
                                                     spacing: 6px;
@@ -413,65 +492,119 @@ export component SkillsPage inherits Rectangle {
                                                         font-weight: 600;
                                                         overflow: elide;
                                                         min-width: 0px;
-                                                        max-width: 160px;
+                                                        horizontal-stretch: 0;
                                                     }
-                                                    if SkillsState.view == 0: SkillChip { text: item.source; }
+                                                    if SkillsState.view == 0: SkillChip {
+                                                        text: item.source;
+                                                        link: item.source-target;
+                                                        link-hint: (item.source-target.starts-with("https://") ? (root.english ? "Open repository: " : "打开仓库：") : (root.english ? "Open folder: " : "打开目录：")) + item.source-target;
+                                                        clicked => { SkillsState.open-source(item.source-target); }
+                                                    }
                                                     if SkillsState.view == 0: SkillChip { text: item.status; accent: item.enabled; }
                                                     if item.problem: Icon { source: @image-url("icons/warning.svg"); width: 14px; colorize: Theme.warning; }
                                                     if item.installed && SkillsState.view == 1: Icon { source: @image-url("icons/check.svg"); width: 14px; colorize: Theme.success; }
                                                     Rectangle { horizontal-stretch: 1; }
                                                 }
-                                                Text { text: item.description; color: Theme.secondary; font-size: 11px; overflow: elide; min-width: 0px; max-width: 400px; horizontal-stretch: 1; }
-                                                if SkillsState.view != 0: Text { text: item.detail; color: Theme.muted; font-size: 10px; overflow: elide; min-width: 0px; max-width: 400px; horizontal-stretch: 1; }
+                                                Text { text: item.description; color: Theme.secondary; font-size: 11px; overflow: elide; min-width: 0px; horizontal-stretch: 1; }
+                                                if SkillsState.view != 0: Text { text: item.detail; color: Theme.muted; font-size: 10px; overflow: elide; min-width: 0px; horizontal-stretch: 1; }
+                                              }
                                             }
-                                            if SkillsState.view == 0: Rectangle { horizontal-stretch: 1; }
-                                            HorizontalLayout {
-                                                visible: SkillsState.view == 0;
-                                                width: SkillsState.view == 0 ? 142px : 0px;
+                                            if SkillsState.view == 0: HorizontalLayout {
+                                                width: 142px;
                                                 spacing: 3px;
                                                 alignment: center;
-                                                AppToggle {
-                                                    icon: @image-url("icons/apps/claude.svg");
-                                                    name: "Claude Code";
-                                                    checked: item.app0;
-                                                    enabled: root.editable;
-                                                    toggled(value) => { SkillsState.toggle-row-app(item.id, 0, value); }
-                                                }
-                                                AppToggle {
-                                                    icon: @image-url("icons/apps/codex.svg");
-                                                    name: "Codex";
-                                                    checked: item.app1;
-                                                    enabled: root.editable;
-                                                    toggled(value) => { SkillsState.toggle-row-app(item.id, 1, value); }
-                                                }
-                                                AppToggle {
-                                                    icon: @image-url("icons/apps/gemini.svg");
-                                                    name: "Gemini CLI";
-                                                    checked: item.app2;
-                                                    enabled: root.editable;
-                                                    toggled(value) => { SkillsState.toggle-row-app(item.id, 2, value); }
-                                                }
-                                                AppToggle {
-                                                    icon: @image-url("icons/apps/opencode.svg");
-                                                    name: "OpenCode";
-                                                    checked: item.app3;
-                                                    enabled: root.editable;
-                                                    toggled(value) => { SkillsState.toggle-row-app(item.id, 3, value); }
-                                                }
-                                                AppToggle {
-                                                    icon: @image-url("icons/apps/grok.svg");
-                                                    name: "Grok Build";
-                                                    checked: item.app4;
-                                                    enabled: root.editable;
-                                                    toggled(value) => { SkillsState.toggle-row-app(item.id, 4, value); }
+                                                padding-top: 10px;
+                                                padding-bottom: 10px;
+                                            AppToggle {
+                                                icon: @image-url("icons/apps/claude.svg");
+                                                name: "Claude Code";
+                                                checked: item.app0;
+                                                enabled: root.editable;
+                                                toggled(value) => { SkillsState.toggle-row-app(item.id, 0, value); }
+                                            }
+                                            AppToggle {
+                                                icon: @image-url("icons/apps/codex.svg");
+                                                name: "Codex";
+                                                checked: item.app1;
+                                                enabled: root.editable;
+                                                toggled(value) => { SkillsState.toggle-row-app(item.id, 1, value); }
+                                            }
+                                            AppToggle {
+                                                icon: @image-url("icons/apps/gemini.svg");
+                                                name: "Gemini CLI";
+                                                checked: item.app2;
+                                                enabled: root.editable;
+                                                toggled(value) => { SkillsState.toggle-row-app(item.id, 2, value); }
+                                            }
+                                            AppToggle {
+                                                icon: @image-url("icons/apps/opencode.svg");
+                                                name: "OpenCode";
+                                                checked: item.app3;
+                                                enabled: root.editable;
+                                                toggled(value) => { SkillsState.toggle-row-app(item.id, 3, value); }
+                                            }
+                                            AppToggle {
+                                                icon: @image-url("icons/apps/grok.svg");
+                                                name: "Grok Build";
+                                                checked: item.app4;
+                                                enabled: root.editable;
+                                                toggled(value) => { SkillsState.toggle-row-app(item.id, 4, value); }
+                                            }
+                                            }
+                                            if SkillsState.view == 0: VerticalLayout {
+                                                alignment: center;
+                                                RowMenuButton {
+                                                    tip: root.english ? "More actions" : "更多操作";
+                                                    enabled: root.enabled;
+                                                    clicked => {
+                                                        SkillsState.select(item.id);
+                                                        row-menu.show();
+                                                    }
                                                 }
                                             }
-                                            RowMenuButton {
-                                                visible: SkillsState.view == 0;
-                                                width: SkillsState.view == 0 ? 28px : 0px;
-                                                tip: root.english ? "Show actions" : "查看操作";
-                                                enabled: root.enabled;
-                                                clicked => { SkillsState.select(item.id); }
+                                        }
+                                        // Opens under the "···" button with right edges aligned
+                                        // (row padding 6px); it floats above the list, so rows keep their height.
+                                        row-menu := PopupWindow {
+                                            x: parent.width - self.width - 6px;
+                                            y: 44px;
+                                            width: 168px;
+                                            close-policy: close-on-click-outside;
+                                            Rectangle {
+                                                border-radius: 8px;
+                                                border-width: 1px;
+                                                border-color: Theme.strong-border;
+                                                background: Theme.surface;
+                                                drop-shadow-blur: 14px;
+                                                drop-shadow-offset-y: 4px;
+                                                drop-shadow-color: #0000004d;
+                                                VerticalLayout {
+                                                    padding: 4px;
+                                                    spacing: 2px;
+                                                    SkillMenuItem {
+                                                        icon: @image-url("icons/download.svg");
+                                                        text: root.english ? "Update" : "更新";
+                                                        hint: item.updatable ? "" : (root.english ? "Local" : "本机导入");
+                                                        enabled: root.editable && item.updatable;
+                                                        activated => {
+                                                            row-menu.close();
+                                                            SkillsState.select(item.id);
+                                                            SkillsState.update-selected();
+                                                        }
+                                                    }
+                                                    Rectangle { height: 1px; background: Theme.border; }
+                                                    SkillMenuItem {
+                                                        icon: @image-url("icons/trash.svg");
+                                                        text: root.english ? "Uninstall..." : "卸载…";
+                                                        danger: true;
+                                                        enabled: root.editable;
+                                                        activated => {
+                                                            row-menu.close();
+                                                            SkillsState.select(item.id);
+                                                            SkillsState.uninstall();
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                         row-keys := FocusScope {
@@ -560,47 +693,7 @@ export component SkillsPage inherits Rectangle {
                         }
                     }
                 }
-                if SkillsState.view == 0 && SkillsState.selected-id != "": Card {
-                    height: 44px;
-                    HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 8px;
-                        spacing: 8px;
-                        Text {
-                            text: SkillsState.selected-name;
-                            color: Theme.text;
-                            font-size: 12px;
-                            font-weight: 600;
-                            overflow: elide;
-                            min-width: 0px;
-                            max-width: 220px;
-                        }
-                        Text {
-                            text: SkillsState.selected-error != "" ? SkillsState.selected-error : SkillsState.selected-summary;
-                            color: SkillsState.selected-error != "" ? Theme.danger : Theme.muted;
-                            font-size: 10px;
-                            overflow: elide;
-                            min-width: 0px;
-                            max-width: 200px;
-                            horizontal-stretch: 1;
-                        }
-                        Rectangle {
-                            width: 14px;
-                            height: 14px;
-                            Icon { source: @image-url("icons/info.svg"); width: 14px; colorize: Theme.muted; }
-                            Tooltip { SkillPathHint { text: SkillsState.selected-detail; } }
-                        }
-                        if SkillsState.selected-error != "": Rectangle {
-                            width: 14px;
-                            height: 14px;
-                            Icon { source: @image-url("icons/warning.svg"); width: 14px; colorize: Theme.warning; }
-                            Tooltip { SkillPathHint { text: SkillsState.selected-error; } }
-                        }
-                        ActionButton { text: root.english ? "Update" : "更新"; enabled: root.editable && SkillsState.selected-updatable; clicked => { SkillsState.update-selected(); } }
-                        ActionButton { text: root.english ? "Uninstall" : "卸载"; danger: true; enabled: root.editable; clicked => { SkillsState.uninstall(); } }
-                    }
                 }
-            }
 
             VerticalLayout {
                 visible: SkillsState.view == 3;
@@ -651,33 +744,51 @@ export component SkillsPage inherits Rectangle {
             }
         }
 
+        // One status line: activity or error, then a summarised notice whose
+        // full text is in the tooltip and the details dialog. No max-width:
+        // a capped child would cap the whole page column in the window layout.
         HorizontalLayout {
-            min-height: 22px;
+            height: 28px;
             spacing: 8px;
-            if SkillsState.busy || SkillsState.submitting || SkillsState.loading: Spinner { width: 17px; height: 17px; }
+            if SkillsState.busy || SkillsState.submitting || SkillsState.loading: VerticalLayout {
+                alignment: center;
+                Spinner { width: 15px; height: 15px; }
+            }
             Caption {
                 text: SkillsState.error-text != "" ? SkillsState.error-text : SkillsState.activity-text;
                 color: SkillsState.error-text != "" ? Theme.danger : Theme.muted;
                 font-size: 11px;
-                max-height: 48px;
-                max-width: 600px;
+                vertical-alignment: center;
+                wrap: no-wrap;
                 overflow: elide;
+                min-width: 0px;
                 horizontal-stretch: 1;
+            }
+            if SkillsState.notice-text != "": Rectangle {
+                horizontal-stretch: 1;
+                min-width: 0px;
+                HorizontalLayout {
+                    spacing: 6px;
+                    Icon { source: @image-url("icons/warning.svg"); width: 13px; colorize: Theme.warning; }
+                    Caption {
+                        text: SkillsState.notice-text;
+                        color: Theme.warning;
+                        font-size: 11px;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                        overflow: elide;
+                        min-width: 0px;
+                        horizontal-stretch: 1;
+                    }
+                }
+                Tooltip { SkillPathHint { text: SkillsState.notice-detail; } }
             }
             if SkillsState.error-text != "" || SkillsState.notice-text != "": ActionButton {
                 text: root.english ? "Details" : "查看详情";
                 subtle: true;
+                height: 28px;
                 clicked => { SkillsState.show-details(); }
             }
-        }
-        if SkillsState.notice-text != "": Caption {
-            text: SkillsState.notice-text;
-            color: Theme.warning;
-            font-size: 11px;
-            max-height: 48px;
-            max-width: 600px;
-            overflow: elide;
-            Tooltip { SkillPathHint { text: SkillsState.notice-text; } }
         }
     }
 }
