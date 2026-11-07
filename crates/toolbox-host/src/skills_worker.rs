@@ -30,6 +30,10 @@ impl SkillsWorker {
     }
 
     fn with_paths(paths: Result<(PathBuf, PathBuf), String>) -> Self {
+        Self::with_paths_retry(paths, Duration::from_secs(CLOCK_CHECK_SECONDS))
+    }
+
+    fn with_paths_retry(paths: Result<(PathBuf, PathBuf), String>, open_retry: Duration) -> Self {
         let (tx, rx) = mpsc::sync_channel(1);
         let snapshot = Arc::new((
             Mutex::new(SkillsSnapshot {
@@ -65,26 +69,31 @@ impl SkillsWorker {
                 let due = service.as_ref().and_then(SkillsService::next_due);
                 let received = match due {
                     Some(_) => rx.recv_timeout(wait_duration(due, unix_now(), retry_not_before)),
+                    // A failed store open must not leave the manager waiting for
+                    // a command forever; retry it so a repaired path recovers.
+                    None if service.is_none() => rx.recv_timeout(open_retry),
                     None => rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected),
                 };
                 let command: Option<SkillsCommand> = match received {
                     Ok(Some(command)) => Some(command),
                     Ok(None) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     Err(mpsc::RecvTimeoutError::Timeout) => {
-                        // Recheck wall time after sleep/resume or clock changes.
-                        if due.is_none_or(|due| unix_now() < due.max(retry_not_before)) {
-                            continue;
+                        if service.is_some() {
+                            // Recheck wall time after sleep/resume or clock changes.
+                            if due.is_none_or(|due| unix_now() < due.max(retry_not_before)) {
+                                continue;
+                            }
+                            let mut cached = shared.0.lock().unwrap_or_else(|e| e.into_inner());
+                            if cached.busy {
+                                // A manual command reserved the worker at the deadline.
+                                continue;
+                            }
+                            cached.busy = true;
+                            cached.message = "正在每日更新 Skills / Updating skills daily".into();
+                            cached.last_error = None;
+                            drop(cached);
+                            shared.1.notify_all();
                         }
-                        let mut cached = shared.0.lock().unwrap_or_else(|e| e.into_inner());
-                        if cached.busy {
-                            // A manual command reserved the worker at the deadline.
-                            continue;
-                        }
-                        cached.busy = true;
-                        cached.message = "正在每日更新 Skills / Updating skills daily".into();
-                        cached.last_error = None;
-                        drop(cached);
-                        shared.1.notify_all();
                         None
                     }
                 };
@@ -95,7 +104,19 @@ impl SkillsWorker {
                 // toolbox. An explicit retry can recover after the user fixes it.
                 if service.is_none() {
                     match open() {
-                        Ok(opened) => service = Some(opened),
+                        Ok(opened) => {
+                            let publish_only = command.is_none();
+                            service = Some(opened);
+                            if publish_only {
+                                // A retry timer reopened the store; publish the
+                                // recovered snapshot and re-evaluate the schedule.
+                                publish(
+                                    &shared,
+                                    service.as_ref().expect("service opened above").snapshot(),
+                                );
+                                continue;
+                            }
+                        }
                         Err(error) => {
                             publish(&shared, failed_snapshot(error));
                             continue;
@@ -160,6 +181,7 @@ impl SkillsWorker {
         snapshot.busy = true;
         snapshot.message = "正在处理 Skills / Processing skills".into();
         snapshot.last_error = None;
+        preview_command(&mut snapshot, &command, unix_now());
         if self.tx.try_send(Some(command)).is_err() {
             *snapshot = previous;
             return Err("Skills 后台不可用 / Skills worker unavailable".into());
@@ -187,6 +209,37 @@ fn publish(shared: &Shared, mut snapshot: SkillsSnapshot) {
     bound_status(&mut snapshot);
     *shared.0.lock().unwrap_or_else(|e| e.into_inner()) = snapshot;
     shared.1.notify_all();
+}
+
+/// Show the requested state while the command is in flight instead of
+/// re-rendering the stale pre-command snapshot. The worker's published result
+/// remains authoritative, so a rejected operation still corrects the UI.
+fn preview_command(snapshot: &mut SkillsSnapshot, command: &SkillsCommand, now: u64) {
+    match command {
+        SkillsCommand::SetDailyUpdate { enabled } => {
+            snapshot.daily_update = *enabled;
+            snapshot.next_update_at = enabled.then_some(now);
+        }
+        SkillsCommand::SetEnabled {
+            skill_id,
+            app,
+            enabled,
+        } => {
+            if let Some(skill) = snapshot
+                .installed
+                .iter_mut()
+                .find(|skill| skill.id == *skill_id)
+            {
+                skill.apps.retain(|current| current != app);
+                if *enabled {
+                    skill.apps.push(*app);
+                    skill.apps.sort();
+                }
+                skill.last_error = None;
+            }
+        }
+        _ => {}
+    }
 }
 
 /// The service reserves space for status, but errors returned from an operation
@@ -279,6 +332,30 @@ mod tests {
         guard.clone()
     }
 
+    fn wait_for(
+        worker: &SkillsWorker,
+        predicate: impl Fn(&SkillsSnapshot) -> bool,
+    ) -> SkillsSnapshot {
+        let mut guard = worker.snapshot.0.lock().unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            if predicate(&guard) {
+                return guard.clone();
+            }
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            assert!(
+                !remaining.is_zero(),
+                "worker state did not change: {guard:?}"
+            );
+            let (next, timeout) = worker.snapshot.1.wait_timeout(guard, remaining).unwrap();
+            guard = next;
+            assert!(
+                !timeout.timed_out(),
+                "worker state did not change: {guard:?}"
+            );
+        }
+    }
+
     #[test]
     fn overdue_schedule_catches_up_but_failed_writes_cannot_spin() {
         assert_eq!(wait_duration(Some(100), 200, 0), Duration::ZERO);
@@ -333,6 +410,62 @@ mod tests {
     }
 
     #[test]
+    fn accepted_commands_preview_their_own_effect() {
+        use toolbox_core::skills::{InstalledSkill, SkillApp};
+        let mut snapshot = SkillsSnapshot {
+            installed: vec![InstalledSkill {
+                id: "review".into(),
+                directory: "review".into(),
+                name: "Review".into(),
+                description: String::new(),
+                repository_id: Some("repo-1".into()),
+                source_path: Some("review".into()),
+                revision: Some("a".repeat(40)),
+                apps: Vec::new(),
+                updated_at: 0,
+                last_error: None,
+            }],
+            ..SkillsSnapshot::default()
+        };
+        preview_command(
+            &mut snapshot,
+            &SkillsCommand::SetDailyUpdate { enabled: true },
+            100,
+        );
+        assert!(snapshot.daily_update);
+        assert_eq!(snapshot.next_update_at, Some(100));
+
+        preview_command(
+            &mut snapshot,
+            &SkillsCommand::SetEnabled {
+                skill_id: "review".into(),
+                app: SkillApp::Codex,
+                enabled: true,
+            },
+            200,
+        );
+        assert_eq!(snapshot.installed[0].apps, vec![SkillApp::Codex]);
+        preview_command(
+            &mut snapshot,
+            &SkillsCommand::SetEnabled {
+                skill_id: "review".into(),
+                app: SkillApp::Codex,
+                enabled: false,
+            },
+            300,
+        );
+        assert!(snapshot.installed[0].apps.is_empty());
+
+        preview_command(
+            &mut snapshot,
+            &SkillsCommand::SetDailyUpdate { enabled: false },
+            400,
+        );
+        assert!(!snapshot.daily_update);
+        assert_eq!(snapshot.next_update_at, None);
+    }
+
+    #[test]
     fn commands_are_acknowledged_busy_and_persist_without_the_ui() {
         let dir = tempfile::tempdir().unwrap();
         let home = dir.path().join("home");
@@ -364,6 +497,29 @@ mod tests {
             wait_idle(&worker).last_error.as_deref(),
             Some("test store unavailable")
         );
+    }
+
+    #[test]
+    fn a_failed_store_reopens_on_its_own_after_the_path_is_repaired() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        std::fs::create_dir(&home).unwrap();
+        let root = dir.path().join("skills");
+        std::fs::write(&root, "not a directory").unwrap();
+        let mut worker = SkillsWorker::with_paths_retry(
+            Ok((root.clone(), home.clone())),
+            Duration::from_millis(25),
+        );
+        let failed = wait_for(&worker, |snapshot| {
+            !snapshot.busy && snapshot.last_error.is_some()
+        });
+        assert!(failed.last_error.is_some());
+        std::fs::remove_file(&root).unwrap();
+        let recovered = wait_for(&worker, |snapshot| {
+            !snapshot.busy && snapshot.last_error.is_none()
+        });
+        assert!(recovered.last_error.is_none());
+        worker.stop();
     }
 
     #[test]
