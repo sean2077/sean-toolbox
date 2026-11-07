@@ -419,7 +419,7 @@ msgid "Unavailable"
 msgstr ""
 
 msgctxt "rust.skills_uninstall_title"
-msgid "Uninstall the selected skill?"
+msgid "Uninstall {name}?"
 msgstr ""
 
 msgctxt "rust.confirm_unsaved_changes_will_be_discarded"
@@ -554,4 +554,144 @@ msgstr[1] ""
 
 msgctxt "rust.skills_source_apps"
 msgid "{source} · {apps}"
+msgstr ""
+
+msgctxt "rust.shortcut_supported_keys"
+msgid "Use modifiers with A–Z, 0–9, Space, Tab, Enter or Escape, or press F1–F24."
+msgstr ""
+
+msgctxt "rust.shortcut_conflict_launcher"
+msgid "Already used to open recent projects. Choose another shortcut."
+msgstr ""
+
+msgctxt "rust.shortcut_conflict_app"
+msgid "Already used by {name}. Choose another shortcut."
+msgstr ""
+
+msgctxt "rust.profile_name_required"
+msgid "Enter a short name for this application."
+msgstr ""
+
+msgctxt "rust.profile_program_required"
+msgid "Choose a valid program path."
+msgstr ""
+
+msgctxt "rust.profile_matcher_required"
+msgid "Enter a window match. On macOS, use the application bundle ID."
+msgstr ""
+
+msgctxt "rust.profile_id_invalid"
+msgid "Use a unique ID with 1–64 letters, digits, - or _."
+msgstr ""
+
+msgctxt "rust.profile_docked"
+msgid "Docked window"
+msgstr ""
+
+msgctxt "rust.profile_switching"
+msgid "Window switching"
+msgstr ""
+
+msgctxt "rust.action_discard_and_close"
+msgid "Discard and close"
+msgstr ""
+
+msgctxt "rust.action_discard_changes"
+msgid "Discard changes"
+msgstr ""
+
+msgctxt "rust.action_restore_settings"
+msgid "Restore saved settings"
+msgstr ""
+
+msgctxt "rust.action_delete_profile"
+msgid "Delete app configuration"
+msgstr ""
+
+msgctxt "rust.action_reload_configuration"
+msgid "Reload configuration"
+msgstr ""
+
+msgctxt "rust.action_discard_and_import"
+msgid "Discard and import"
+msgstr ""
+
+msgctxt "rust.action_uninstall_skill"
+msgid "Uninstall skill"
+msgstr ""
+
+msgctxt "rust.action_keep_editing"
+msgid "Keep editing"
+msgstr ""
+
+msgctxt "rust.action_cancel"
+msgid "Cancel"
+msgstr ""
+
+msgctxt "rust.profile_other_platform"
+msgid "Other operating system"
+msgstr ""
+
+msgctxt "rust.skills_app_deployed"
+msgid "Deployed to {name}\n{path}"
+msgstr ""
+
+msgctxt "rust.skills_app_not_deployed"
+msgid "Not deployed to {name}\n{path}"
+msgstr ""
+
+msgctxt "rust.skills_overview"
+msgid "{managed} managed · {problems} need attention"
+msgstr ""
+
+msgctxt "rust.skills_request_sending"
+msgid "Sending request…"
+msgstr ""
+
+msgctxt "rust.skills_updating"
+msgid "Updating skills…"
+msgstr ""
+
+msgctxt "rust.skills_discovering"
+msgid "Discovering skills…"
+msgstr ""
+
+msgctxt "rust.skills_installing"
+msgid "Installing skill…"
+msgstr ""
+
+msgctxt "rust.skills_background_work"
+msgid "Working in the background…"
+msgstr ""
+
+msgctxt "rust.skills_attention"
+msgid "Needs attention"
+msgstr ""
+
+msgctxt "rust.skills_operation_finished"
+msgid "Operation finished"
+msgstr ""
+
+msgctxt "rust.skills_ready"
+msgid "Ready"
+msgstr ""
+
+msgctxt "rust.skills_selection_scope"
+msgid "{total} selected · {hidden} hidden by filters"
+msgstr ""
+
+msgctxt "rust.skills_batch_deployment"
+msgid "{app}: {deployed} of {total} selected skills are deployed"
+msgstr ""
+
+msgctxt "rust.skills_review_local_import"
+msgid "Review local import"
+msgstr ""
+
+msgctxt "rust.shortcut_capture_unavailable"
+msgid "Recording is unavailable. Your shortcut is unchanged. Try again or enter it directly."
+msgstr ""
+
+msgctxt "rust.shortcut_capture_failed"
+msgid "Recording stopped: {error}. Your shortcut is unchanged."
 msgstr ""

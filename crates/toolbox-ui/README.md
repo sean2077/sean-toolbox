@@ -8,10 +8,13 @@ manages the UI process, its local endpoint and the saved configuration.
 The UI has two windows:
 
 - `LauncherWindow`: a frameless, always-on-top recent-project search panel, with
-  a default size of 760×408 logical pixels, path tooltips and a selection counter.
+  a default size of 760×432 logical pixels, 36-pixel result rows, path tooltips,
+  remote markers and a selection counter. Alt+Enter expands a selectable full
+  path; Escape closes those details before dismissing the panel.
   The global shortcut, tray and `sean-toolbox show projects` open this panel.
 - `AppWindow`: the management window, with projects, application profiles,
-  skills, settings and diagnostics pages.
+  skills, settings and diagnostics pages. The preferred size is 1120×780, with
+  an 800×580 minimum and compact icon navigation below 980 pixels wide.
 
 Each launcher activation refreshes history, clears the query and focuses search.
 Repeated activations reuse the panel. Up/Down selects a result; Enter or
@@ -34,7 +37,17 @@ requests. Results return through `slint::invoke_from_event_loop`.
   results for the current generation; opening a row also checks its generation.
 - Application drafts and settings drafts are separate. Saves carry the host's
   expected configuration revision. Failed validation, shortcut conflicts or
-  concurrent updates leave the draft available for correction.
+  concurrent updates leave the draft available for correction. Saving an app
+  retains its editor. Testing uses its saved configuration while preserving
+  drafts. Filtered profile rows retain their source indices, so selection and
+  actions do not depend on the currently visible row position.
+- Program selection suggests the name and matcher for a new profile. Basic
+  fields stay visible; IDs, matching rules and launch alternatives are advanced
+  options. Field-specific validation opens the relevant section when needed.
+- Shortcut recording accepts normal UI key events and the host's registered
+  shortcuts. A token-scoped three-second host lease intercepts the latter while
+  the recorder polls. Native registrations stay intact; closing, focus loss or
+  cancellation ends capture, and a missing UI expires without a resident timer.
 - Settings previews apply language and theme immediately. Discarding settings
   restores their saved values and preserves any application draft.
 - Static text uses Slint's bundled gettext translations. Rust-generated status
@@ -44,12 +57,16 @@ requests. Results return through `slint::invoke_from_event_loop`.
   locale; backend diagnostics and user-provided metadata remain verbatim.
 - Diagnostics refresh on request, showing capabilities, activity and errors.
   A failed refresh clears the previous capability snapshot.
-- Skills exposes installed skills, repository discovery, local imports and
-  repository settings. Commands run in the host; the UI worker only performs
-  IPC and folder selection. App selections are explicit and folder imports
-  initially keep only a managed copy. A global deploy-mode selector chooses
-  symlinks (default) or copies for new app deployments. Daily updates and manual
-  updates share the host's serialized worker and persisted status.
+- Skills exposes installed skills, repository discovery, local imports,
+  repository settings and current operation status. Commands run in the host; the UI worker
+  only performs IPC and folder selection. Full-width rows open details on
+  demand. Bulk actions show hidden selections and explicitly enable or disable
+  the selected app. Both folder and scan imports review the source, copy/link
+  mode and deployment apps before submission. A separate global deploy-mode
+  selector chooses symlinks (default) or copies for new managed-skill app
+  deployments; existing deployments keep their mode. Daily and manual updates
+  share the host's serialized worker and persisted status. Operation status
+  shows current state and errors, rather than a historical activity log.
 - While the Skills page is visible, a single outstanding request polls the
   snapshot every 15 seconds, or every second while the host is busy. Navigation
   and closing stop polling. The UI waits for a command acknowledgement before
@@ -65,8 +82,9 @@ appear in the UI. Modal dialogs retain keyboard focus, including shortcuts.
 
 ## Appearance
 
-System, Light and Dark themes share Slint's Fluent palette across both windows,
-native controls and window decorations. System mode follows platform theme
+System, Light and Dark themes share neutral surfaces and a restrained blue
+accent across both windows, with Slint's Fluent native controls and matching
+window decorations. System mode follows platform theme
 notifications. Each application profile has a Quake editor with a layout preview,
 presets and controls for the supported platform options. Native docking behavior
 is documented in the [window module](../toolbox-windows/README.md).
@@ -125,3 +143,8 @@ See the [development guide](../../docs/DEVELOPMENT.md) for their prerequisites a
 commands, and the [validation record](../../docs/VALIDATION.md) for dated results.
 The development guide also owns the translation resource layout, update/check
 commands and the boundary between localized UI messages and raw diagnostics.
+
+`scripts/render_ui.py` renders the actual Slint components with clearly labeled
+example data, without a desktop session or host process. It is useful for
+reviewing language, theme, geometry and UI states; it does not replace native
+focus, global-hotkey or lifecycle tests.

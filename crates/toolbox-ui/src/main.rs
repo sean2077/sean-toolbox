@@ -8,9 +8,10 @@ mod worker;
 use crate::i18n::UiText;
 use model::{
     ImportedConfig, launch_command, next_profile_id, page_from_index, page_index,
-    platform_from_index, platform_index, platform_name, quake_alignment_from_index,
-    quake_alignment_index, quake_edge_from_index, quake_edge_index, quake_monitor_from_index,
-    quake_monitor_index, theme_from_index, theme_index,
+    platform_from_index, platform_index, platform_name, program_suggestion, project_display_path,
+    quake_alignment_from_index, quake_alignment_index, quake_edge_from_index, quake_edge_index,
+    quake_monitor_from_index, quake_monitor_index, recorded_shortcut, shortcut_problem,
+    text_matches, theme_from_index, theme_index,
 };
 use slint::{
     ComponentHandle, Model, ModelRc, Timer, TimerMode, VecModel,
@@ -24,11 +25,11 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
-    time::Duration,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use toolbox_core::{
-    AppProfile, Config, HostStatus, LaunchCommand, Platform, QuakeConfig, Response,
-    ThemePreference, UiPage,
+    AppProfile, Config, HostStatus, HotkeySpec, LaunchCommand, Platform, QuakeConfig, Response,
+    ShortcutCaptureAction, ThemePreference, UiPage,
 };
 use toolbox_i18n::{Locale, Message, messages};
 use worker::{DialogKind, Event, SaveKind, Work};
@@ -173,6 +174,32 @@ fn x11_window_has_focus(window: &winit::window::Window) -> Option<bool> {
     None
 }
 
+#[derive(Clone, Copy)]
+struct ShortcutSession {
+    token: u64,
+    target: i32,
+    active: bool,
+    pending: bool,
+    requested_at: Instant,
+    deadline: Instant,
+}
+
+// Stay below the host's three-second lease, including one watchdog interval.
+const SHORTCUT_CAPTURE_TIMEOUT: Duration = Duration::from_secs(2);
+
+fn next_shortcut_token() -> u64 {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    // A process-unique starting point keeps a delayed response from an old UI
+    // from cancelling a recorder created after a UI restart.
+    let seed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as u64
+        ^ u64::from(std::process::id());
+    let _ = NEXT.compare_exchange(0, seed.max(1), Ordering::Relaxed, Ordering::Relaxed);
+    NEXT.fetch_add(1, Ordering::Relaxed)
+}
+
 struct State {
     config: Config,
     revision: u64,
@@ -199,6 +226,8 @@ struct State {
     last_error: UiText,
     status_text: Option<UiText>,
     confirmation_text: Option<(Message, Message)>,
+    shortcut_capture: Option<ShortcutSession>,
+    shortcut_ending: Option<u64>,
     skills: skills::SkillsUiState,
 }
 
@@ -210,6 +239,7 @@ struct Controller {
     query_generation: Arc<AtomicU64>,
     idle_timer: Timer,
     skills_timer: Timer,
+    shortcut_timer: Timer,
 }
 
 impl Controller {
@@ -512,12 +542,17 @@ impl Controller {
             ui.global::<SkillsState>().set_submitting(false);
             ui.global::<SkillsState>().set_loading(false);
             ui.global::<SkillsState>().set_loaded(false);
+            self.shortcut_timer.stop();
+            ui.set_shortcut_recording(0);
+            ui.set_shortcut_pending(0);
             {
                 let mut state = self.state.borrow_mut();
                 state.dialog_open = false;
                 state.toggling = false;
                 state.skills.submitting = false;
                 state.skills.loading = false;
+                state.shortcut_capture = None;
+                state.shortcut_ending = None;
             }
             self.error(messages::error_background_worker_stopped_reopen_the_toolbox());
         }
@@ -570,6 +605,10 @@ impl Controller {
         drop(state);
         self.update_match_help();
         self.sync_candidate_labels();
+        self.sync_profiles();
+        self.sync_confirmation_labels();
+        self.validate_profile(false);
+        self.validate_settings();
         self.sync_project_message();
         self.sync_diagnostics();
         self.render_skills();
@@ -588,6 +627,7 @@ impl Controller {
             return Err("UI is closing".into());
         }
         let ui = self.ui();
+        self.end_shortcut_capture();
         // Activation must not move the page underneath an open modal dialog.
         let modal = ui.get_confirm_visible() || ui.get_import_visible() || ui.get_dialog_busy();
         if page == UiPage::Projects && !modal {
@@ -616,8 +656,8 @@ impl Controller {
         // first display; only correct a real, already-observed size below it.
         let scale = ui.window().scale_factor();
         let size = ui.window().size().to_logical(scale);
-        if size.width > 0.0 && size.height > 0.0 && (size.width < 900.0 || size.height < 650.0) {
-            ui.window().set_size(slint::LogicalSize::new(900.0, 650.0));
+        if size.width > 0.0 && size.height > 0.0 && (size.width < 800.0 || size.height < 580.0) {
+            ui.window().set_size(slint::LogicalSize::new(800.0, 580.0));
         }
         self.apply_native_theme();
         ui.window()
@@ -654,6 +694,7 @@ impl Controller {
         }
         let target = page_index(page_from_index(page));
         let changed = target != ui.get_page();
+        self.end_shortcut_capture();
         ui.set_page(target);
         ui.invoke_focus_page();
         if changed && target == 0 && ui.get_loaded() {
@@ -668,6 +709,7 @@ impl Controller {
     }
 
     fn dismiss(&self) {
+        self.end_shortcut_capture();
         let ui = self.ui();
         if ui.get_saving()
             || ui.get_project_opening()
@@ -696,6 +738,7 @@ impl Controller {
     }
 
     fn hide(&self) {
+        self.end_shortcut_capture();
         if let Err(error) = self.ui().hide() {
             self.error(error.to_string());
             return;
@@ -713,6 +756,8 @@ impl Controller {
             || state.toggling
             || state.dialog_open
             || state.skills.submitting
+            || state.shortcut_capture.is_some()
+            || state.shortcut_ending.is_some()
             || self.ui().get_project_opening()
             || self.ui().get_saving()
             || self.dirty()
@@ -765,40 +810,78 @@ impl Controller {
                 .into(),
         );
         ui.set_settings_dirty(false);
+        ui.set_settings_error("".into());
         drop(state);
         self.apply_language();
     }
 
     fn sync_profiles(&self) {
         let ui = self.ui();
-        ui.set_projects_enabled(self.state.borrow().config.projects.enabled);
-        ui.set_windows_enabled(self.state.borrow().config.windows.enabled);
-        let rows = self
-            .state
-            .borrow()
+        let state = self.state.borrow();
+        ui.set_projects_enabled(state.config.projects.enabled);
+        ui.set_windows_enabled(state.config.windows.enabled);
+        ui.set_profile_testable(
+            state
+                .editor_index
+                .and_then(|index| state.config.windows.profiles.get(index))
+                .is_some_and(|profile| profile.enabled && profile.platform == Platform::current()),
+        );
+        ui.set_profile_total(state.config.windows.profiles.len() as i32);
+        let query = ui.get_profile_query();
+        let locale = self.locale();
+        let rows = state
             .config
             .windows
             .profiles
             .iter()
-            .map(|profile| ProfileRow {
+            .enumerate()
+            .filter(|(_, profile)| {
+                text_matches(
+                    &query,
+                    &format!(
+                        "{} {} {} {}",
+                        profile.name,
+                        profile.matcher,
+                        profile.hotkey,
+                        platform_name(profile.platform)
+                    ),
+                )
+            })
+            .map(|(index, profile)| ProfileRow {
+                source_index: index as i32,
                 name: profile.name.clone().into(),
                 hotkey: profile.hotkey.clone().into(),
                 platform: platform_name(profile.platform).into(),
                 detail: format!(
-                    "{}  ·  {}",
+                    "{} · {} · {}",
                     platform_name(profile.platform),
-                    if profile.hotkey.is_empty() {
-                        "—"
+                    if profile.quake.enabled {
+                        messages::profile_docked()
                     } else {
-                        &profile.hotkey
+                        messages::profile_switching()
                     }
+                    .render(locale),
+                    if profile.platform != Platform::current() {
+                        messages::profile_other_platform()
+                    } else if profile.enabled {
+                        messages::enabled()
+                    } else {
+                        messages::disabled()
+                    }
+                    .render(locale)
                 )
                 .into(),
                 enabled: profile.enabled,
                 available: profile.platform == Platform::current(),
+                docked: profile.quake.enabled,
             })
             .collect::<Vec<_>>();
         ui.set_profiles(ModelRc::new(VecModel::from(rows)));
+    }
+
+    fn profile_query_changed(&self, query: String) {
+        self.ui().set_profile_query(query.into());
+        self.sync_profiles();
     }
 
     fn refresh_projects(&self) {
@@ -907,10 +990,6 @@ impl Controller {
 
     fn request_project_open(&self, index: i32, target: ProjectOpenTarget) {
         let ui = self.ui();
-        if target == ProjectOpenTarget::Manager && self.dirty() {
-            self.say(messages::status_save_or_cancel_your_changes_before_opening_a_project());
-            return;
-        }
         if ui.get_project_opening()
             || ui.get_project_loading()
             || !ui.get_loaded()
@@ -941,8 +1020,327 @@ impl Controller {
     fn settings_changed(&self) {
         let ui = self.ui();
         ui.set_settings_dirty(true);
+        ui.set_settings_error("".into());
         self.apply_theme();
         self.apply_language();
+    }
+
+    fn validate_settings(&self) -> bool {
+        let ui = self.ui();
+        let state = self.state.borrow();
+        // A module toggle in this settings draft changes its own registration set.
+        let mut config = state.config.clone();
+        config.windows.enabled = ui.get_setting_windows();
+        let shortcut = shortcut_problem(&ui.get_setting_hotkey(), &config, None, true, true);
+        let idle_valid = ui
+            .get_setting_idle()
+            .trim()
+            .parse::<u32>()
+            .is_ok_and(|value| value <= 3600);
+        ui.set_setting_hotkey_error(
+            shortcut
+                .as_ref()
+                .map(|message| message.render(self.locale()))
+                .unwrap_or_default()
+                .into(),
+        );
+        ui.set_setting_idle_error(
+            if idle_valid {
+                String::new()
+            } else {
+                messages::invalid_idle_timeout().render(self.locale())
+            }
+            .into(),
+        );
+        shortcut.is_none() && idle_valid
+    }
+
+    fn start_shortcut_capture(&self, target: i32) {
+        self.end_shortcut_capture();
+        let ui = self.ui();
+        if !(target == 1 && ui.get_editing() && ui.get_page() == 1
+            || target == 2 && ui.get_page() == 2)
+            || !ui.get_loaded()
+            || ui.get_saving()
+            || ui.get_dialog_busy()
+            || ui.get_confirm_visible()
+            || ui.get_import_visible()
+        {
+            return;
+        }
+        let token = next_shortcut_token();
+        let requested_at = Instant::now();
+        self.state.borrow_mut().shortcut_capture = Some(ShortcutSession {
+            token,
+            target,
+            active: false,
+            pending: true,
+            requested_at,
+            deadline: requested_at + SHORTCUT_CAPTURE_TIMEOUT,
+        });
+        ui.invoke_focus_shortcut_recorder();
+        ui.set_shortcut_pending(target);
+        self.idle_timer.stop();
+        // Begin can block in IPC too, so supervise it before its acknowledgement.
+        self.shortcut_timer
+            .start(TimerMode::Repeated, Duration::from_millis(300), || {
+                with_controller(Controller::poll_shortcut_capture)
+            });
+        self.send(Work::ShortcutCapture {
+            token,
+            action: ShortcutCaptureAction::Begin,
+        });
+    }
+
+    fn end_shortcut_capture(&self) {
+        self.shortcut_timer.stop();
+        let session = self.state.borrow_mut().shortcut_capture.take();
+        let ui = self.ui();
+        ui.set_shortcut_pending(0);
+        ui.set_shortcut_recording(0);
+        if let Some(session) = session {
+            self.state.borrow_mut().shortcut_ending = Some(session.token);
+            self.send(Work::ShortcutCapture {
+                token: session.token,
+                action: ShortcutCaptureAction::End,
+            });
+        }
+    }
+
+    fn poll_shortcut_capture(&self) {
+        self.poll_shortcut_capture_at(Instant::now());
+    }
+
+    fn poll_shortcut_capture_at(&self, now: Instant) {
+        let Some(session) = self.valid_shortcut_capture(now) else {
+            return;
+        };
+        // A pending IPC request never postpones the last confirmed deadline.
+        if !session.active || session.pending {
+            return;
+        }
+        let token = {
+            let mut state = self.state.borrow_mut();
+            let Some(session) = state.shortcut_capture.as_mut() else {
+                return;
+            };
+            session.pending = true;
+            session.requested_at = now;
+            session.token
+        };
+        self.send(Work::ShortcutCapture {
+            token,
+            action: ShortcutCaptureAction::Poll,
+        });
+    }
+
+    fn receive_shortcut_capture(
+        &self,
+        token: u64,
+        action: ShortcutCaptureAction,
+        response: Result<Response, String>,
+    ) {
+        self.receive_shortcut_capture_at(token, action, response, Instant::now());
+    }
+
+    fn receive_shortcut_capture_at(
+        &self,
+        token: u64,
+        action: ShortcutCaptureAction,
+        response: Result<Response, String>,
+        now: Instant,
+    ) {
+        if action == ShortcutCaptureAction::End {
+            let finished = self.state.borrow().shortcut_ending == Some(token);
+            if finished {
+                self.state.borrow_mut().shortcut_ending = None;
+                self.schedule_unload();
+            }
+            return;
+        }
+        let session = self.state.borrow().shortcut_capture;
+        let Some(session) = session.filter(|session| session.token == token) else {
+            // An End was already queued on cancellation. A late Begin or Poll
+            // reply must never recreate the local session or move focus.
+            return;
+        };
+        if now >= session.deadline {
+            self.shortcut_capture_failed(session.target, None);
+            return;
+        }
+        let result = match response {
+            Ok(response) if response.ok => response.shortcut_capture,
+            Ok(response) => {
+                self.shortcut_capture_failed(session.target, Some(response.message));
+                return;
+            }
+            Err(error) => {
+                self.shortcut_capture_failed(session.target, Some(error));
+                return;
+            }
+        };
+        let Some(capture) = result.filter(|capture| capture.active) else {
+            self.shortcut_capture_failed(session.target, None);
+            return;
+        };
+        if let Some(current) = self.state.borrow_mut().shortcut_capture.as_mut() {
+            current.pending = false;
+            current.active = true;
+            // Queue/IPC latency must consume the lease, never extend it.
+            current.deadline = session.requested_at + SHORTCUT_CAPTURE_TIMEOUT;
+        }
+        let ui = self.ui();
+        ui.set_shortcut_pending(0);
+        ui.set_shortcut_recording(session.target);
+        if let Some(shortcut) = capture.shortcut {
+            self.finish_shortcut_capture(shortcut);
+        }
+    }
+
+    fn valid_shortcut_capture(&self, now: Instant) -> Option<ShortcutSession> {
+        let session = self.state.borrow().shortcut_capture?;
+        if now >= session.deadline {
+            self.shortcut_capture_failed(session.target, None);
+            None
+        } else {
+            Some(session)
+        }
+    }
+
+    fn shortcut_capture_failed(&self, target: i32, reason: Option<String>) {
+        self.end_shortcut_capture();
+        let message = match reason.filter(|reason| !reason.is_empty()) {
+            Some(reason) => messages::shortcut_capture_failed(reason),
+            None => messages::shortcut_capture_unavailable(),
+        };
+        let error = message.render(self.locale()).into();
+        if target == 1 {
+            self.ui().set_form_hotkey_error(error);
+        } else {
+            self.ui().set_setting_hotkey_error(error);
+        }
+        self.error(message);
+    }
+
+    fn finish_shortcut_capture(&self, shortcut: String) {
+        let session = self.valid_shortcut_capture(Instant::now());
+        let Some(session) = session.filter(|session| session.active) else {
+            return;
+        };
+        let shortcut = if shortcut.is_empty() {
+            shortcut
+        } else if let Ok(shortcut) = HotkeySpec::parse(&shortcut) {
+            shortcut.canonical()
+        } else {
+            self.shortcut_capture_failed(session.target, None);
+            return;
+        };
+        self.end_shortcut_capture();
+        let ui = self.ui();
+        if session.target == 1 {
+            ui.set_form_hotkey(shortcut.into());
+            self.profile_changed();
+            ui.invoke_focus_profile_problem(2);
+        } else {
+            ui.set_setting_hotkey(shortcut.into());
+            self.settings_changed();
+            ui.invoke_focus_settings_problem(0);
+        }
+    }
+
+    fn queue_manager_focus_loss(&self) {
+        let Some(session) = self.state.borrow().shortcut_capture else {
+            return;
+        };
+        // A registered shortcut can briefly grab the keyboard on X11 without
+        // changing the foreground window. Resolve that after the native event.
+        Timer::single_shot(Duration::from_millis(60), move || {
+            with_controller(|controller| {
+                if controller
+                    .state
+                    .borrow()
+                    .shortcut_capture
+                    .is_none_or(|current| current.token != session.token)
+                {
+                    return;
+                }
+                let focused = controller
+                    .ui()
+                    .window()
+                    .with_winit_window(|window| {
+                        #[cfg(target_os = "linux")]
+                        if let Some(focused) = x11_window_has_focus(window) {
+                            return focused;
+                        }
+                        window.has_focus()
+                    })
+                    .unwrap_or(false);
+                if !focused {
+                    controller.end_shortcut_capture();
+                }
+            });
+        });
+    }
+
+    fn queue_shortcut_focus_loss(&self) {
+        let Some(session) = self.state.borrow().shortcut_capture else {
+            return;
+        };
+        // Finish the pointer action first so the recorder's Cancel button
+        // cannot lose focus, clear state, then accidentally start a new lease.
+        Timer::single_shot(Duration::ZERO, move || {
+            with_controller(|controller| {
+                if controller
+                    .state
+                    .borrow()
+                    .shortcut_capture
+                    .is_some_and(|current| current.token == session.token)
+                    && !controller.ui().get_shortcut_has_focus()
+                {
+                    controller.end_shortcut_capture();
+                }
+            });
+        });
+    }
+
+    fn record_shortcut(&self, text: &str, control: bool, alt: bool, shift: bool, meta: bool) {
+        let ui = self.ui();
+        let session = self.valid_shortcut_capture(Instant::now());
+        let Some(session) = session.filter(|session| session.active) else {
+            return;
+        };
+        if ui.get_saving() || ui.get_dialog_busy() {
+            self.end_shortcut_capture();
+            return;
+        }
+        if !control && !alt && !shift && !meta {
+            if text == char::from(slint::platform::Key::Escape).to_string() {
+                self.end_shortcut_capture();
+                return;
+            }
+            if [
+                slint::platform::Key::Backspace,
+                slint::platform::Key::Delete,
+            ]
+            .into_iter()
+            .any(|key| text == char::from(key).to_string())
+            {
+                self.finish_shortcut_capture(String::new());
+                return;
+            }
+        }
+        match recorded_shortcut(text, control, alt, shift, meta, Platform::current()) {
+            Ok(Some(key)) => self.finish_shortcut_capture(key),
+            Ok(None) => {}
+            Err(error) => {
+                let error = error.render(self.locale()).into();
+                if session.target == 1 {
+                    ui.set_form_hotkey_error(error);
+                } else {
+                    ui.set_setting_hotkey_error(error);
+                }
+            }
+        }
     }
 
     fn apply_theme(&self) {
@@ -1004,7 +1402,14 @@ impl Controller {
         if self.ui().get_saving() || !self.ui().get_loaded() {
             return;
         }
+        self.end_shortcut_capture();
         if let Err(error) = config.validate() {
+            if kind == SaveKind::Profile {
+                self.ui().set_profile_error(error.clone().into());
+                self.ui().set_form_advanced(true);
+            } else if kind == SaveKind::Settings {
+                self.ui().set_settings_error(error.clone().into());
+            }
             self.error(error);
             return;
         }
@@ -1019,9 +1424,19 @@ impl Controller {
     }
 
     fn save_settings(&self) {
+        if !self.validate_settings() {
+            self.ui().invoke_focus_settings_problem(i32::from(
+                self.ui().get_setting_hotkey_error().is_empty(),
+            ));
+            return;
+        }
         match self.settings_config() {
             Ok(config) => self.save(config, SaveKind::Settings),
-            Err(error) => self.error(error),
+            Err(error) => {
+                self.ui()
+                    .set_settings_error(error.render(self.locale()).into());
+                self.error(error);
+            }
         }
     }
 
@@ -1060,6 +1475,7 @@ impl Controller {
     fn profile_changed(&self) {
         let ui = self.ui();
         ui.set_profile_dirty(true);
+        ui.set_profile_error("".into());
         if ui.get_form_platform() != 0 {
             ui.set_form_quake_auto_hide(false);
         }
@@ -1067,6 +1483,149 @@ impl Controller {
             ui.set_form_quake_topmost(false);
         }
         self.update_match_help();
+        self.validate_profile(false);
+    }
+
+    fn suggest_program_fields(&self) {
+        let ui = self.ui();
+        let state = self.state.borrow();
+        if state.editor_index.is_some()
+            || state.candidate != 0
+            || ui.get_launch_executable().trim().is_empty()
+        {
+            return;
+        }
+        let platform = platform_from_index(ui.get_form_platform());
+        let (name, matcher) = program_suggestion(&ui.get_launch_executable(), platform);
+        if ui.get_form_name().trim().is_empty() {
+            ui.set_form_name(name.into());
+        }
+        if ui.get_form_matcher().trim().is_empty() {
+            if let Some(matcher) = matcher {
+                ui.set_form_matcher(matcher.into());
+            } else {
+                // macOS bundle identity is an explicit advanced setting.
+                ui.set_form_advanced(true);
+            }
+        }
+    }
+
+    fn validate_profile(&self, require: bool) -> bool {
+        let ui = self.ui();
+        if !ui.get_editing() {
+            return true;
+        }
+        if require {
+            ui.set_form_validate(true);
+        }
+        let required = ui.get_form_validate();
+        let state = self.state.borrow();
+        let locale = self.locale();
+        let name = ui.get_form_name();
+        let name_valid = !name.trim().is_empty() && name.len() <= 160;
+        ui.set_form_name_error(
+            if !name_valid && required {
+                messages::profile_name_required().render(locale)
+            } else {
+                String::new()
+            }
+            .into(),
+        );
+        let program = ui.get_launch_executable();
+        let program_valid =
+            !program.trim().is_empty() && program.len() <= 4096 && !program.contains('\0');
+        ui.set_form_executable_error(
+            if !program_valid && required {
+                messages::profile_program_required().render(locale)
+            } else {
+                String::new()
+            }
+            .into(),
+        );
+        let matcher = ui.get_form_matcher();
+        let matcher_valid =
+            !matcher.trim().is_empty() && matcher.len() <= 1024 && !matcher.contains('\0');
+        ui.set_form_matcher_error(
+            if !matcher_valid && required {
+                messages::profile_matcher_required().render(locale)
+            } else {
+                String::new()
+            }
+            .into(),
+        );
+        let id = ui.get_form_id();
+        let id = id.trim();
+        let id_valid = !id.is_empty()
+            && id.len() <= 64
+            && id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+            && !state
+                .config
+                .windows
+                .profiles
+                .iter()
+                .enumerate()
+                .any(|(index, profile)| {
+                    Some(index) != state.editor_index && profile.id.eq_ignore_ascii_case(id)
+                });
+        ui.set_form_id_error(
+            if !id_valid && required {
+                messages::profile_id_invalid().render(locale)
+            } else {
+                String::new()
+            }
+            .into(),
+        );
+        let args = launch_command(&program, &ui.get_launch_args(), &ui.get_launch_cwd());
+        ui.set_form_args_error(
+            args.as_ref()
+                .err()
+                .map(|error| error.render(locale))
+                .unwrap_or_default()
+                .into(),
+        );
+        let active = state.config.windows.enabled
+            && ui.get_form_enabled()
+            && platform_from_index(ui.get_form_platform()) == Platform::current();
+        let shortcut = shortcut_problem(
+            &ui.get_form_hotkey(),
+            &state.config,
+            state.editor_index,
+            active,
+            false,
+        );
+        ui.set_form_hotkey_error(
+            shortcut
+                .as_ref()
+                .map(|message| message.render(locale))
+                .unwrap_or_default()
+                .into(),
+        );
+        let valid = name_valid
+            && program_valid
+            && matcher_valid
+            && id_valid
+            && args.is_ok()
+            && shortcut.is_none();
+        drop(state);
+        if require && !valid {
+            let field = if !program_valid {
+                1
+            } else if !name_valid {
+                0
+            } else if shortcut.is_some() {
+                2
+            } else if !matcher_valid {
+                3
+            } else if !id_valid {
+                4
+            } else {
+                5
+            };
+            ui.invoke_focus_profile_problem(field);
+        }
+        valid
     }
 
     fn edit_profile(&self, index: i32) {
@@ -1088,6 +1647,7 @@ impl Controller {
     }
 
     fn begin_edit(&self, index: i32) {
+        self.end_shortcut_capture();
         let profile = if index < 0 {
             let state = self.state.borrow();
             AppProfile {
@@ -1115,6 +1675,10 @@ impl Controller {
         };
         let ui = self.ui();
         ui.set_editing(true);
+        ui.set_form_advanced(false);
+        ui.set_form_validate(false);
+        ui.set_shortcut_recording(0);
+        ui.set_profile_error("".into());
         ui.set_selected_profile(index);
         ui.set_form_id(profile.id.clone().into());
         ui.set_form_name(profile.name.clone().into());
@@ -1122,6 +1686,9 @@ impl Controller {
         ui.set_form_matcher(profile.matcher.clone().into());
         ui.set_form_hotkey(profile.hotkey.clone().into());
         ui.set_form_enabled(profile.enabled);
+        ui.set_profile_testable(
+            index >= 0 && profile.enabled && profile.platform == Platform::current(),
+        );
         ui.set_form_maximize(profile.maximize);
         ui.set_form_cycle(profile.cycle_continuous);
         ui.set_form_quake_enabled(profile.quake.enabled);
@@ -1141,7 +1708,11 @@ impl Controller {
         }
         self.sync_candidate();
         self.update_match_help();
+        self.validate_profile(false);
         ui.invoke_focus_page();
+        if index < 0 {
+            ui.invoke_focus_profile_program();
+        }
     }
 
     fn new_profile(&self) {
@@ -1279,6 +1850,10 @@ impl Controller {
     }
 
     fn save_profile(&self) {
+        self.suggest_program_fields();
+        if !self.validate_profile(true) {
+            return;
+        }
         if let Err(error) = self.capture_candidate() {
             self.error(error);
             return;
@@ -1328,13 +1903,44 @@ impl Controller {
     }
 
     fn cancel_editor(&self) {
+        self.end_shortcut_capture();
         self.state.borrow_mut().editor = None;
         self.state.borrow_mut().editor_index = None;
         let ui = self.ui();
         ui.set_editing(false);
         ui.set_selected_profile(-1);
         ui.set_profile_dirty(false);
+        ui.set_shortcut_recording(0);
+        ui.set_profile_testable(false);
+        ui.set_profile_error("".into());
         ui.invoke_focus_page();
+    }
+
+    fn retain_saved_editor(&self) {
+        let ui = self.ui();
+        let mut state = self.state.borrow_mut();
+        let index = state
+            .editor_index
+            .unwrap_or_else(|| state.config.windows.profiles.len().saturating_sub(1));
+        let Some(profile) = state.config.windows.profiles.get(index).cloned() else {
+            return;
+        };
+        state.editor_index = Some(index);
+        state.candidate = state.candidate.min(profile.launch.len().saturating_sub(1));
+        state.editor = Some(profile.clone());
+        ui.set_selected_profile(index as i32);
+        ui.set_form_id(profile.id.into());
+        ui.set_form_name(profile.name.into());
+        ui.set_form_matcher(profile.matcher.into());
+        ui.set_form_hotkey(profile.hotkey.into());
+        ui.set_profile_testable(profile.enabled && profile.platform == Platform::current());
+        ui.set_profile_dirty(false);
+        ui.set_form_validate(false);
+        ui.set_profile_error("".into());
+        drop(state);
+        self.sync_candidate();
+        self.validate_profile(false);
+        // Keep the mounted editor, focus, expanded sections and scroll position.
     }
 
     fn cancel_profile(&self) {
@@ -1371,11 +1977,8 @@ impl Controller {
             }
             profile.id.clone()
         };
-        // A saved draft may not be lost just because the UI later unloads.
-        if self.dirty() {
-            self.say(messages::status_save_or_cancel_your_changes_before_toggling_a_window());
-            return;
-        }
+        // The action names the saved profile. Drafts remain mounted, and the
+        // existing unload guard keeps them alive while the manager is hidden.
         #[cfg(windows)]
         {
             use windows_sys::Win32::{
@@ -1396,6 +1999,7 @@ impl Controller {
     }
 
     fn ask(&self, action: ConfirmAction, title: Message, message: Message) {
+        self.end_shortcut_capture();
         let ui = self.ui();
         ui.set_confirm_title(title.render(self.locale()).into());
         ui.set_confirm_message(message.render(self.locale()).into());
@@ -1403,8 +2007,45 @@ impl Controller {
         state.confirmation = Some(action);
         state.confirmation_text = Some((title, message));
         drop(state);
+        self.sync_confirmation_labels();
         ui.set_confirm_visible(true);
         ui.invoke_focus_confirm_actions();
+    }
+
+    fn sync_confirmation_labels(&self) {
+        let ui = self.ui();
+        let state = self.state.borrow();
+        let Some(action) = &state.confirmation else {
+            return;
+        };
+        let accept = match action {
+            ConfirmAction::Close => messages::action_discard_and_close(),
+            ConfirmAction::Edit(_) | ConfirmAction::New | ConfirmAction::CancelEdit => {
+                messages::action_discard_changes()
+            }
+            ConfirmAction::ResetSettings => messages::action_restore_settings(),
+            ConfirmAction::Delete => messages::action_delete_profile(),
+            ConfirmAction::Reload => messages::action_reload_configuration(),
+            ConfirmAction::Import => messages::action_discard_and_import(),
+            ConfirmAction::UninstallSkill(_) => messages::action_uninstall_skill(),
+        };
+        let cancel = if matches!(
+            action,
+            ConfirmAction::Close
+                | ConfirmAction::Edit(_)
+                | ConfirmAction::New
+                | ConfirmAction::CancelEdit
+        ) {
+            messages::action_keep_editing()
+        } else {
+            messages::action_cancel()
+        };
+        ui.set_confirm_accept_label(accept.render(self.locale()).into());
+        ui.set_confirm_cancel_label(cancel.render(self.locale()).into());
+        ui.set_confirm_destructive(matches!(
+            action,
+            ConfirmAction::Delete | ConfirmAction::UninstallSkill(_)
+        ));
     }
 
     fn confirm(&self, yes: bool) {
@@ -1469,6 +2110,7 @@ impl Controller {
         if self.state.borrow().dialog_open {
             return;
         }
+        self.end_shortcut_capture();
         self.state.borrow_mut().dialog_open = true;
         self.ui().set_dialog_busy(true);
         let dialog = self
@@ -1582,6 +2224,13 @@ impl Controller {
     fn handle(&self, event: Event) {
         let ui = self.ui();
         match event {
+            Event::ShortcutCapture {
+                token,
+                action,
+                response,
+            } => {
+                self.receive_shortcut_capture(token, action, response);
+            }
             Event::Loaded { response, force } => match response {
                 Ok(response) => {
                     if let Some(status) = response.status {
@@ -1650,10 +2299,9 @@ impl Controller {
                             self.sync_settings();
                         }
                         self.sync_profiles();
-                        if matches!(
-                            kind,
-                            SaveKind::Profile | SaveKind::Delete | SaveKind::Import
-                        ) {
+                        if kind == SaveKind::Profile {
+                            self.retain_saved_editor();
+                        } else if matches!(kind, SaveKind::Delete | SaveKind::Import) {
                             self.cancel_editor();
                         }
                         if kind == SaveKind::Import {
@@ -1664,7 +2312,14 @@ impl Controller {
                             self.refresh_projects();
                         }
                     }
-                    Err(error) => self.error(error),
+                    Err(error) => {
+                        if kind == SaveKind::Profile {
+                            ui.set_profile_error(error.clone().into());
+                        } else if kind == SaveKind::Settings {
+                            ui.set_settings_error(error.clone().into());
+                        }
+                        self.error(error);
+                    }
                 }
             }
             Event::Projects {
@@ -1687,6 +2342,8 @@ impl Controller {
                             .map(|item| ProjectRow {
                                 id: item.id.into(),
                                 name: item.name.into(),
+                                display_location: project_display_path(&item.location).into(),
+                                remote: item.location.starts_with("vscode-remote://"),
                                 location: item.location.into(),
                                 source: item.source.into(),
                             })
@@ -1773,6 +2430,7 @@ impl Controller {
                     Ok(Some(path)) => match kind {
                         0 => {
                             ui.set_launch_executable(path.into());
+                            self.suggest_program_fields();
                             self.profile_changed();
                         }
                         1 => {
@@ -1900,6 +2558,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         query_generation: query_generation.clone(),
         idle_timer: Timer::default(),
         skills_timer: Timer::default(),
+        shortcut_timer: Timer::default(),
         state: RefCell::new(State {
             config: Config::default(),
             revision: 0,
@@ -1926,6 +2585,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             last_error: UiText::default(),
             status_text: None,
             confirmation_text: None,
+            shortcut_capture: None,
+            shortcut_ending: None,
             skills: skills::SkillsUiState::default(),
         }),
     });
@@ -1937,6 +2598,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.on_open_project(|index| with_controller(|c| c.open_project(index)));
     ui.on_move_project(|delta| with_controller(|c| c.move_project(delta)));
     ui.on_edit_profile(|index| with_controller(|c| c.edit_profile(index)));
+    ui.on_profile_query_changed(|query| with_controller(|c| c.profile_query_changed(query.into())));
+    ui.on_text_matches(|query, text| text_matches(&query, &text));
+    ui.on_start_shortcut(|target| with_controller(|c| c.start_shortcut_capture(target)));
+    ui.on_shortcut_focus_lost(|| with_controller(Controller::queue_shortcut_focus_loss));
+    ui.on_record_shortcut(|text, control, alt, shift, meta| {
+        with_controller(|c| c.record_shortcut(&text, control, alt, shift, meta))
+    });
+    ui.on_program_edited(|| with_controller(Controller::profile_changed));
     ui.on_new_profile(|| with_controller(Controller::new_profile));
     ui.on_delete_profile(|| with_controller(Controller::delete_profile));
     ui.on_save_profile(|| with_controller(Controller::save_profile));
@@ -1962,6 +2631,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.window().on_close_requested(|| {
         with_controller(Controller::dismiss);
         slint::CloseRequestResponse::KeepWindowShown
+    });
+    ui.window().on_winit_window_event(|_window, event| {
+        if let winit::event::WindowEvent::Focused(false) = event {
+            with_controller(Controller::queue_manager_focus_loss);
+        }
+        EventResult::Propagate
     });
     launcher.on_query_changed(|query| with_controller(|c| c.query_changed(query.into())));
     launcher.on_refresh_projects(|| with_controller(Controller::refresh_projects));
@@ -2051,7 +2726,7 @@ mod tests {
         }
     }
 
-    fn with_test_ui(
+    pub(super) fn with_test_ui(
         test: impl FnOnce(&AppWindow, &Controller, &mpsc::Receiver<Work>) + Send + 'static,
     ) {
         // Each test owns a Slint context, software window and disconnected worker.
@@ -2068,6 +2743,7 @@ mod tests {
                 query_generation: Arc::new(AtomicU64::new(0)),
                 idle_timer: Timer::default(),
                 skills_timer: Timer::default(),
+                shortcut_timer: Timer::default(),
                 state: RefCell::new(State {
                     config: Config::default(),
                     revision: 1,
@@ -2094,6 +2770,8 @@ mod tests {
                     last_error: UiText::default(),
                     status_text: None,
                     confirmation_text: None,
+                    shortcut_capture: None,
+                    shortcut_ending: None,
                     skills: skills::SkillsUiState::default(),
                 }),
             };
@@ -2104,6 +2782,766 @@ mod tests {
         })
         .join()
         .unwrap();
+    }
+
+    #[test]
+    fn application_search_keeps_original_targets_and_unsaved_editor() {
+        with_test_ui(|ui, controller, _| {
+            controller.profile_query_changed("chrome F5".into());
+            let rows = ui.get_profiles();
+            assert_eq!(rows.row_count(), 1);
+            let row = rows.row_data(0).unwrap();
+            assert_eq!(row.source_index, 2);
+            controller.edit_profile(row.source_index);
+            assert_eq!(ui.get_form_name(), row.name);
+            ui.set_form_name("My browser draft".into());
+            controller.profile_changed();
+            controller.profile_query_changed("WezTerm".into());
+            assert_eq!(ui.get_profiles().row_data(0).unwrap().source_index, 0);
+            assert_eq!(ui.get_selected_profile(), 2);
+            assert_eq!(ui.get_form_name(), "My browser draft");
+            assert!(ui.get_profile_dirty());
+        });
+    }
+
+    #[test]
+    fn selecting_a_program_suggests_only_missing_new_profile_fields() {
+        with_test_ui(|ui, controller, _| {
+            controller.begin_edit(-1);
+            ui.set_form_platform(0);
+            controller.handle(Event::PathPicked {
+                kind: 0,
+                path: Ok(Some(r"C:\Program Files\WezTerm\wezterm-gui.exe".into())),
+            });
+            assert_eq!(ui.get_form_name(), "WezTerm");
+            assert_eq!(ui.get_form_matcher(), "wezterm-gui.exe");
+            assert!(ui.get_profile_dirty());
+            ui.set_form_name("My terminal".into());
+            ui.set_form_matcher("custom.exe".into());
+            controller.handle(Event::PathPicked {
+                kind: 0,
+                path: Ok(Some(r"D:\apps\code.exe".into())),
+            });
+            assert_eq!(ui.get_form_name(), "My terminal");
+            assert_eq!(ui.get_form_matcher(), "custom.exe");
+
+            controller.begin_edit(1);
+            let existing_name = ui.get_form_name();
+            let existing_matcher = ui.get_form_matcher();
+            controller.handle(Event::PathPicked {
+                kind: 0,
+                path: Ok(Some("/opt/another-editor".into())),
+            });
+            assert_eq!(ui.get_form_name(), existing_name);
+            assert_eq!(ui.get_form_matcher(), existing_matcher);
+        });
+    }
+
+    #[test]
+    fn saving_an_app_keeps_its_editor_and_other_settings_draft() {
+        with_test_ui(|ui, controller, receive| {
+            controller.begin_edit(0);
+            ui.set_form_advanced(true);
+            ui.set_form_quake_enabled(true);
+            ui.set_form_quake_width(75);
+            controller.profile_changed();
+            ui.set_setting_theme(2);
+            controller.settings_changed();
+            controller.save_profile();
+            let Work::Save {
+                config,
+                kind,
+                revision,
+            } = receive.try_recv().unwrap()
+            else {
+                panic!("expected an application save");
+            };
+            assert_eq!(kind, SaveKind::Profile);
+            controller.handle(Event::Saved {
+                response: Ok(Response {
+                    ok: true,
+                    revision: revision + 1,
+                    config: Some(config.clone()),
+                    ..Response::default()
+                }),
+                config,
+                kind,
+            });
+            assert!(ui.get_editing());
+            assert_eq!(ui.get_selected_profile(), 0);
+            assert!(ui.get_form_advanced());
+            assert_eq!(ui.get_form_quake_width(), 75);
+            assert!(!ui.get_profile_dirty());
+            assert!(ui.get_settings_dirty());
+            assert_eq!(ui.get_setting_theme(), 2);
+            assert_eq!(
+                controller
+                    .state
+                    .borrow()
+                    .editor
+                    .as_ref()
+                    .unwrap()
+                    .quake
+                    .width_percent,
+                75
+            );
+        });
+    }
+
+    #[test]
+    fn saved_actions_do_not_discard_or_block_unrelated_drafts() {
+        with_test_ui(|ui, controller, receive| {
+            controller.begin_edit(0);
+            ui.set_form_name("Unsaved terminal name".into());
+            controller.profile_changed();
+            ui.set_setting_theme(2);
+            controller.settings_changed();
+            receive_project(controller, "test-project");
+            ui.set_page(0);
+            controller.open_project(0);
+            assert!(
+                matches!(receive.try_recv().unwrap(), Work::Open { id, .. } if id == "test-project")
+            );
+            controller.handle(Event::Opened(Ok(())));
+            assert!(controller.state.borrow().visible);
+            assert!(ui.get_profile_dirty());
+            assert!(ui.get_settings_dirty());
+
+            let saved_id = controller.state.borrow().config.windows.profiles[0]
+                .id
+                .clone();
+            controller.toggle_profile(0);
+            assert!(matches!(receive.try_recv().unwrap(), Work::Toggle(id) if id == saved_id));
+            assert_eq!(ui.get_form_name(), "Unsaved terminal name");
+            assert!(ui.get_profile_dirty());
+            assert!(ui.get_settings_dirty());
+            assert_eq!(controller.unload_delay(), None);
+        });
+    }
+
+    fn shortcut_response(active: bool, shortcut: Option<&str>) -> Result<Response, String> {
+        Ok(Response {
+            ok: true,
+            shortcut_capture: Some(toolbox_core::ShortcutCaptureState {
+                active,
+                shortcut: shortcut.map(str::to_owned),
+            }),
+            ..Response::default()
+        })
+    }
+
+    fn shortcut_reply(
+        token: u64,
+        action: ShortcutCaptureAction,
+        active: bool,
+        shortcut: Option<&str>,
+    ) -> Event {
+        Event::ShortcutCapture {
+            token,
+            action,
+            response: shortcut_response(active, shortcut),
+        }
+    }
+
+    fn acknowledge_recorder(
+        controller: &Controller,
+        receive: &mpsc::Receiver<Work>,
+        target: i32,
+    ) -> u64 {
+        controller.start_shortcut_capture(target);
+        let Work::ShortcutCapture {
+            token,
+            action: ShortcutCaptureAction::Begin,
+        } = receive.try_recv().unwrap()
+        else {
+            panic!("expected a recorder begin request");
+        };
+        assert_eq!(controller.ui().get_shortcut_recording(), 0);
+        assert_eq!(controller.ui().get_shortcut_pending(), target);
+        controller.handle(shortcut_reply(
+            token,
+            ShortcutCaptureAction::Begin,
+            true,
+            None,
+        ));
+        assert_eq!(controller.ui().get_shortcut_recording(), target);
+        assert_eq!(controller.ui().get_shortcut_pending(), 0);
+        token
+    }
+
+    #[test]
+    fn shortcut_recording_and_validation_never_commit_invalid_drafts() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_page(1);
+            controller.begin_edit(0);
+            let token = acknowledge_recorder(controller, receive, 1);
+            controller.record_shortcut(
+                &char::from(slint::platform::Key::Control).to_string(),
+                true,
+                false,
+                false,
+                false,
+            );
+            assert_eq!(ui.get_shortcut_recording(), 1);
+            assert_eq!(ui.get_form_hotkey(), "F3");
+            controller.record_shortcut(
+                &char::from(slint::platform::Key::F4).to_string(),
+                false,
+                false,
+                false,
+                false,
+            );
+            assert!(
+                matches!(receive.try_recv().unwrap(), Work::ShortcutCapture { token: ended, action: ShortcutCaptureAction::End } if ended == token)
+            );
+            assert_eq!(ui.get_shortcut_recording(), 0);
+            assert!(ui.get_form_hotkey_error().contains("VS Code"));
+            controller.save_profile();
+            assert!(receive.try_recv().is_err());
+            assert_eq!(ui.get_form_hotkey(), "F4");
+            assert_eq!(
+                controller.state.borrow().config.windows.profiles[0].hotkey,
+                "F3"
+            );
+            assert!(ui.get_profile_dirty());
+            acknowledge_recorder(controller, receive, 1);
+            controller.record_shortcut(
+                &char::from(slint::platform::Key::Backspace).to_string(),
+                false,
+                false,
+                false,
+                false,
+            );
+            assert!(ui.get_form_hotkey().is_empty());
+            assert!(ui.get_form_hotkey_error().is_empty());
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::End,
+                    ..
+                }
+            ));
+            assert!(receive.try_recv().is_err());
+        });
+    }
+
+    #[test]
+    fn registered_shortcuts_wait_for_ack_and_only_one_capture_poll_is_in_flight() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_page(1);
+            controller.begin_edit(0);
+            controller.start_shortcut_capture(1);
+            let Work::ShortcutCapture {
+                token,
+                action: ShortcutCaptureAction::Begin,
+            } = receive.try_recv().unwrap()
+            else {
+                panic!("expected Begin");
+            };
+            controller.record_shortcut("s", true, false, false, false);
+            controller.poll_shortcut_capture();
+            assert_eq!(ui.get_shortcut_recording(), 0);
+            assert_eq!(ui.get_form_hotkey(), "F3");
+            assert!(receive.try_recv().is_err());
+            controller.handle(shortcut_reply(
+                token,
+                ShortcutCaptureAction::Begin,
+                true,
+                None,
+            ));
+            controller.poll_shortcut_capture();
+            controller.poll_shortcut_capture();
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::Poll,
+                    ..
+                }
+            ));
+            assert!(receive.try_recv().is_err());
+            controller.handle(shortcut_reply(
+                token,
+                ShortcutCaptureAction::Poll,
+                true,
+                Some("F4"),
+            ));
+            assert_eq!(ui.get_form_hotkey(), "F4");
+            assert!(ui.get_form_hotkey_error().contains("VS Code"));
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::End,
+                    ..
+                }
+            ));
+            assert_eq!(ui.get_shortcut_recording(), 0);
+            assert!(controller.state.borrow().shortcut_capture.is_none());
+            controller.handle(shortcut_reply(
+                token,
+                ShortcutCaptureAction::Poll,
+                true,
+                Some("F5"),
+            ));
+            assert_eq!(
+                ui.get_form_hotkey(),
+                "F4",
+                "late responses cannot replace the recorded draft"
+            );
+            assert!(receive.try_recv().is_err());
+        });
+    }
+
+    #[test]
+    fn capture_deadline_rejects_a_late_begin_ack_and_expires_a_pending_begin() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_page(1);
+            controller.begin_edit(0);
+            let original = ui.get_form_hotkey();
+            controller.start_shortcut_capture(1);
+            let session = controller.state.borrow().shortcut_capture.unwrap();
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::Begin,
+                    ..
+                }
+            ));
+            assert_eq!(
+                session.deadline,
+                session.requested_at + SHORTCUT_CAPTURE_TIMEOUT
+            );
+            controller.receive_shortcut_capture_at(
+                session.token,
+                ShortcutCaptureAction::Begin,
+                shortcut_response(true, Some("F4")),
+                session.deadline,
+            );
+            assert_eq!(ui.get_shortcut_recording(), 0);
+            assert_eq!(ui.get_shortcut_pending(), 0);
+            assert_eq!(ui.get_form_hotkey(), original);
+            assert!(!ui.get_profile_dirty());
+            assert!(controller.state.borrow().shortcut_capture.is_none());
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::End,
+                    ..
+                }
+            ));
+
+            controller.start_shortcut_capture(1);
+            let pending = controller.state.borrow().shortcut_capture.unwrap();
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::Begin,
+                    ..
+                }
+            ));
+            controller.poll_shortcut_capture_at(pending.deadline);
+            assert_eq!(ui.get_shortcut_pending(), 0);
+            assert!(controller.state.borrow().shortcut_capture.is_none());
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::End,
+                    ..
+                }
+            ));
+            controller.receive_shortcut_capture_at(
+                pending.token,
+                ShortcutCaptureAction::Begin,
+                shortcut_response(true, Some("F5")),
+                pending.deadline + Duration::from_millis(1),
+            );
+            assert_eq!(ui.get_form_hotkey(), original);
+            assert_eq!(ui.get_shortcut_recording(), 0);
+            assert!(receive.try_recv().is_err());
+        });
+    }
+
+    #[test]
+    fn capture_deadline_uses_poll_enqueue_time_and_expires_while_a_reply_is_pending() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_page(1);
+            controller.begin_edit(0);
+            let original = ui.get_form_hotkey();
+            let token = acknowledge_recorder(controller, receive, 1);
+            let started = controller
+                .state
+                .borrow()
+                .shortcut_capture
+                .unwrap()
+                .requested_at;
+            let sent = started + Duration::from_millis(300);
+            controller.poll_shortcut_capture_at(sent);
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::Poll,
+                    ..
+                }
+            ));
+            let previous_deadline = controller.state.borrow().shortcut_capture.unwrap().deadline;
+            assert_eq!(previous_deadline, started + SHORTCUT_CAPTURE_TIMEOUT);
+            controller.receive_shortcut_capture_at(
+                token,
+                ShortcutCaptureAction::Poll,
+                shortcut_response(true, None),
+                started + Duration::from_millis(700),
+            );
+            let renewed_deadline = controller.state.borrow().shortcut_capture.unwrap().deadline;
+            assert_eq!(renewed_deadline, sent + SHORTCUT_CAPTURE_TIMEOUT);
+            controller.poll_shortcut_capture_at(started + Duration::from_millis(900));
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::Poll,
+                    ..
+                }
+            ));
+            controller.poll_shortcut_capture_at(started + Duration::from_millis(1500));
+            assert!(
+                receive.try_recv().is_err(),
+                "one pending poll must not enqueue more requests"
+            );
+            controller.poll_shortcut_capture_at(renewed_deadline);
+            assert!(controller.state.borrow().shortcut_capture.is_none());
+            assert_eq!(ui.get_shortcut_recording(), 0);
+            assert_eq!(ui.get_form_hotkey(), original);
+            assert!(!ui.get_profile_dirty());
+            assert!(!ui.get_form_hotkey_error().is_empty());
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::End,
+                    ..
+                }
+            ));
+            controller.receive_shortcut_capture_at(
+                token,
+                ShortcutCaptureAction::Poll,
+                shortcut_response(true, Some("F4")),
+                renewed_deadline + Duration::from_millis(100),
+            );
+            assert_eq!(ui.get_form_hotkey(), original);
+            assert_eq!(ui.get_shortcut_recording(), 0);
+            assert!(receive.try_recv().is_err());
+        });
+    }
+
+    #[test]
+    fn cancelled_or_failed_capture_keeps_drafts_and_old_responses_cannot_revive_it() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_page(1);
+            controller.begin_edit(0);
+            ui.set_form_hotkey("Ctrl+Alt+T".into());
+            controller.profile_changed();
+            controller.start_shortcut_capture(1);
+            let Work::ShortcutCapture { token: old, .. } = receive.try_recv().unwrap() else {
+                panic!("expected Begin");
+            };
+            controller.navigate(2);
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::End,
+                    ..
+                }
+            ));
+            controller.handle(shortcut_reply(
+                old,
+                ShortcutCaptureAction::Begin,
+                true,
+                None,
+            ));
+            assert_eq!(ui.get_shortcut_recording(), 0);
+            assert_eq!(ui.get_form_hotkey(), "Ctrl+Alt+T");
+            assert!(ui.get_profile_dirty());
+            let original = ui.get_setting_hotkey();
+            let current = acknowledge_recorder(controller, receive, 2);
+            assert_ne!(current, old);
+            controller.handle(shortcut_reply(
+                old,
+                ShortcutCaptureAction::Poll,
+                true,
+                Some("F8"),
+            ));
+            assert_eq!(ui.get_shortcut_recording(), 2);
+            assert_eq!(ui.get_setting_hotkey(), original);
+            controller.handle(shortcut_reply(
+                current,
+                ShortcutCaptureAction::Poll,
+                false,
+                None,
+            ));
+            assert_eq!(ui.get_shortcut_recording(), 0);
+            assert_eq!(ui.get_setting_hotkey(), original);
+            assert!(!ui.get_setting_hotkey_error().is_empty());
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::End,
+                    ..
+                }
+            ));
+            let current = acknowledge_recorder(controller, receive, 2);
+            controller.handle(Event::ShortcutCapture {
+                token: current,
+                action: ShortcutCaptureAction::Poll,
+                response: Err("Host disconnected".into()),
+            });
+            assert_eq!(ui.get_shortcut_recording(), 0);
+            assert_eq!(ui.get_setting_hotkey(), original);
+            assert!(ui.get_setting_hotkey_error().contains("Host disconnected"));
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::End,
+                    ..
+                }
+            ));
+            acknowledge_recorder(controller, receive, 2);
+            controller.record_shortcut(
+                &char::from(slint::platform::Key::Escape).to_string(),
+                false,
+                false,
+                false,
+                false,
+            );
+            assert_eq!(ui.get_setting_hotkey(), original);
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::ShortcutCapture {
+                    action: ShortcutCaptureAction::End,
+                    ..
+                }
+            ));
+            assert!(receive.try_recv().is_err());
+        });
+    }
+
+    #[test]
+    fn closing_during_capture_delivers_end_before_releasing_the_ui() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_page(2);
+            let token = acknowledge_recorder(controller, receive, 2);
+            controller.close_manager();
+            assert_eq!(ui.get_shortcut_recording(), 0);
+            assert!(!controller.state.borrow().visible);
+            assert_eq!(controller.unload_delay(), None);
+            assert!(
+                matches!(receive.try_recv().unwrap(), Work::ShortcutCapture { token: ended, action: ShortcutCaptureAction::End } if ended == token)
+            );
+            controller.handle(shortcut_reply(
+                token,
+                ShortcutCaptureAction::End,
+                false,
+                None,
+            ));
+            assert_eq!(controller.unload_delay(), Some(Duration::ZERO));
+            assert!(!ui.get_settings_dirty());
+            assert!(receive.try_recv().is_err());
+        });
+    }
+
+    #[test]
+    fn recorder_keyboard_input_precedes_navigation_save_and_escape_close() {
+        with_test_ui(|ui, controller, _| {
+            use slint::platform::{Key, WindowEvent};
+            use std::cell::Cell;
+            ui.set_page(1);
+            controller.begin_edit(0);
+            ui.window().set_size(slint::LogicalSize::new(1120.0, 780.0));
+            ui.show().unwrap();
+            ui.invoke_focus_shortcut_recorder();
+            ui.set_shortcut_recording(1);
+            let gestures = Rc::new(RefCell::new(Vec::new()));
+            let captured = gestures.clone();
+            ui.on_record_shortcut(move |text, control, _, _, meta| {
+                captured
+                    .borrow_mut()
+                    .push((text.to_string(), control || meta))
+            });
+            let navigation = Rc::new(Cell::new(0));
+            let navigated = navigation.clone();
+            ui.on_navigate(move |_| navigated.set(navigated.get() + 1));
+            let saves = Rc::new(Cell::new(0));
+            let saved = saves.clone();
+            ui.on_save_profile(move || saved.set(saved.get() + 1));
+            let dismissals = Rc::new(Cell::new(0));
+            let dismissed = dismissals.clone();
+            ui.on_dismiss(move || dismissed.set(dismissed.get() + 1));
+            let cancellations = Rc::new(Cell::new(0));
+            let cancelled = cancellations.clone();
+            ui.on_start_shortcut(move |target| {
+                if target == 0 {
+                    cancelled.set(cancelled.get() + 1);
+                }
+            });
+            ui.window().dispatch_event(WindowEvent::KeyPressed {
+                text: Key::Control.into(),
+            });
+            for text in ["s", "1"] {
+                ui.window()
+                    .dispatch_event(WindowEvent::KeyPressed { text: text.into() });
+                ui.window()
+                    .dispatch_event(WindowEvent::KeyReleased { text: text.into() });
+            }
+            ui.window().dispatch_event(WindowEvent::KeyReleased {
+                text: Key::Control.into(),
+            });
+            ui.window().dispatch_event(WindowEvent::KeyPressed {
+                text: Key::Escape.into(),
+            });
+            assert!(gestures.borrow().contains(&("s".into(), true)));
+            assert!(gestures.borrow().contains(&("1".into(), true)));
+            assert_eq!(saves.get(), 0);
+            assert_eq!(navigation.get(), 0);
+            assert_eq!(dismissals.get(), 0);
+            assert_eq!(cancellations.get(), 1);
+        });
+    }
+
+    #[test]
+    fn recorder_distinguishes_window_activation_from_moving_to_another_field() {
+        with_test_ui(|ui, controller, _| {
+            use slint::platform::WindowEvent;
+            use std::cell::Cell;
+            ui.set_page(1);
+            controller.begin_edit(0);
+            ui.window().set_size(slint::LogicalSize::new(1120.0, 780.0));
+            ui.show().unwrap();
+            ui.window()
+                .dispatch_event(WindowEvent::WindowActiveChanged(true));
+            ui.invoke_focus_shortcut_recorder();
+            ui.set_shortcut_recording(1);
+            let losses = Rc::new(Cell::new(0));
+            let lost = losses.clone();
+            ui.on_shortcut_focus_lost(move || lost.set(lost.get() + 1));
+            ui.window()
+                .dispatch_event(WindowEvent::WindowActiveChanged(false));
+            assert_eq!(
+                losses.get(),
+                0,
+                "native activation must use the real window focus check"
+            );
+            assert_eq!(ui.get_shortcut_recording(), 1);
+            ui.window()
+                .dispatch_event(WindowEvent::WindowActiveChanged(true));
+            ui.invoke_focus_profile_editor();
+            assert_eq!(
+                losses.get(),
+                1,
+                "moving to a form field must cancel recording"
+            );
+        });
+    }
+
+    #[test]
+    fn invalid_settings_reveal_and_focus_the_field_after_a_search() {
+        with_test_ui(|ui, controller, receive| {
+            use slint::platform::WindowEvent;
+            ui.set_page(2);
+            ui.window().set_size(slint::LogicalSize::new(800.0, 580.0));
+            ui.show().unwrap();
+            ui.on_text_matches(|query, text| text_matches(&query, &text));
+            ui.set_settings_query("appearance".into());
+            ui.set_setting_hotkey("F3".into());
+            controller.settings_changed();
+            controller.save_settings();
+            assert!(ui.get_settings_query().is_empty());
+            assert!(!ui.get_setting_hotkey_error().is_empty());
+            assert!(receive.try_recv().is_err());
+            ui.window()
+                .dispatch_event(WindowEvent::KeyPressed { text: "x".into() });
+            assert!(
+                ui.get_setting_hotkey().contains('x'),
+                "the invalid shortcut field must receive typing"
+            );
+            assert!(ui.get_settings_query().is_empty());
+            ui.set_setting_hotkey("Ctrl+Alt+Space".into());
+            ui.set_setting_idle("9999".into());
+            ui.set_settings_query("appearance".into());
+            controller.save_settings();
+            assert!(!ui.get_setting_idle_error().is_empty());
+            ui.window()
+                .dispatch_event(WindowEvent::KeyPressed { text: "1".into() });
+            assert_ne!(
+                ui.get_setting_idle(),
+                "9999",
+                "the invalid timeout field must receive typing"
+            );
+            assert!(receive.try_recv().is_err());
+        });
+    }
+
+    #[test]
+    fn launcher_full_path_preview_uses_alt_enter_and_escape_before_dismissal() {
+        with_test_ui(|_, controller, _| {
+            use slint::platform::{Key, WindowEvent};
+            use std::cell::Cell;
+            let launcher = controller.launcher();
+            launcher.set_loaded(true);
+            launcher.set_projects(ModelRc::new(VecModel::from(vec![ProjectRow {
+                name: "Remote workspace".into(),
+                location: "vscode-remote://ssh-remote+server/home/sean/very/long/project/location"
+                    .into(),
+                ..ProjectRow::default()
+            }])));
+            launcher.set_selected_project(0);
+            launcher
+                .window()
+                .set_size(slint::LogicalSize::new(760.0, 432.0));
+            launcher.show().unwrap();
+            launcher.invoke_focus_search();
+            let opens = Rc::new(Cell::new(0));
+            let opened = opens.clone();
+            launcher.on_open_project(move |_| opened.set(opened.get() + 1));
+            let dismissals = Rc::new(Cell::new(0));
+            let dismissed = dismissals.clone();
+            launcher.on_dismiss(move || dismissed.set(dismissed.get() + 1));
+            launcher.window().dispatch_event(WindowEvent::KeyPressed {
+                text: Key::Alt.into(),
+            });
+            launcher.window().dispatch_event(WindowEvent::KeyPressed {
+                text: Key::Return.into(),
+            });
+            launcher.window().dispatch_event(WindowEvent::KeyReleased {
+                text: Key::Return.into(),
+            });
+            launcher.window().dispatch_event(WindowEvent::KeyReleased {
+                text: Key::Alt.into(),
+            });
+            assert!(launcher.get_details_expanded());
+            assert_eq!(opens.get(), 0);
+            launcher.window().dispatch_event(WindowEvent::KeyPressed {
+                text: Key::Escape.into(),
+            });
+            launcher.window().dispatch_event(WindowEvent::KeyReleased {
+                text: Key::Escape.into(),
+            });
+            assert!(!launcher.get_details_expanded());
+            assert_eq!(dismissals.get(), 0);
+            launcher.window().dispatch_event(WindowEvent::KeyPressed {
+                text: Key::Escape.into(),
+            });
+            assert_eq!(dismissals.get(), 1);
+        });
+    }
+
+    #[test]
+    fn destructive_confirmations_name_the_action_in_the_current_language() {
+        with_test_ui(|ui, controller, _| {
+            controller.begin_edit(0);
+            controller.delete_profile();
+            assert_eq!(ui.get_confirm_accept_label(), "删除应用配置");
+            assert!(ui.get_confirm_destructive());
+            ui.set_setting_language(1);
+            controller.settings_changed();
+            assert_eq!(ui.get_confirm_accept_label(), "Delete app configuration");
+            assert_eq!(ui.get_confirm_cancel_label(), "Cancel");
+        });
     }
 
     #[test]
@@ -3083,6 +4521,10 @@ mod tests {
             assert!(!ui.get_dialog_busy());
             assert!(!controller.state.borrow().dialog_open);
             assert!(ui.get_settings_dirty());
+            assert!(ui.global::<SkillsState>().get_details_visible());
+            assert!(ui.global::<SkillsState>().get_import_from_folder());
+            assert!(receive.try_recv().is_err());
+            controller.install_selected_skill();
             assert!(matches!(
                 receive.try_recv().unwrap(),
                 Work::Skills(SkillsCommand::ImportLocal { path, apps, link: false })
@@ -3306,20 +4748,20 @@ mod tests {
                 });
             };
 
-            // Centers observed in native UI acceptance at the default content size:
-            // Add application, first profile's Edit, and the Settings navigation row.
+            // Centers observed in the real Slint layout at the default content size:
+            // Add application, first application row, and Settings navigation.
             // Rendering first exercises real hit testing, not direct callback invocation.
             render();
-            click(336.0, 129.0);
+            click(336.0, 93.0);
             assert_eq!(added.get(), 1, "the first mouse click must activate Add");
-            click(288.0, 274.0);
+            click(336.0, 228.0);
             assert_eq!(edited.get(), 0, "the first mouse click must activate Edit");
-            click(100.0, 621.0);
+            click(100.0, 613.0);
             assert_eq!(navigated.get(), 2, "navigation must accept its first click");
 
             ui.set_saving(true);
             render();
-            click(336.0, 129.0);
+            click(336.0, 93.0);
             assert_eq!(added.get(), 1, "a disabled action must not fire");
         });
     }

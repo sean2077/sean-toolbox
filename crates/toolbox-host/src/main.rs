@@ -5,6 +5,7 @@ mod autostart;
 mod focus_watch;
 mod hotkeys;
 mod runtime;
+mod shortcut_capture;
 mod skills_worker;
 mod ui_process;
 

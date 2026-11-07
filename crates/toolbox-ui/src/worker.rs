@@ -14,7 +14,9 @@ use std::{
         mpsc::Receiver,
     },
 };
-use toolbox_core::{Config, HostCommand, Response, UiPage, UiRequest, skills::SkillsCommand};
+use toolbox_core::{
+    Config, HostCommand, Response, ShortcutCaptureAction, UiPage, UiRequest, skills::SkillsCommand,
+};
 use toolbox_i18n::messages;
 use toolbox_projects::ProjectItem;
 
@@ -95,6 +97,10 @@ pub enum Work {
     Status,
     GetSkills,
     Skills(SkillsCommand),
+    ShortcutCapture {
+        token: u64,
+        action: ShortcutCaptureAction,
+    },
     Dialog(DialogKind, rfd::FileDialog),
     Link(i32),
     /// Opens a skill source: an HTTPS page in the browser or a local folder.
@@ -121,6 +127,11 @@ pub enum Event {
     Status(Result<Response, String>),
     SkillsLoaded(Result<Response, String>),
     SkillsSubmitted(Result<Response, String>),
+    ShortcutCapture {
+        token: u64,
+        action: ShortcutCaptureAction,
+        response: Result<Response, String>,
+    },
     SkillFolderPicked(Result<Option<String>, UiText>),
     PathPicked {
         kind: i32,
@@ -244,6 +255,12 @@ pub fn run(receiver: Receiver<Work>, latest_query: Arc<AtomicU64>) {
             Work::Skills(command) => Event::SkillsSubmitted(
                 toolbox_ipc::call(HostCommand::Skills(command)).and_then(successful),
             ),
+            Work::ShortcutCapture { token, action } => Event::ShortcutCapture {
+                token,
+                action,
+                response: toolbox_ipc::call(HostCommand::ShortcutCapture { token, action })
+                    .and_then(successful),
+            },
             Work::Dialog(kind, dialog) => match kind {
                 DialogKind::Browse(kind) => {
                     let selected = native_dialog(|| {
