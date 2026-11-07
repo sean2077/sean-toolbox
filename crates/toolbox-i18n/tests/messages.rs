@@ -34,6 +34,21 @@ fn english_zero_one_many_and_chinese_single_plural_form_are_distinct() {
 }
 
 #[test]
+fn shared_common_messages_render_from_the_slint_owned_catalog() {
+    assert_eq!(messages::common_enabled().render(Locale::En), "Enabled");
+    assert_eq!(messages::common_enabled().render(Locale::ZhCn), "已启用");
+    assert_eq!(messages::common_disabled().render(Locale::ZhCn), "未启用");
+    assert_eq!(
+        messages::common_primary_display().render(Locale::En),
+        "Primary display"
+    );
+    assert_eq!(
+        messages::common_with_foreground_window().render(Locale::ZhCn),
+        "当前前台窗口所在显示器"
+    );
+}
+
+#[test]
 fn parameters_are_values_and_never_reinterpreted_as_format_strings() {
     let path = "C:\\用户\\{count}\\\"工具\"\n{{name}}";
     let message = messages::config_exported(path);

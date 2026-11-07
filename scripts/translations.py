@@ -9,7 +9,6 @@ Neither command installs tools; normal application builds only need Cargo.
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -70,7 +69,7 @@ def extract(destination: Path) -> None:
     )
 
 
-def check(extracted: Path) -> None:
+def check(extracted: Path, temporary: Path) -> None:
     # The build script checks IDs, completeness, fuzzy flags, plural forms, and
     # placeholders. The example compares semantic entries, ignoring timestamps
     # and source line numbers emitted by the official extractor.
@@ -89,7 +88,18 @@ def check(extracted: Path) -> None:
             str(extracted),
         ]
     )
-    run(["msgfmt", "--check", "--check-format", "-o", os.devnull, str(CHINESE)])
+    # Write inside the staging directory: the MSYS2 msgfmt treats a bare
+    # "nul" output path as a regular file on Windows.
+    run(
+        [
+            "msgfmt",
+            "--check",
+            "--check-format",
+            "-o",
+            str(temporary / "check.mo"),
+            str(CHINESE),
+        ]
+    )
     print("Translation catalogs are complete and match the Slint sources.")
 
 
@@ -120,7 +130,16 @@ def update(extracted: Path, temporary: Path) -> None:
     )
     # Stage both outputs before replacing either source. New entries may still
     # be untranslated: fill them in, then use `check` or the normal Cargo gates.
-    run(["msgfmt", "--check", "--check-format", "-o", os.devnull, str(translated)])
+    run(
+        [
+            "msgfmt",
+            "--check",
+            "--check-format",
+            "-o",
+            str(temporary / "update.mo"),
+            str(translated),
+        ]
+    )
     extracted.replace(LOCALES / "ui.pot")
     translated.replace(CHINESE)
     print("Updated ui.pot and merged the Chinese PO. Translate new entries, then run check.")
@@ -137,7 +156,7 @@ def main() -> int:
             extracted = temporary / "ui.pot"
             extract(extracted)
             if args.command == "check":
-                check(extracted)
+                check(extracted, temporary)
             else:
                 update(extracted, temporary)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:

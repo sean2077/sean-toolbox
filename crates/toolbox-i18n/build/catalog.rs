@@ -5,6 +5,11 @@ use std::path::Path;
 
 use rspolib::{POEntry, POFile};
 
+/// Parameterless messages owned by the Slint catalog but shared with Rust.
+/// Slint uses the context directly; Rust receives a generated `common_*`
+/// constructor from the same translation.
+pub const SHARED_PREFIX: &str = "ui.common.";
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Source {
     pub context: String,
@@ -386,6 +391,39 @@ pub fn load(root: &Path) -> Result<Catalog, String> {
                 plural: source.plural.clone(),
                 chinese,
                 parameters: parameters(source, true)?,
+            });
+        } else if let Some(id) = source.context.strip_prefix(SHARED_PREFIX) {
+            let id = format!("common_{id}");
+            if source.plural.is_some() {
+                return Err(format!(
+                    "{}: shared messages must not be plural",
+                    source.context
+                ));
+            }
+            if !parameters(source, false)?.is_empty() {
+                return Err(format!(
+                    "{}: shared messages must not contain placeholders",
+                    source.context
+                ));
+            }
+            if !identifier(&id) {
+                return Err(format!(
+                    "{}: generated Rust message ID must be a snake_case identifier",
+                    source.context
+                ));
+            }
+            if !variants.insert(variant(&id)) {
+                return Err(format!(
+                    "{}: generated enum variant collides",
+                    source.context
+                ));
+            }
+            messages.push(RustMessage {
+                id,
+                english: source.english.clone(),
+                plural: None,
+                chinese,
+                parameters: Vec::new(),
             });
         }
     }

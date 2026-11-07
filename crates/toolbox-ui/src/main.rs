@@ -35,6 +35,12 @@ use worker::{DialogKind, Event, SaveKind, Work};
 
 slint::include_modules!();
 
+/// Mirrors `min-width` / `min-height` in `ui/main.slint`. Displays below this
+/// supported layout minimum would clip the manager, so the window is never
+/// resized below these values.
+const MIN_WINDOW_WIDTH: f32 = 900.0;
+const MIN_WINDOW_HEIGHT: f32 = 650.0;
+
 thread_local! { static APP: RefCell<Option<Rc<Controller>>> = const { RefCell::new(None) }; }
 
 fn with_controller(action: impl FnOnce(&Controller)) {
@@ -199,6 +205,7 @@ struct State {
     last_error: UiText,
     status_text: Option<UiText>,
     confirmation_text: Option<(Message, Message)>,
+    applied_language: Locale,
     skills: skills::SkillsUiState,
 }
 
@@ -524,11 +531,7 @@ impl Controller {
     }
 
     fn locale(&self) -> Locale {
-        if self.ui().get_setting_language() == 1 {
-            Locale::En
-        } else {
-            Locale::ZhCn
-        }
+        Locale::from_index(self.ui().get_setting_language())
     }
 
     fn say(&self, message: Message) {
@@ -554,6 +557,7 @@ impl Controller {
     /// Slint invalidates @tr bindings; Rust messages retain their ID and arguments.
     fn apply_language(&self) {
         let locale = self.locale();
+        self.state.borrow_mut().applied_language = locale;
         slint::select_bundled_translation(locale.tag()).expect("supported bundled locale");
         let ui = self.ui();
         let state = self.state.borrow();
@@ -616,8 +620,12 @@ impl Controller {
         // first display; only correct a real, already-observed size below it.
         let scale = ui.window().scale_factor();
         let size = ui.window().size().to_logical(scale);
-        if size.width > 0.0 && size.height > 0.0 && (size.width < 900.0 || size.height < 650.0) {
-            ui.window().set_size(slint::LogicalSize::new(900.0, 650.0));
+        if size.width > 0.0
+            && size.height > 0.0
+            && (size.width < MIN_WINDOW_WIDTH || size.height < MIN_WINDOW_HEIGHT)
+        {
+            ui.window()
+                .set_size(slint::LogicalSize::new(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT));
         }
         self.apply_native_theme();
         ui.window()
@@ -748,7 +756,7 @@ impl Controller {
         let ui = self.ui();
         let state = self.state.borrow();
         let config = &state.config;
-        ui.set_setting_language(i32::from(config.general.language == "en"));
+        ui.set_setting_language(Locale::from_tag(&config.general.language).index());
         ui.set_setting_theme(theme_index(config.general.theme));
         self.apply_theme();
         ui.set_setting_hotkey(config.projects.hotkey.clone().into());
@@ -838,7 +846,7 @@ impl Controller {
         let message = if !ui.get_projects_enabled() {
             messages::projects_disabled()
         } else if ui.get_project_loading() {
-            messages::projects_reading()
+            messages::common_reading_recent_projects()
         } else if ui.get_projects().row_count() == 0 {
             if ui.get_project_total() == 0 {
                 messages::projects_empty()
@@ -942,7 +950,9 @@ impl Controller {
         let ui = self.ui();
         ui.set_settings_dirty(true);
         self.apply_theme();
-        self.apply_language();
+        if self.locale() != self.state.borrow().applied_language {
+            self.apply_language();
+        }
     }
 
     fn apply_theme(&self) {
@@ -1533,7 +1543,9 @@ impl Controller {
     fn sync_diagnostics(&self) {
         let ui = self.ui();
         let state = self.state.borrow();
-        ui.set_diagnostic_error(state.last_error.render(self.locale()).into());
+        let locale = self.locale();
+        let last_error = state.last_error.render(locale);
+        ui.set_diagnostic_error(last_error.clone().into());
         let Some(status) = &state.host_status else {
             return;
         };
@@ -1553,29 +1565,28 @@ impl Controller {
             );
         }
         let warnings = warnings.join("\n");
-        ui.set_diagnostic_warnings(warnings.clone().into());
-        let locale = self.locale();
         let availability = |value| {
             if value {
-                messages::available()
+                messages::common_available()
             } else {
-                messages::unavailable()
+                messages::common_unavailable()
             }
             .render(locale)
         };
-        let text = messages::diagnostics_summary(
-            &status.last_action,
-            &status.backend,
-            state.last_error.render(locale),
-            availability(status.hotkeys),
-            warnings,
-            state.host_pid,
-            platform_name(Platform::current()),
-            state.revision,
-            availability(status.tray),
-            availability(status.window_control),
-        )
+        let text = messages::diagnostics_summary(messages::DiagnosticsSummaryArgs {
+            action: status.last_action.clone(),
+            backend: status.backend.clone(),
+            error: last_error,
+            hotkeys: availability(status.hotkeys),
+            notes: warnings.clone(),
+            pid: state.host_pid.to_string(),
+            platform: platform_name(Platform::current()).to_owned(),
+            revision: state.revision.to_string(),
+            tray: availability(status.tray),
+            windows: availability(status.window_control),
+        })
         .render(locale);
+        ui.set_diagnostic_warnings(warnings.into());
         ui.set_diagnostics(text.into());
     }
 
@@ -1926,6 +1937,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             last_error: UiText::default(),
             status_text: None,
             confirmation_text: None,
+            applied_language: Locale::ZhCn,
             skills: skills::SkillsUiState::default(),
         }),
     });
@@ -2094,6 +2106,7 @@ mod tests {
                     last_error: UiText::default(),
                     status_text: None,
                     confirmation_text: None,
+                    applied_language: Locale::ZhCn,
                     skills: skills::SkillsUiState::default(),
                 }),
             };
@@ -2169,6 +2182,22 @@ mod tests {
                     .contains(r"C:\backup\{literal}.json")
             );
             assert_eq!(ui.get_status_message(), "配置已读取，请预览后应用。");
+        });
+    }
+
+    #[test]
+    fn settings_preview_rerenders_language_only_when_it_changes() {
+        with_test_ui(|ui, controller, _| {
+            assert_eq!(controller.state.borrow().applied_language, Locale::ZhCn);
+            ui.set_setting_language(1);
+            controller.settings_changed();
+            assert_eq!(controller.state.borrow().applied_language, Locale::En);
+            ui.set_setting_hotkey("Ctrl+Alt+K".into());
+            controller.settings_changed();
+            assert_eq!(controller.state.borrow().applied_language, Locale::En);
+            ui.set_setting_language(0);
+            controller.settings_changed();
+            assert_eq!(controller.state.borrow().applied_language, Locale::ZhCn);
         });
     }
 
@@ -2623,6 +2652,39 @@ mod tests {
             assert!(!ui.get_diagnostic_loaded());
             assert!(!ui.get_diagnostic_loading());
             assert_eq!(ui.get_diagnostic_error(), "Host disconnected");
+        });
+    }
+
+    #[test]
+    fn diagnostics_summary_uses_shared_labels_and_named_arguments() {
+        with_test_ui(|ui, controller, _| {
+            controller.error("raw backend detail");
+            controller.receive_status(HostStatus {
+                process_id: 42,
+                backend: "test backend".into(),
+                window_control: true,
+                hotkeys: false,
+                tray: true,
+                ..HostStatus::default()
+            });
+            let chinese = ui.get_diagnostics();
+            assert!(chinese.contains("窗口后端：test backend"));
+            assert!(chinese.contains("常驻进程：42"));
+            assert!(chinese.contains("窗口控制：可用"));
+            assert!(chinese.contains("全局快捷键：不可用"));
+            assert!(chinese.contains("系统托盘：可用"));
+            assert!(chinese.contains("最近的界面错误：\nraw backend detail"));
+            assert_eq!(ui.get_diagnostic_error(), "raw backend detail");
+
+            ui.set_setting_language(1);
+            controller.settings_changed();
+            let english = ui.get_diagnostics();
+            assert!(english.contains("Backend: test backend"));
+            assert!(english.contains("Host process: 42"));
+            assert!(english.contains("Window control: Available"));
+            assert!(english.contains("Global shortcuts: Unavailable"));
+            assert!(english.contains("System tray: Available"));
+            assert!(english.contains("Last UI error:\nraw backend detail"));
         });
     }
 

@@ -376,7 +376,7 @@ export component SkillsPage inherits Rectangle {
                                             width: 90px;
                                             height: 26px;
                                             horizontal-stretch: 0;
-                                            model: [@tr("ui.skills.status_filter.all" => "All"), @tr("ui.skills.status_filter.enabled" => "Enabled"), @tr("ui.skills.status_filter.disabled" => "Disabled")];
+                                            model: [@tr("ui.common.all" => "All"), @tr("ui.common.enabled" => "Enabled"), @tr("ui.common.disabled" => "Disabled")];
                                             current-index <=> SkillsState.status-filter;
                                             enabled: root.enabled;
                                             selected => { SkillsState.filter-changed(); }
@@ -585,7 +585,7 @@ export component SkillsPage inherits Rectangle {
                                                     SkillMenuItem {
                                                         icon: @image-url("icons/download.svg");
                                                         text: @tr("ui.action.update" => "Update");
-                                                        hint: item.updatable ? "" : (@tr("ui.skills.local_import" => "Local"));
+                                                        hint: item.updatable ? "" : (@tr("ui.common.local" => "Local"));
                                                         enabled: root.editable && item.updatable;
                                                         activated => {
                                                             row-menu.close();

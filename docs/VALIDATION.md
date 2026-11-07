@@ -548,3 +548,25 @@ UI 行为测试使用真实 Slint 组件与软件渲染测试平台，不访问�
 两者需要隔离的 Linux X11 桌面，未在本机执行，由 CI 的 Linux 集成任务复核。
 
 本地未执行完整界面人工验收、真实仓库下载和 macOS/Linux 实机运行；这些结果以 PR 对应提交的 CI 为准。
+
+## 2026-11-07：翻译目录去重、共享消息与生成 API 加固
+
+基于合并 PR #2/#3 后的 `main`，继续处理复核建议，并同步最新的 Skills 部署与配置分组改动：
+
+- 将 Rust 与 Slint 共用的 20 个无参数消息统一为 `.slint` 中的 `ui.common.*` 上下文；构建期为 Rust 生成 `messages::common_*`，`rust.pot` 移除 22 条重复条目，中文 PO 每个概念只保留一条译文。
+- 四个及以上参数的消息改为具名参数结构体（`DiagnosticsSummaryArgs`、`ImportProfileArgs` 等）；以 `sync_diagnostics` 回归测试校验字段映射。
+- `settings_changed` 只在语言实际变化时重渲染；`sync_diagnostics` 只渲染一次 `last_error` 并少一次 warnings 克隆；`Locale` 增加 `index()` / `from_index()`，UI 预览与宿主托盘共用同一映射。
+- `scripts/translations.py` 的 `msgfmt -o` 改用暂存目录中的 `.mo` 文件，避免 MSYS2 Windows 下在仓库根目录生成 `nul` 文件。
+- 小屏幕 900×650 夹取保持既有行为，并以常量与注释标明其与 `main.slint` 最小尺寸一致；低于该布局最小值的显示不在支持范围。
+
+环境：Windows 11、Rust 1.99.1 MSVC（本机 GNU 工具链缺少 dlltool/windres）、`slint-tr-extractor 1.18.1`、MSYS2 gettext。
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace` | 通过；UI 61 项、`toolbox-i18n` 16 项 |
+| `python scripts/translations.py check` | 通过；104 条 Rust + 230 条界面 = 334 条活动条目，20 条 `ui.common.*` 均有中文译文 |
+| `python -m py_compile scripts/translations.py` | 通过 |
+| 跨目录重复检查 | 共享英文标签的跨目录重复为 0；`ui.common.*` 共 20 条 |
+| 生成 API 回归 | 10 项目录测试通过，含共享消息生成、拒绝占位符/复数、具名参数结构体编译执行 |

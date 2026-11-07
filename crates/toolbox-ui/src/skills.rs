@@ -170,8 +170,8 @@ fn installed_matches(
 
 fn source_options(snapshot: &SkillsSnapshot, locale: Locale) -> Vec<String> {
     let mut options = vec![
-        messages::skills_source_all().render(locale),
-        messages::skills_source_local().render(locale),
+        messages::common_all().render(locale),
+        messages::common_local().render(locale),
         messages::skills_source_linked().render(locale),
     ];
     options.extend(
@@ -236,7 +236,7 @@ fn filtered_rows(
                                 _ => label,
                             }
                         })
-                        .unwrap_or_else(|| messages::skills_source_local().render(locale))
+                        .unwrap_or_else(|| messages::common_local().render(locale))
                 };
                 let apps = skill
                     .apps
@@ -265,9 +265,9 @@ fn filtered_rows(
                     source: source.into(),
                     source_target: source_target(snapshot, skill).into(),
                     status: if enabled {
-                        messages::skills_enabled()
+                        messages::common_enabled()
                     } else {
-                        messages::skills_disabled()
+                        messages::common_disabled()
                     }
                     .render(locale)
                     .into(),
@@ -659,12 +659,12 @@ impl Controller {
                 .unwrap_or_else(|| "—".into());
             let updated = relative_time(installed.updated_at, now_seconds(), locale);
             let detail = match installed.target.as_deref().filter(|_| installed.linked) {
-                Some(target) => messages::skills_linked_detail(
-                    &installed.directory,
-                    &revision,
-                    target,
-                    &updated,
-                ),
+                Some(target) => messages::skills_linked_detail(messages::SkillsLinkedDetailArgs {
+                    directory: installed.directory.clone(),
+                    revision: revision.clone(),
+                    target: target.to_owned(),
+                    updated: updated.clone(),
+                }),
                 None => messages::skills_detail(&installed.directory, &revision, &updated),
             };
             skills.set_selected_detail(detail.render(locale).into());
