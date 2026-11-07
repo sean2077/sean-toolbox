@@ -210,8 +210,8 @@ class AppearanceDesktop(Desktop):
     def save_theme(self, scheme: str) -> None:
         self.choose_theme(scheme)
         self.key("ctrl+s")
-        wait_for("theme persisted by the real settings UI", lambda: self.saved()["theme"] == scheme)
-        require(json.loads(self.config_path.read_text())["theme"] == scheme, "Saved theme did not reach disk")
+        wait_for("theme persisted by the real settings UI", lambda: self.saved()["general"]["theme"] == scheme)
+        require(json.loads(self.config_path.read_text())["general"]["theme"] == scheme, "Saved theme did not reach disk")
 
     def manager_size(self) -> tuple[int, int]:
         geometry = dict(line.split("=", 1) for line in self.command(
@@ -265,7 +265,7 @@ class AppearanceDesktop(Desktop):
     def popup(self, dark: bool) -> int:
         self.key("ctrl+alt+space")
         window = wait_for("recent-project panel", lambda: self.visible(LAUNCHER_TITLE_PATTERN))[0]
-        expected_title = LAUNCHER_TITLES[self.saved()["language"]]
+        expected_title = LAUNCHER_TITLES[self.saved()["general"]["language"]]
         # A cold UI loads the saved language asynchronously after creation.
         wait_for("localized project panel title", lambda: self.command(
             "xdotool", "getwindowname", str(window)
@@ -308,10 +308,10 @@ class AppearanceDesktop(Desktop):
         self.require_ui_reaped(current, endpoint)
         state = self.rpc("get_config")
         config = state["config"]
-        config["ui_idle_seconds"] = 60
+        config["ui"]["idle_seconds"] = 60
         response = self.rpc("save_config", {"config": config, "expected_revision": state["revision"]})
         require(response.get("ok"), "Warm-cache lifecycle fixture was rejected")
-        dark = config["theme"] == "dark"
+        dark = config["general"]["theme"] == "dark"
 
         self.key("ctrl+alt+space")
         current, endpoint = self.track_ui()
@@ -510,7 +510,7 @@ class AppearanceDesktop(Desktop):
         self.click(760, 351)
         self.key("ctrl+s")
         expected = {"enabled": True, "edge": "right", "alignment": "center", "width_percent": 40, "height_percent": 100}
-        wait_for("Quake controls persist the right-side preset", lambda: expected.items() <= self.saved()["profiles"][0]["quake"].items())
+        wait_for("Quake controls persist the right-side preset", lambda: expected.items() <= self.saved()["windows"]["profiles"][0]["quake"].items())
         self.key("F8")
         windows = wait_for("Quake profile launches a real terminal", self.windows)
         require(len(windows) == 1, "Quake profile created multiple application windows")
@@ -531,7 +531,7 @@ class AppearanceDesktop(Desktop):
         self.key("Up")
         self.key("Return")
         self.key("ctrl+s")
-        wait_for("Chinese language selected and saved through the UI", lambda: self.saved()["language"] == "zh-CN")
+        wait_for("Chinese language selected and saved through the UI", lambda: self.saved()["general"]["language"] == "zh-CN")
         self.save_theme("dark")
         self.save_theme("light")
         self.snapshot("cn-light-settings")
@@ -557,8 +557,10 @@ class AppearanceDesktop(Desktop):
     def run_appearance(self) -> None:
         initial = self.start()
         config = initial["config"]
-        config.update(language="en", theme="system", projects_enabled=True, ui_idle_seconds=0)
-        config["vscode_path_override"] = str(self.add_projects())
+        config["general"].update(language="en", theme="system")
+        config["projects"]["enabled"] = True
+        config["ui"]["idle_seconds"] = 0
+        config["projects"]["vscode_path"] = str(self.add_projects())
         response = self.rpc("save_config", {"config": config, "expected_revision": initial["revision"]})
         require(response.get("ok"), f"Appearance fixture was rejected: {response}")
         self.probe = X11Probe(self.environment["DISPLAY"])
@@ -577,7 +579,7 @@ class AppearanceDesktop(Desktop):
                 self.dismiss_popup(popup)
                 previous, endpoint = self.restart_ui(previous, endpoint)
                 self.wait_theme(dark)
-                require(self.saved()["theme"] == scheme, "New UI process changed the saved theme")
+                require(self.saved()["general"]["theme"] == scheme, "New UI process changed the saved theme")
                 print(f"PASS real {scheme} choice → save → native manager/panel → fresh UI PID", flush=True)
             print("PASS both native windows expose the new matching application icon", flush=True)
 
@@ -588,7 +590,7 @@ class AppearanceDesktop(Desktop):
             self.command("xdotool", "type", "--clearmodifiers", "--delay", "2", "Terminal")
             self.key("ctrl+3")
             self.choose_theme("dark")
-            require(self.saved()["theme"] == "light", "Preview persisted without Save")
+            require(self.saved()["general"]["theme"] == "light", "Preview persisted without Save")
             popup = self.popup(True)
             self.dismiss_popup(popup)
             self.click(945, 700)
@@ -596,10 +598,10 @@ class AppearanceDesktop(Desktop):
             self.key("Tab")
             self.key("Return")
             self.wait_theme(False)
-            require(self.saved()["theme"] == "light", "Discard changed the saved theme")
+            require(self.saved()["general"]["theme"] == "light", "Discard changed the saved theme")
             self.key("ctrl+2")
             self.key("ctrl+s")
-            wait_for("application draft survived theme discard", lambda: self.saved()["profiles"][0]["name"] == "Terminal")
+            wait_for("application draft survived theme discard", lambda: self.saved()["windows"]["profiles"][0]["name"] == "Terminal")
             self.snapshot("en-light-draft-retained")
             print("PASS theme preview is unsaved; Discard restores the saved theme and retains the application draft", flush=True)
             self.check_quake_editor()

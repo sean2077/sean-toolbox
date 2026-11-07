@@ -286,11 +286,12 @@ impl App {
 
     fn toggle(&mut self, id: &str, reply: Option<Reply>) {
         let result: Result<(), String> = (|| {
-            if !self.config.windows_enabled {
+            if !self.config.windows.enabled {
                 return Err("窗口模块已停用 / Window module is disabled".into());
             }
             let profile = self
                 .config
+                .windows
                 .profiles
                 .iter()
                 .find(|p| p.id == id)
@@ -361,15 +362,18 @@ impl App {
         };
         let hotkeys = self.hotkeys.as_mut().ok_or("Host is still starting")?;
         let prepared = hotkeys.prepare(&config)?;
-        let startup_changed = config.autostart != self.config.autostart;
-        if startup_changed && let Err(error) = autostart::set(config.autostart, &self.executable) {
+        let startup_changed = config.general.autostart != self.config.general.autostart;
+        if startup_changed
+            && let Err(error) = autostart::set(config.general.autostart, &self.executable)
+        {
             hotkeys.rollback(prepared);
             return Err(error);
         }
         if let Err(error) = self.store.save(&config) {
             hotkeys.rollback(prepared);
             if startup_changed
-                && let Err(rollback) = autostart::set(self.config.autostart, &self.executable)
+                && let Err(rollback) =
+                    autostart::set(self.config.general.autostart, &self.executable)
             {
                 self.status.warnings.push(rollback);
             }
@@ -381,7 +385,7 @@ impl App {
             .warnings
             .retain(|s| !s.starts_with("Hotkeys:") || !self.status.hotkeys);
         self.status.warnings.extend(warnings);
-        let language_changed = self.config.language != config.language;
+        let language_changed = self.config.general.language != config.general.language;
         self.config = config;
         #[cfg(windows)]
         {
@@ -498,7 +502,7 @@ impl App {
         self.status
             .warnings
             .retain(|warning| !warning.starts_with("Tray:"));
-        let locale = Locale::from_tag(&self.config.language);
+        let locale = Locale::from_tag(&self.config.general.language);
         let build = || -> Result<TrayIcon, String> {
             let menu = Menu::new();
             for (id, label) in [
@@ -558,7 +562,7 @@ impl ApplicationHandler<Event> for App {
                 Err(error) => self.status.warnings.push(format!("Quake focus: {error}")),
             }
         }
-        if self.config.autostart
+        if self.config.general.autostart
             && let Err(e) = autostart::set(true, &self.executable)
         {
             self.status.warnings.push(e);
@@ -696,8 +700,8 @@ impl Drop for App {
 
 #[cfg(windows)]
 fn needs_focus_watch(config: &Config) -> bool {
-    config.windows_enabled
-        && config.profiles.iter().any(|profile| {
+    config.windows.enabled
+        && config.windows.profiles.iter().any(|profile| {
             profile.enabled
                 && profile.platform == Platform::Windows
                 && profile.quake.enabled

@@ -121,7 +121,7 @@ mod tests {
         assert!(!store.path().exists());
         let mut config = Config::default();
         store.save(&config).unwrap();
-        config.language = "en".into();
+        config.general.language = "en".into();
         store.save(&config).unwrap();
         assert_eq!(store.load().unwrap(), config);
     }
@@ -150,7 +150,7 @@ mod tests {
             args: vec!["x".repeat(32768); 4],
             cwd: None,
         };
-        config.profiles[0].launch = vec![command; 8];
+        config.windows.profiles[0].launch = vec![command; 8];
         assert!(config.validate().is_ok());
         assert!(store.save(&config).is_err());
         assert_eq!(fs::read(store.path()).unwrap(), original);

@@ -274,18 +274,24 @@ class Desktop:
             "xprop", "-root", "_NET_SUPPORTING_WM_CHECK", check=False
         ).stdout)
         config = {
-            "schema_version": 1, "language": "en", "launcher_hotkey": "Ctrl+Alt+Space",
-            "autostart": False, "projects_enabled": False, "windows_enabled": True,
-            "ui_idle_seconds": 0, "vscode_path_override": None,
-            "profiles": [{
-                "id": "smoke-xterm", "name": "Smoke terminal", "platform": "linux",
-                "matcher": self.terminal_class, "hotkey": "F8", "enabled": True,
-                "maximize": False, "cycle_continuous": True,
-                "launch": [{"executable": shutil.which("xterm"), "args": [
-                    "-class", self.terminal_class, "-title", "Toolbox smoke terminal",
-                    "-e", shutil.which("cat") or "/bin/cat",
-                ], "cwd": str(self.root / "home")}],
-            }],
+            "schema_version": 2,
+            "general": {"language": "en", "theme": "system", "autostart": False},
+            "projects": {
+                "enabled": False, "hotkey": "Ctrl+Alt+Space", "vscode_path": None,
+            },
+            "windows": {
+                "enabled": True,
+                "profiles": [{
+                    "id": "smoke-xterm", "name": "Smoke terminal", "platform": "linux",
+                    "matcher": self.terminal_class, "hotkey": "F8", "enabled": True,
+                    "maximize": False, "cycle_continuous": True,
+                    "launch": [{"executable": shutil.which("xterm"), "args": [
+                        "-class", self.terminal_class, "-title", "Toolbox smoke terminal",
+                        "-e", shutil.which("cat") or "/bin/cat",
+                    ], "cwd": str(self.root / "home")}],
+                }],
+            },
+            "ui": {"idle_seconds": 0},
         }
         self.config_path.write_text(json.dumps(config, indent=2) + "\n")
         self.config_path.chmod(0o600)
@@ -478,9 +484,9 @@ class Desktop:
 
         original_bytes = self.config_path.read_bytes()
         duplicate = copy.deepcopy(config)
-        second = copy.deepcopy(duplicate["profiles"][0])
+        second = copy.deepcopy(duplicate["windows"]["profiles"][0])
         second["id"] = "smoke-duplicate"
-        duplicate["profiles"].append(second)
+        duplicate["windows"]["profiles"].append(second)
         denied = self.rpc("save_config", {"config": duplicate, "expected_revision": revision})
         require(not denied.get("ok"), "Duplicate shortcut configuration was accepted")
         require(self.config_path.read_bytes() == original_bytes, "Rejected duplicate configuration changed the file")
@@ -494,7 +500,7 @@ class Desktop:
         print("PASS duplicate/stale saves rejected without changing file or live configuration", flush=True)
 
         replacement = copy.deepcopy(config)
-        replacement["profiles"][0]["hotkey"] = "F9"
+        replacement["windows"]["profiles"][0]["hotkey"] = "F9"
         saved = self.rpc("save_config", {"config": replacement, "expected_revision": revision})
         require(saved.get("ok") and saved["revision"] != revision, f"Valid rebind failed: {saved}")
         require(json.loads(self.config_path.read_text()) == replacement, "Successful save was not persisted")

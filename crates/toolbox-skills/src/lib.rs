@@ -15,8 +15,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use toolbox_core::skills::{
-    InstalledSkill, LocalSkill, SkillApp, SkillAppPath, SkillCandidate, SkillRepository,
-    SkillsCommand, SkillsSnapshot,
+    InstalledSkill, LocalSkill, SkillApp, SkillAppPath, SkillCandidate, SkillDeployMode,
+    SkillRepository, SkillsCommand, SkillsSnapshot,
 };
 use transaction::Change;
 
@@ -34,12 +34,20 @@ struct ManagedSkill {
     fingerprint: String,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Deployment {
+    Absent,
+    Link,
+    Directory,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct State {
     schema: u32,
     generation: u64,
     next_id: u64,
+    deploy_mode: SkillDeployMode,
     repositories: Vec<SkillRepository>,
     installed: Vec<ManagedSkill>,
     daily_update: bool,
@@ -57,6 +65,7 @@ impl Default for State {
             schema: 1,
             generation: 0,
             next_id: 2,
+            deploy_mode: SkillDeployMode::Symlink,
             repositories: vec![SkillRepository {
                 id: "repo-1".into(),
                 url: "https://github.com/anthropics/skills.git".into(),
@@ -110,6 +119,31 @@ fn display_path(path: &Path) -> String {
         }
     }
     text.into_owned()
+}
+
+/// Compare a recorded link target without requiring the target to exist, so a
+/// missing master copy does not block disabling or uninstalling its links.
+fn link_points_to(link: &Path, target: &Path) -> Result<bool, String> {
+    let Some(raw) = files::link_target(link)? else {
+        return Ok(false);
+    };
+    if raw == target {
+        return Ok(true);
+    }
+    if let (Ok(actual), Ok(expected)) = (link.canonicalize(), target.canonicalize()) {
+        return Ok(actual == expected);
+    }
+    Ok(normalized_path(&raw) == normalized_path(target))
+}
+
+#[cfg(windows)]
+fn normalized_path(path: &Path) -> String {
+    display_path(path).to_ascii_lowercase()
+}
+
+#[cfg(not(windows))]
+fn normalized_path(path: &Path) -> String {
+    display_path(path)
 }
 
 impl SkillsService {
@@ -185,6 +219,7 @@ impl SkillsService {
                     path: display_path(&self.app_root(app)),
                 })
                 .collect(),
+            deploy_mode: self.state.deploy_mode,
             repositories: self.state.repositories.clone(),
             installed: self
                 .state
@@ -304,6 +339,17 @@ impl SkillsService {
                     "Daily updates enabled; an overdue check runs while the host is running"
                 } else {
                     "Daily updates disabled"
+                }
+                .into())
+            }
+            SkillsCommand::SetDeployMode { mode } => {
+                let mut next = self.state.clone();
+                next.deploy_mode = mode;
+                self.save(next)?;
+                Ok(if mode == SkillDeployMode::Symlink {
+                    "New app deployments use symbolic links"
+                } else {
+                    "New app deployments use copies"
                 }
                 .into())
             }
@@ -760,7 +806,12 @@ impl SkillsService {
             target: None,
         };
         self.install_source(&source, skill)?;
-        Ok("Skill installed; app copies are managed by Sean Toolbox".into())
+        Ok(if self.state.deploy_mode == SkillDeployMode::Symlink {
+            "Skill installed; app directories link to the managed copy"
+        } else {
+            "Skill installed; app copies are managed by Sean Toolbox"
+        }
+        .into())
     }
 
     fn import_local(
@@ -824,6 +875,8 @@ impl SkillsService {
         });
         Ok(if link {
             "Imported a linked local skill; source changes apply immediately and it has no remote update source"
+        } else if self.state.deploy_mode == SkillDeployMode::Symlink {
+            "Imported a local master copy; app directories link to it and local imports have no remote update source"
         } else {
             "Imported a local master copy; local imports have no remote update source"
         }
@@ -919,24 +972,70 @@ impl SkillsService {
         }
         skill.apps.sort();
         skill.apps.dedup();
+        let master = self.root.join("managed").join(&skill.directory);
         let (stage, fingerprint) = self.stage_source(source)?;
-        let mut changes = vec![Change {
-            destination: self.root.join("managed").join(&skill.directory),
-            source: Some(stage.path().to_owned()),
-            expected: None,
-            replacement: Some(fingerprint.clone()),
-        }];
-        for app in &skill.apps {
-            changes.push(Change {
-                destination: self.target(*app, &skill.directory, true)?,
+        let mut next = self.state.clone();
+        next.installed.push(ManagedSkill {
+            skill: skill.clone(),
+            fingerprint: fingerprint.clone(),
+        });
+        if self.state.deploy_mode == SkillDeployMode::Copy {
+            let mut changes = vec![Change {
+                destination: master,
                 source: Some(stage.path().to_owned()),
                 expected: None,
                 replacement: Some(fingerprint.clone()),
-            });
+            }];
+            for app in &skill.apps {
+                changes.push(Change {
+                    destination: self.target(*app, &skill.directory, true)?,
+                    source: Some(stage.path().to_owned()),
+                    expected: None,
+                    replacement: Some(fingerprint.clone()),
+                });
+            }
+            return self.commit(next, changes);
         }
-        let mut next = self.state.clone();
-        next.installed.push(ManagedSkill { skill, fingerprint });
-        self.commit(next, changes)
+        // Symlink mode: refuse conflicts before creating the master, then
+        // install it transactionally and link each app directory to it.
+        let mut targets = Vec::new();
+        for app in &skill.apps {
+            let target = self.target(*app, &skill.directory, true)?;
+            match self.deployment(&target)? {
+                Deployment::Absent => {}
+                Deployment::Link | Deployment::Directory => {
+                    return Err(format!(
+                        "An unmanaged folder or link already exists: {}",
+                        target.display()
+                    ));
+                }
+            }
+            targets.push(target);
+        }
+        self.commit(
+            next,
+            vec![Change {
+                destination: master.clone(),
+                source: Some(stage.path().to_owned()),
+                expected: None,
+                replacement: Some(fingerprint),
+            }],
+        )?;
+        let mut created: Vec<PathBuf> = Vec::new();
+        for target in targets {
+            if let Err(error) = files::link_dir(&master, &target) {
+                for created in &created {
+                    let _ = files::remove_link(created);
+                }
+                let cleanup = self.uninstall(&skill.id);
+                return Err(match cleanup {
+                    Ok(_) => error,
+                    Err(cleanup) => format!("{error}; cleanup needs attention: {cleanup}"),
+                });
+            }
+            created.push(target);
+        }
+        Ok(())
     }
 
     fn installed_index(&self, id: &str) -> Result<usize, String> {
@@ -945,6 +1044,27 @@ impl SkillsService {
             .iter()
             .position(|entry| entry.skill.id == id)
             .ok_or_else(|| "Unknown installed skill".into())
+    }
+
+    /// Classify an app destination without following it. Links and reparse
+    /// points are rejected by `files::metadata`, so inspect the link first.
+    fn deployment(&self, path: &Path) -> Result<Deployment, String> {
+        match fs::symlink_metadata(path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Deployment::Absent),
+            Err(error) => Err(format!("{}: {error}", path.display())),
+            Ok(metadata) => {
+                if files::link_target(path)?.is_some() {
+                    Ok(Deployment::Link)
+                } else if metadata.is_dir() {
+                    Ok(Deployment::Directory)
+                } else {
+                    Err(format!(
+                        "An unmanaged file already exists: {}",
+                        path.display()
+                    ))
+                }
+            }
+        }
     }
 
     fn linked_source(&self, entry: &ManagedSkill) -> Result<PathBuf, String> {
@@ -983,20 +1103,34 @@ impl SkillsService {
             return Ok(());
         }
         let central = self.root.join("managed").join(&entry.skill.directory);
-        let mut destinations = vec![central];
+        if files::exists(&central)? && files::fingerprint(&central)? != entry.fingerprint {
+            return Err(format!(
+                "Local edits were preserved; move or back up the edited folder before retrying: {}",
+                central.display()
+            ));
+        }
         for app in &entry.skill.apps {
             let root = self.app_root(*app);
             files::checked_path(&self.home, &root, false)?;
-            destinations.push(root.join(&entry.skill.directory));
-        }
-        for destination in destinations {
-            if files::exists(&destination)?
-                && files::fingerprint(&destination)? != entry.fingerprint
-            {
-                return Err(format!(
-                    "Local edits were preserved; move or back up the edited folder before retrying: {}",
-                    destination.display()
-                ));
+            let destination = root.join(&entry.skill.directory);
+            match self.deployment(&destination)? {
+                Deployment::Absent => {}
+                Deployment::Link => {
+                    if !link_points_to(&destination, &central)? {
+                        return Err(format!(
+                            "The app link was replaced; move or restore it before retrying: {}",
+                            destination.display()
+                        ));
+                    }
+                }
+                Deployment::Directory => {
+                    if files::fingerprint(&destination)? != entry.fingerprint {
+                        return Err(format!(
+                            "Local edits were preserved; move or back up the edited folder before retrying: {}",
+                            destination.display()
+                        ));
+                    }
+                }
             }
         }
         Ok(())
@@ -1047,7 +1181,8 @@ impl SkillsService {
             return self.set_link_enabled(index, entry, app, enabled);
         }
         self.verify_owned(&entry)?;
-        if !enabled && !entry.skill.apps.contains(&app) {
+        let already_enabled = entry.skill.apps.contains(&app);
+        if !enabled && !already_enabled {
             return Ok("Skill is already disabled for this app".into());
         }
         let source = self.root.join("managed").join(&entry.skill.directory);
@@ -1057,6 +1192,27 @@ impl SkillsService {
             );
         }
         let target = self.target(app, &entry.skill.directory, enabled)?;
+        let deployment = self.deployment(&target)?;
+        if deployment == Deployment::Link && !link_points_to(&target, &source)? {
+            return Err(format!(
+                "An unmanaged folder or a different link already exists: {}",
+                target.display()
+            ));
+        }
+        if deployment == Deployment::Directory {
+            if !already_enabled {
+                return Err(format!(
+                    "An unmanaged folder already exists: {}",
+                    target.display()
+                ));
+            }
+            if files::fingerprint(&target)? != entry.fingerprint {
+                return Err(format!(
+                    "Local edits were preserved; move or back up the edited folder before retrying: {}",
+                    target.display()
+                ));
+            }
+        }
         let mut next = self.state.clone();
         next.installed[index]
             .skill
@@ -1067,24 +1223,58 @@ impl SkillsService {
             next.installed[index].skill.apps.sort();
         }
         next.installed[index].skill.last_error = None;
-        let expected = entry
-            .skill
-            .apps
-            .contains(&app)
-            .then_some(entry.fingerprint.clone());
-        let mut changes = Vec::new();
-        // Removing a copy must not recreate an app directory the user deleted.
-        if target.parent().is_some_and(|parent| parent.exists()) {
-            changes.push(Change {
-                destination: target,
-                source: enabled.then_some(source),
-                expected,
-                replacement: enabled.then_some(entry.fingerprint),
-            });
+        if enabled {
+            if deployment == Deployment::Absent {
+                match self.state.deploy_mode {
+                    SkillDeployMode::Symlink => {
+                        files::link_dir(&source, &target)?;
+                        if let Err(error) = self.save(next) {
+                            let _ = files::remove_link(&target);
+                            return Err(error);
+                        }
+                        return Ok(format!("{} link created", app.label()));
+                    }
+                    SkillDeployMode::Copy => {
+                        self.commit(
+                            next,
+                            vec![Change {
+                                destination: target,
+                                source: Some(source),
+                                expected: None,
+                                replacement: Some(entry.fingerprint),
+                            }],
+                        )?;
+                        return Ok(format!("{} copy created", app.label()));
+                    }
+                }
+            }
+            // An existing owned link or copy stays in its current form.
+            self.save(next)?;
+            return Ok(format!("{} is already available", app.label()));
         }
-        self.commit(next, changes)?;
+        match deployment {
+            Deployment::Absent => self.save(next)?,
+            Deployment::Link => {
+                files::remove_link(&target)?;
+                if let Err(error) = self.save(next) {
+                    let _ = files::link_dir(&source, &target);
+                    return Err(error);
+                }
+            }
+            Deployment::Directory => {
+                self.commit(
+                    next,
+                    vec![Change {
+                        destination: target,
+                        source: None,
+                        expected: Some(entry.fingerprint),
+                        replacement: None,
+                    }],
+                )?;
+            }
+        }
         Ok(format!(
-            "{} copy {}",
+            "{} deployment {}",
             app.label(),
             if enabled { "enabled" } else { "removed" }
         ))
@@ -1171,28 +1361,44 @@ impl SkillsService {
             return self.uninstall_link(index, entry);
         }
         self.verify_owned(&entry)?;
+        let master = self.root.join("managed").join(&entry.skill.directory);
         let mut changes = vec![Change {
-            destination: self.root.join("managed").join(&entry.skill.directory),
+            destination: master.clone(),
             source: None,
             expected: Some(entry.fingerprint.clone()),
             replacement: None,
         }];
+        let mut removed_links = Vec::new();
         for app in &entry.skill.apps {
             let target = self.target(*app, &entry.skill.directory, false)?;
-            // Do not recreate an app directory the user removed; only remove a
-            // deployment that can still exist.
-            if target.parent().is_some_and(|parent| parent.exists()) {
-                changes.push(Change {
+            match self.deployment(&target)? {
+                Deployment::Absent => {}
+                Deployment::Link => {
+                    if !link_points_to(&target, &master)? {
+                        return Err(format!(
+                            "The app link was replaced; move or restore it before uninstalling: {}",
+                            target.display()
+                        ));
+                    }
+                    files::remove_link(&target)?;
+                    removed_links.push(target);
+                }
+                Deployment::Directory => changes.push(Change {
                     destination: target,
                     source: None,
                     expected: Some(entry.fingerprint.clone()),
                     replacement: None,
-                });
+                }),
             }
         }
         let mut next = self.state.clone();
         next.installed.remove(index);
-        self.commit(next, changes)?;
+        if let Err(error) = self.commit(next, changes) {
+            for target in removed_links {
+                let _ = files::link_dir(&master, &target);
+            }
+            return Err(error);
+        }
         Ok("Skill uninstalled; unrelated folders were left untouched".into())
     }
 
@@ -1423,6 +1629,12 @@ impl SkillsService {
         let index = self.installed_index(id)?;
         let entry = self.state.installed[index].clone();
         self.verify_owned(&entry)?;
+        let master = self.root.join("managed").join(&entry.skill.directory);
+        if !files::exists(&master)? {
+            return Err(
+                "The managed master copy is missing; reimport or uninstall the skill".into(),
+            );
+        }
         let repository = entry
             .skill
             .repository_id
@@ -1436,11 +1648,20 @@ impl SkillsService {
         let (source, revision) = self.source_path(repository, path)?;
         let (stage, fingerprint) = self.stage_source(&source)?;
         let (name, description) = files::descriptor(stage.path(), &entry.skill.directory)?;
-        let mut changes = Vec::new();
-        let mut targets = vec![self.root.join("managed").join(&entry.skill.directory)];
+        let mut targets = vec![master];
         for app in &entry.skill.apps {
-            targets.push(self.target(*app, &entry.skill.directory, true)?);
+            let destination = self.target(*app, &entry.skill.directory, false)?;
+            match self.deployment(&destination)? {
+                // Links follow the master copy and need no replacement.
+                Deployment::Link => {}
+                Deployment::Directory => targets.push(destination),
+                Deployment::Absent if self.state.deploy_mode == SkillDeployMode::Copy => {
+                    targets.push(self.target(*app, &entry.skill.directory, true)?);
+                }
+                Deployment::Absent => {}
+            }
         }
+        let mut changes = Vec::new();
         for destination in targets {
             if fingerprint != entry.fingerprint || !files::exists(&destination)? {
                 changes.push(Change {
