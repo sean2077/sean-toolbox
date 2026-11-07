@@ -338,6 +338,46 @@ fn identical_unmanaged_folders_are_never_adopted_or_deleted() {
 }
 
 #[test]
+fn disabling_a_removed_app_copy_does_not_recreate_its_directory() {
+    let mut fixture = Fixture::new();
+    fixture.commit("review", "old");
+    fixture.install("review", vec![SkillApp::Codex], 1);
+    fs::remove_dir_all(fixture.home.join(".codex")).unwrap();
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabled {
+                skill_id: "review".into(),
+                app: SkillApp::Codex,
+                enabled: false,
+            },
+            2,
+        )
+        .unwrap();
+    assert!(!fixture.home.join(".codex").exists());
+    assert!(!fixture.app(SkillApp::Codex, "review").exists());
+}
+
+#[test]
+fn uninstall_does_not_recreate_removed_app_directories() {
+    let mut fixture = Fixture::new();
+    fixture.commit("review", "old");
+    fixture.install("review", vec![SkillApp::Codex], 1);
+    fs::remove_dir_all(fixture.home.join(".codex")).unwrap();
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::Uninstall {
+                skill_id: "review".into(),
+            },
+            2,
+        )
+        .unwrap();
+    assert!(!fixture.home.join(".codex").exists());
+    assert!(!fixture.master("review").exists());
+}
+
+#[test]
 fn local_import_scans_cc_switch_and_preserves_original_on_uninstall() {
     let mut fixture = Fixture::new();
     let original = fixture.home.join(".cc-switch/skills/local-review");
@@ -401,6 +441,34 @@ fn local_import_scans_cc_switch_and_preserves_original_on_uninstall() {
     assert_eq!(
         fs::read_to_string(original.join(".git/private")).unwrap(),
         "never copy repository metadata"
+    );
+}
+
+#[test]
+fn local_scan_continues_after_one_root_is_not_a_directory() {
+    let mut fixture = Fixture::new();
+    fs::create_dir(fixture.home.join(".claude")).unwrap();
+    fs::write(fixture.home.join(".claude/skills"), "not a directory").unwrap();
+    let shared = fixture.home.join(".agents/skills/valid");
+    fs::create_dir_all(&shared).unwrap();
+    fs::write(
+        shared.join("SKILL.md"),
+        "---\nname: Shared\ndescription: shared\n---\n",
+    )
+    .unwrap();
+    // The malformed root is reported, but the remaining roots are still scanned.
+    assert!(
+        fixture
+            .service()
+            .execute(SkillsCommand::ScanLocal, 0)
+            .is_err()
+    );
+    let snapshot = fixture.service().snapshot();
+    assert!(
+        snapshot
+            .local
+            .iter()
+            .any(|skill| skill.directory == "valid")
     );
 }
 
@@ -562,6 +630,29 @@ fn repository_and_path_validation_rejects_injection_and_windows_aliases() {
     ] {
         assert!(files::relative(value).is_err(), "{value}");
     }
+}
+
+#[test]
+fn git_environment_names_are_scrubbed_case_insensitively() {
+    use std::ffi::OsStr;
+    assert!(git::is_git_environment(OsStr::new("GIT_DIR")));
+    assert!(git::is_git_environment(OsStr::new("Git_Dir")));
+    assert!(git::is_git_environment(OsStr::new("git_config_global")));
+    assert!(!git::is_git_environment(OsStr::new("GIT")));
+    assert!(!git::is_git_environment(OsStr::new("PATH")));
+}
+
+#[test]
+fn an_indented_rule_inside_a_block_description_does_not_end_frontmatter() {
+    let directory = tempfile::tempdir().unwrap();
+    fs::write(
+        directory.path().join("SKILL.md"),
+        "---\nname: Review\ndescription: |\n  First line\n  ---\n  Last line\n---\nBody\n",
+    )
+    .unwrap();
+    let (name, description) = files::descriptor(directory.path(), "fallback").unwrap();
+    assert_eq!(name, "Review");
+    assert_eq!(description, "First line --- Last line");
 }
 
 #[cfg(unix)]
@@ -736,6 +827,25 @@ fn state_lock_corruption_and_cancellation_preserve_user_files() {
 }
 
 #[test]
+fn a_status_write_failure_does_not_report_a_completed_command_as_failed() {
+    let mut fixture = Fixture::new();
+    fixture.commit("review", "old");
+    fs::remove_file(fixture.root.join("state.json")).unwrap();
+    fs::create_dir(fixture.root.join("state.json")).unwrap();
+    let result = fixture.service().execute(SkillsCommand::Discover, 1);
+    assert!(result.is_ok(), "{result:?}");
+    let snapshot = fixture.service().snapshot();
+    assert!(
+        snapshot
+            .last_error
+            .as_deref()
+            .unwrap_or("")
+            .contains("Cannot save skills status")
+    );
+    assert_eq!(snapshot.available.len(), 1);
+}
+
+#[test]
 fn stale_staging_directories_are_cleaned_on_open_without_touching_unknown_entries() {
     let mut fixture = Fixture::new();
     let temporary = fixture.root.join("temporary");
@@ -776,7 +886,8 @@ fn snapshot_byte_budget_remains_below_ipc_limit_with_unicode_metadata() {
         let directory = format!("skill-{index}");
         let name = "🦀".repeat(80);
         let description = "🦀".repeat(240);
-        let source_path = "x".repeat(512);
+        // Valid relative path with five 100-character components (~504 bytes).
+        let source_path = vec!["x".repeat(100); 5].join("/");
         service.state.installed.push(ManagedSkill {
             skill: InstalledSkill {
                 id: directory.clone(),
@@ -812,6 +923,18 @@ fn snapshot_byte_budget_remains_below_ipc_limit_with_unicode_metadata() {
     let snapshot = service.snapshot();
     assert!(snapshot.truncated);
     assert!(serde_json::to_vec(&snapshot).unwrap().len() <= 700 * 1024);
+
+    // The same catalog at the documented metadata limits can exceed 1 MiB in
+    // state.json; saving must remain possible with the 2 MiB cap.
+    let state = service.state.clone();
+    let bytes = state_bytes(&state).unwrap();
+    assert!(
+        bytes.len() as u64 > 1024 * 1024,
+        "state was {} bytes",
+        bytes.len()
+    );
+    assert!(bytes.len() as u64 <= MAX_STATE_BYTES);
+    service.save(state).unwrap();
 }
 
 #[test]
@@ -899,6 +1022,87 @@ fn unreadable_skill_metadata_is_reported_without_hiding_the_catalog() {
         )
         .unwrap();
     assert_eq!(file_content(&fixture.master("valid")), "package");
+}
+
+#[test]
+fn a_skill_at_the_repository_root_installs_and_updates() {
+    let mut fixture = Fixture::new();
+    fs::write(
+        fixture.origin.join("SKILL.md"),
+        "---\nname: Root Skill\ndescription: Repository root package\n---\nRoot instructions\n",
+    )
+    .unwrap();
+    fs::write(fixture.origin.join("example.txt"), "root v1").unwrap();
+    git_command(&fixture.origin, &["add", "."]);
+    git_command(
+        &fixture.origin,
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            "root skill",
+        ],
+    );
+    fixture
+        .service()
+        .execute(SkillsCommand::Discover, 1)
+        .unwrap();
+    let snapshot = fixture.service().snapshot();
+    assert_eq!(snapshot.available.len(), 1);
+    assert_eq!(snapshot.available[0].path, "");
+    let id = snapshot.available[0].id.clone();
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::Install {
+                candidate_id: id,
+                apps: vec![],
+            },
+            2,
+        )
+        .unwrap();
+    assert_eq!(file_content(&fixture.master("skills")), "root v1");
+
+    fs::write(fixture.origin.join("example.txt"), "root v2").unwrap();
+    git_command(&fixture.origin, &["add", "."]);
+    git_command(
+        &fixture.origin,
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            "root update",
+        ],
+    );
+    fixture
+        .service()
+        .execute(SkillsCommand::Update { skill_id: None }, 3)
+        .unwrap();
+    assert_eq!(file_content(&fixture.master("skills")), "root v2");
+}
+
+#[test]
+fn discovery_releases_the_bare_repository_and_archive() {
+    let mut fixture = Fixture::new();
+    fixture.commit("review", "old");
+    fixture
+        .service()
+        .execute(SkillsCommand::Discover, 1)
+        .unwrap();
+    let checkout = fixture.service().caches.get("repo-2").unwrap();
+    assert!(!checkout._temporary.path().join("repository.git").exists());
+    assert!(!checkout._temporary.path().join("source.tar").exists());
+    assert!(checkout.tree.join("skills/review/SKILL.md").is_file());
 }
 
 #[test]

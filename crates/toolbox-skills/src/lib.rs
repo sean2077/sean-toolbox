@@ -24,6 +24,9 @@ const DAY: u64 = 24 * 60 * 60;
 const RETRY: u64 = 60 * 60;
 const MAX_SKILLS: usize = 250;
 const MAX_REPOSITORIES: usize = 16;
+/// The persisted state carries per-skill metadata at its documented limits.
+/// 1 MiB is not enough for a full catalog with long localized errors.
+const MAX_STATE_BYTES: u64 = 2 * 1024 * 1024;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct ManagedSkill {
@@ -140,7 +143,7 @@ impl SkillsService {
             .map_err(|_| "Another skills manager is running")?;
         let path = root.join("state.json");
         let state = if files::exists(&path)? {
-            serde_json::from_slice(&files::read_limited(&path, 1024 * 1024)?)
+            serde_json::from_slice(&files::read_limited(&path, MAX_STATE_BYTES)?)
                 .map_err(|e| format!("Invalid skills state (file preserved): {e}"))?
         } else {
             State::default()
@@ -310,11 +313,15 @@ impl SkillsService {
         // themselves still only advance state after their durable write succeeds.
         if let Err(error) = self.save(next.clone()) {
             self.state.message = next.message;
-            self.state.last_error = Some(format!(
-                "{}; cannot save status: {error}",
-                next.last_error.unwrap_or_default()
-            ));
-            return Err(self.state.last_error.clone().unwrap_or(error));
+            self.state.last_error = Some(match &next.last_error {
+                Some(previous) => format!("{previous}; cannot save status: {error}"),
+                None => format!("Cannot save skills status: {error}"),
+            });
+            // A mutation already committed through its transaction; losing
+            // only the status write must not report the change as failed.
+            if result.is_err() {
+                return Err(self.state.last_error.clone().unwrap_or(error));
+            }
         }
         result
     }
@@ -376,9 +383,9 @@ impl SkillsService {
         Ok(())
     }
 
-    fn target(&self, app: SkillApp, directory: &str) -> Result<PathBuf, String> {
+    fn target(&self, app: SkillApp, directory: &str, create: bool) -> Result<PathBuf, String> {
         let root = self.app_root(app);
-        files::checked_path(&self.home, &root, true)?;
+        files::checked_path(&self.home, &root, create)?;
         files::name(directory)?;
         Ok(root.join(directory))
     }
@@ -395,8 +402,8 @@ impl SkillsService {
 fn state_bytes(state: &State) -> Result<Vec<u8>, String> {
     let mut bytes = serde_json::to_vec_pretty(state).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
-    if bytes.len() > 1024 * 1024 {
-        return Err("Skills state exceeds 1 MiB".into());
+    if bytes.len() as u64 > MAX_STATE_BYTES {
+        return Err("Skills state exceeds 2 MiB".into());
     }
     Ok(bytes)
 }
@@ -788,7 +795,7 @@ impl SkillsService {
         }];
         for app in &skill.apps {
             changes.push(Change {
-                destination: self.target(*app, &skill.directory)?,
+                destination: self.target(*app, &skill.directory, true)?,
                 source: Some(stage.path().to_owned()),
                 expected: None,
                 replacement: Some(fingerprint.clone()),
@@ -841,7 +848,7 @@ impl SkillsService {
                 "The managed master copy is missing; update or reimport the skill first".into(),
             );
         }
-        let target = self.target(app, &entry.skill.directory)?;
+        let target = self.target(app, &entry.skill.directory, enabled)?;
         let mut next = self.state.clone();
         next.installed[index]
             .skill
@@ -857,15 +864,17 @@ impl SkillsService {
             .apps
             .contains(&app)
             .then_some(entry.fingerprint.clone());
-        self.commit(
-            next,
-            vec![Change {
+        let mut changes = Vec::new();
+        // Removing a copy must not recreate an app directory the user deleted.
+        if target.parent().is_some_and(|parent| parent.exists()) {
+            changes.push(Change {
                 destination: target,
                 source: enabled.then_some(source),
                 expected,
                 replacement: enabled.then_some(entry.fingerprint),
-            }],
-        )?;
+            });
+        }
+        self.commit(next, changes)?;
         Ok(format!(
             "{} copy {}",
             app.label(),
@@ -884,12 +893,17 @@ impl SkillsService {
             replacement: None,
         }];
         for app in &entry.skill.apps {
-            changes.push(Change {
-                destination: self.target(*app, &entry.skill.directory)?,
-                source: None,
-                expected: Some(entry.fingerprint.clone()),
-                replacement: None,
-            });
+            let target = self.target(*app, &entry.skill.directory, false)?;
+            // Do not recreate an app directory the user removed; only remove a
+            // deployment that can still exist.
+            if target.parent().is_some_and(|parent| parent.exists()) {
+                changes.push(Change {
+                    destination: target,
+                    source: None,
+                    expected: Some(entry.fingerprint.clone()),
+                    replacement: None,
+                });
+            }
         }
         let mut next = self.state.clone();
         next.installed.remove(index);
@@ -912,10 +926,22 @@ impl SkillsService {
                 errors.push(error);
                 continue;
             }
-            if !files::exists(&root)? {
-                continue;
+            match files::exists(&root) {
+                Ok(true) => {}
+                Ok(false) => continue,
+                Err(error) => {
+                    errors.push(error);
+                    continue;
+                }
             }
-            for entry in files::sorted_entries(&root)? {
+            let entries = match files::sorted_entries(&root) {
+                Ok(entries) => entries,
+                Err(error) => {
+                    errors.push(error);
+                    continue;
+                }
+            };
+            for entry in entries {
                 self.check_cancel()?;
                 visited += 1;
                 if visited > 4096 || errors.len() >= 16 {
@@ -1067,7 +1093,7 @@ impl SkillsService {
         let mut changes = Vec::new();
         let mut targets = vec![self.root.join("managed").join(&entry.skill.directory)];
         for app in &entry.skill.apps {
-            targets.push(self.target(*app, &entry.skill.directory)?);
+            targets.push(self.target(*app, &entry.skill.directory, true)?);
         }
         for destination in targets {
             if fingerprint != entry.fingerprint || !files::exists(&destination)? {

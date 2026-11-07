@@ -7,6 +7,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
+use toolbox_core::skills::SkillApp;
 
 pub(crate) struct Change {
     pub destination: PathBuf,
@@ -203,7 +204,9 @@ fn validate_destination(path: &Path, allowed_parents: &[PathBuf]) -> Result<(), 
     {
         return Err("Transaction directory contains a symlink or redirected path".into());
     }
-    files::metadata(parent)?;
+    if !files::metadata(parent)?.is_dir() {
+        return Err("Transaction directory is not a directory".into());
+    }
     let name = path
         .file_name()
         .and_then(|name| name.to_str())
@@ -238,26 +241,49 @@ pub(crate) fn recover(
     }
     let journal: Journal = serde_json::from_slice(&files::read_limited(&path, 1024 * 1024)?)
         .map_err(|e| format!("Invalid recovery journal: {e}"))?;
-    if journal.entries.len() > 6 || journal.entries.is_empty() {
+    if journal.entries.len() > 1 + SkillApp::ALL.len() || journal.entries.is_empty() {
         return Err("Invalid skills transaction entry count".into());
     }
-    for entry in &journal.entries {
-        validate_destination(&entry.destination, allowed_parents)?;
-        validate_auxiliary(&entry.backup, entry, ".sean-toolbox-backup-")?;
-        if let Some(stage) = &entry.stage {
-            validate_auxiliary(stage, entry, ".sean-toolbox-stage-")?;
+    let mut present = Journal {
+        generation: journal.generation,
+        entries: Vec::new(),
+    };
+    let mut warnings = Vec::new();
+    for entry in journal.entries {
+        let parent = entry
+            .destination
+            .parent()
+            .ok_or("Missing destination parent")?;
+        // A directory removed after the interruption cannot hold a recoverable
+        // copy. Skip that entry instead of blocking every future command.
+        if !parent.exists() {
+            warnings.push(format!(
+                "Skipped a skills recovery entry because its directory is missing: {}",
+                parent.display()
+            ));
+            continue;
         }
+        validate_destination(&entry.destination, allowed_parents)?;
+        validate_auxiliary(&entry.backup, &entry, ".sean-toolbox-backup-")?;
+        if let Some(stage) = &entry.stage {
+            validate_auxiliary(stage, &entry, ".sean-toolbox-stage-")?;
+        }
+        present.entries.push(entry);
     }
-    let warnings = if journal.generation == generation {
-        cleanup(&journal)
-    } else if journal.generation == generation.saturating_add(1) {
-        rollback(&journal)?
-    } else {
+    if journal.generation != generation && journal.generation != generation.saturating_add(1) {
         return Err(
             "Skills transaction generation does not match state; recovery files were preserved"
                 .into(),
         );
-    };
+    }
+    if !present.entries.is_empty() {
+        let outcome = if journal.generation == generation {
+            cleanup(&present)
+        } else {
+            rollback(&present)?
+        };
+        warnings.extend(outcome);
+    }
     fs::remove_file(path).map_err(|e| e.to_string())?;
     Ok(warnings)
 }
@@ -534,5 +560,40 @@ mod tests {
             b"old generation"
         );
         assert_eq!(fs::read_to_string(backup.join("SKILL.md")).unwrap(), "old");
+    }
+
+    #[test]
+    fn recovery_retires_entries_whose_app_directory_was_removed() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().canonicalize().unwrap();
+        let app = root.join("app");
+        fs::create_dir(&app).unwrap();
+        let destination = app.join("review");
+        let stage = app.join(".sean-toolbox-stage-fixture");
+        let backup = app.join(".sean-toolbox-backup-fixture");
+        let old = tree(&destination, "old");
+        let new = tree(&stage, "new");
+        fs::rename(&destination, &backup).unwrap();
+        fs::rename(&stage, &destination).unwrap();
+        journal(
+            &root,
+            2,
+            Entry {
+                destination: destination.clone(),
+                stage: Some(stage.clone()),
+                backup: backup.clone(),
+                old: Some(old),
+                new: Some(new),
+            },
+        );
+        fs::remove_dir_all(&app).unwrap();
+        let warnings = recover(&root, std::slice::from_ref(&app), 1).unwrap();
+        assert!(
+            warnings
+                .iter()
+                .any(|warning| warning.contains("directory is missing")),
+            "{warnings:?}"
+        );
+        assert!(!root.join("pending.json").exists());
     }
 }

@@ -97,7 +97,7 @@ pub fn checked_path(root: &Path, path: &Path, create: bool) -> Result<(), String
     }
     let mut current = root.to_path_buf();
     let components: Vec<_> = suffix.components().collect();
-    for (index, component) in components.iter().enumerate() {
+    for component in components.iter() {
         let Component::Normal(part) = component else {
             return Err("Only normal path components are allowed".into());
         };
@@ -105,7 +105,7 @@ pub fn checked_path(root: &Path, path: &Path, create: bool) -> Result<(), String
         match fs::symlink_metadata(&current) {
             Ok(_) => {
                 let meta = metadata(&current)?;
-                if index + 1 < components.len() && !meta.is_dir() {
+                if !meta.is_dir() {
                     return Err(format!("Not a directory: {}", current.display()));
                 }
             }
@@ -192,7 +192,11 @@ fn hash_tree(
     }
     hash.update((text.len() as u64).to_le_bytes());
     hash.update(text.as_bytes());
-    budget.add(if meta.is_file() { meta.len() } else { 0 }, depth)?;
+    // The package root is not one of the entries users count against the
+    // documented 4096-entry budget; copy_inner also counts children only.
+    if depth > 0 {
+        budget.add(if meta.is_file() { meta.len() } else { 0 }, depth)?;
+    }
     if meta.is_dir() {
         hash.update([0]);
         let mut names = HashSet::new();
@@ -315,11 +319,13 @@ pub fn descriptor(directory: &Path, fallback: &str) -> Result<(String, String), 
     let mut in_frontmatter = false;
     let mut block_description = false;
     for (index, line) in text.lines().enumerate() {
-        if index == 0 && line.trim() == "---" {
+        // Frontmatter delimiters start at column 0. An indented `---` inside a
+        // block scalar is content, not the end of the header.
+        if index == 0 && line.trim_end() == "---" {
             in_frontmatter = true;
             continue;
         }
-        if !in_frontmatter || line.trim() == "---" {
+        if !in_frontmatter || line.trim_end() == "---" {
             break;
         }
         if block_description && (line.starts_with(' ') || line.starts_with('\t')) {

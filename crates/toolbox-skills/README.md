@@ -86,7 +86,7 @@ daily schedule; updating one skill does not postpone the next full check.
 There are at most 16 repositories and 250 managed skills. Discovery and local
 scan lists each contain at most 250 rows. A serialized display snapshot is
 limited to 700 KiB, with `truncated` set when rows must be omitted for IPC.
-State is limited to 1 MiB. Skill packages are limited to 32 MiB, 8 MiB per file,
+State is limited to 2 MiB. Skill packages are limited to 32 MiB, 8 MiB per file,
 4096 entries, 20 directory levels, and portable paths. Repository archives are
 limited to 64 MiB and 20000 entries; links, submodules, invalid paths, and
 oversized package files are rejected before installation.

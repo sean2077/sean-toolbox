@@ -129,6 +129,11 @@ pub(crate) fn archive_repository(
         Some(&archive),
     )?;
     let mut checkout = read_archive(temporary, archive, revision, cancel)?;
+    // Only the extracted tree is needed for later installs and updates. Drop
+    // the shallow bare repository and archive so cached checkouts do not pin
+    // their full clone and archive for the life of the tray host.
+    let _ = fs::remove_dir_all(checkout._temporary.path().join("repository.git"));
+    let _ = fs::remove_file(checkout._temporary.path().join("source.tar"));
     checkout.blocked.extend(submodules);
     Ok(checkout)
 }
@@ -181,6 +186,16 @@ pub(crate) fn read_archive(
             }
         };
         let kind = entry.header().entry_type();
+        // `git archive` emits a global pax header for the archive itself. It
+        // describes metadata, not a repository file, and must not count as a
+        // blocked entry (especially for a skill at the repository root).
+        if kind.is_pax_global_extensions()
+            || kind.is_pax_local_extensions()
+            || kind.is_gnu_longname()
+            || kind.is_gnu_longlink()
+        {
+            continue;
+        }
         if !kind.is_dir() && !kind.is_file() {
             blocked.push(text);
             continue;
@@ -236,6 +251,14 @@ pub(crate) fn read_archive(
     })
 }
 
+pub(crate) fn is_git_environment(key: &OsStr) -> bool {
+    // Windows environment names are case-insensitive; a mixed-case GIT_DIR
+    // must not leak a parent repository into the controlled checkout.
+    key.to_string_lossy()
+        .get(..4)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("GIT_"))
+}
+
 pub(crate) fn run<I, S>(
     directory: &Path,
     args: I,
@@ -255,7 +278,7 @@ where
     fs::create_dir_all(&hooks).map_err(|e| e.to_string())?;
     let mut command = Command::new("git");
     for (key, _) in std::env::vars_os() {
-        if key.to_string_lossy().starts_with("GIT_") {
+        if is_git_environment(&key) {
             command.env_remove(key);
         }
     }
