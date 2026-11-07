@@ -610,15 +610,13 @@ impl Controller {
         {
             ui.window().set_minimized(false);
         }
-        let scale = ui.window().scale_factor();
-        let size = ui.window().size().to_logical(scale);
-        if size.width < 900.0 || size.height < 650.0 {
-            ui.window().set_size(slint::LogicalSize::new(900.0, 650.0));
-        }
         ui.show().map_err(|e| e.to_string())?;
+        // A window that was never shown has no native size yet. Checking before
+        // `show` would replace Slint's preferred size with the minimum on every
+        // first display; only correct a real, already-observed size below it.
         let scale = ui.window().scale_factor();
         let size = ui.window().size().to_logical(scale);
-        if size.width < 900.0 || size.height < 650.0 {
+        if size.width > 0.0 && size.height > 0.0 && (size.width < 900.0 || size.height < 650.0) {
             ui.window().set_size(slint::LogicalSize::new(900.0, 650.0));
         }
         self.apply_native_theme();

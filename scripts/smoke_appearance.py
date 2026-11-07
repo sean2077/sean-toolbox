@@ -213,8 +213,18 @@ class AppearanceDesktop(Desktop):
         wait_for("theme persisted by the real settings UI", lambda: self.saved()["theme"] == scheme)
         require(json.loads(self.config_path.read_text())["theme"] == scheme, "Saved theme did not reach disk")
 
+    def manager_size(self) -> tuple[int, int]:
+        geometry = dict(line.split("=", 1) for line in self.command(
+            "xdotool", "getwindowgeometry", "--shell", str(self.manager)
+        ).stdout.splitlines())
+        return int(geometry["WIDTH"]), int(geometry["HEIGHT"])
+
     def show_manager(self) -> tuple[int, Path]:
         self.ui_pid, self.manager, endpoint = self.show_ui()
+        # The manager must open at its Slint preferred size, not the minimum.
+        # Fixed coordinates below (theme preview) depend on this default size.
+        expected = (self.point(1120), self.point(780))
+        wait_for("manager's preferred size", lambda: self.manager_size() == expected)
         self.activate(self.manager)
         self.key("ctrl+3")
         return self.ui_pid, endpoint
