@@ -67,7 +67,7 @@ impl SkillsWorker {
                     Some(_) => rx.recv_timeout(wait_duration(due, unix_now(), retry_not_before)),
                     None => rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected),
                 };
-                let command = match received {
+                let command: Option<SkillsCommand> = match received {
                     Ok(Some(command)) => Some(command),
                     Ok(None) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     Err(mpsc::RecvTimeoutError::Timeout) => {
@@ -104,22 +104,19 @@ impl SkillsWorker {
                 }
                 let service = service.as_mut().expect("service opened above");
                 let now = unix_now();
-                let all_update = command.as_ref().is_none_or(|command| {
-                    matches!(command, SkillsCommand::Update { skill_id: None })
-                });
-                let result = match command {
-                    Some(command) => service.execute(command, now),
+                let result = match command.as_ref() {
+                    Some(command) => service.execute(command.to_owned(), now),
                     None => service.run_daily(now),
                 };
                 // Even a failed state-file write cannot cause an automatic
-                // zero-delay retry loop. The service persists ordinary retries.
-                if all_update {
-                    retry_not_before = unix_now().saturating_add(if result.is_err() {
-                        RETRY_SECONDS
-                    } else {
-                        CLOCK_CHECK_SECONDS
-                    });
-                }
+                // zero-delay retry loop. The service persists ordinary retries,
+                // and an explicit daily-enable request still checks immediately.
+                retry_not_before = next_retry_guard(
+                    command.as_ref(),
+                    result.is_ok(),
+                    retry_not_before,
+                    unix_now(),
+                );
                 let mut next = service.snapshot();
                 match result {
                     Ok(message) => next.message = message,
@@ -231,6 +228,34 @@ fn skills_paths(config_path: &Path) -> Result<(PathBuf, PathBuf), String> {
     Ok((root, home))
 }
 
+/// Update the worker-local retry guard after a command or scheduled run.
+/// Batch updates and daily runs arm the backoff; an explicit daily-enable
+/// request clears it so the immediately due check is not delayed by the
+/// previous failed update.
+fn next_retry_guard(
+    command: Option<&SkillsCommand>,
+    succeeded: bool,
+    retry_not_before: u64,
+    now: u64,
+) -> u64 {
+    if matches!(
+        command,
+        Some(SkillsCommand::SetDailyUpdate { enabled: true })
+    ) {
+        0
+    } else if command
+        .is_none_or(|command| matches!(command, SkillsCommand::Update { skill_id: None }))
+    {
+        now.saturating_add(if succeeded {
+            CLOCK_CHECK_SECONDS
+        } else {
+            RETRY_SECONDS
+        })
+    } else {
+        retry_not_before
+    }
+}
+
 fn wait_duration(due: Option<u64>, now: u64, retry_not_before: u64) -> Duration {
     Duration::from_secs(
         due.map(|due| due.max(retry_not_before).saturating_sub(now))
@@ -263,6 +288,48 @@ mod tests {
         );
         assert_eq!(wait_duration(Some(250), 200, 0), Duration::from_secs(50));
         assert_eq!(wait_duration(Some(300), 500, 510), Duration::from_secs(10));
+    }
+
+    #[test]
+    fn an_explicit_daily_enable_clears_the_failed_update_backoff() {
+        let update_all = SkillsCommand::Update { skill_id: None };
+        let update_one = SkillsCommand::Update {
+            skill_id: Some("review".into()),
+        };
+        // Enabling daily update must run the due check now instead of waiting
+        // out a retry window armed by an earlier batch failure.
+        assert_eq!(
+            next_retry_guard(
+                Some(&SkillsCommand::SetDailyUpdate { enabled: true }),
+                false,
+                5_000,
+                100
+            ),
+            0
+        );
+        assert_eq!(
+            next_retry_guard(
+                Some(&SkillsCommand::SetDailyUpdate { enabled: false }),
+                false,
+                5_000,
+                100
+            ),
+            5_000
+        );
+        assert_eq!(
+            next_retry_guard(Some(&update_all), false, 5_000, 100),
+            100 + RETRY_SECONDS
+        );
+        assert_eq!(
+            next_retry_guard(Some(&update_all), true, 5_000, 100),
+            100 + CLOCK_CHECK_SECONDS
+        );
+        // A single-skill update does not move the full-update schedule.
+        assert_eq!(
+            next_retry_guard(Some(&update_one), false, 5_000, 100),
+            5_000
+        );
+        assert_eq!(next_retry_guard(None, false, 0, 100), 100 + RETRY_SECONDS);
     }
 
     #[test]
