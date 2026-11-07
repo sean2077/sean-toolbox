@@ -420,3 +420,24 @@ GitHub Actions 沿用 Windows x64、macOS ARM/Intel、Linux x64 的完整矩阵�
 集成检查的实际远端结果以本 PR 对应提交的 Actions 为准；未降低、跳过或修改既有测试来
 绕过本地 socket 限制。本次没有执行 Windows 实机的文件占用、junction、休眠恢复或文件
 选择器验收。
+
+## 2026-11-07：Skills PR 复审修复
+
+对 PR #1 的复审修复了以下行为：显式开启每日更新不再被此前全量更新失败留下的重试回退
+延迟；仓库中单个无法读取 `SKILL.md` 的条目会跳过并进入提示，不再使整个仓库发现失败；
+启动时清理上次进程中断遗留的 `checkout-*`、`skill-*` 暂存目录并保留其他文件；Windows
+快照中的显示路径去掉 verbatim 前缀；发现页空状态区分“没有来源”和“尚未刷新”，来源
+标签不再显示 `.git` 后缀。文档补充了预置的官方 `anthropics/skills` 来源及跳过条目说明。
+
+本地环境为 Windows 11、固定 Rust 1.99.1 MSVC 工具链，复用主工作树的 `target`：
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked -p toolbox-skills -p toolbox-host -p toolbox-ui` | 通过：Skills 20、宿主 13、UI 41 |
+| `cargo test --locked --workspace --no-fail-fast` | 除既有 `toolbox-windows` 原生窗口用例 `native_quake_hides_reuses_and_recovers_without_activation` 外全部通过；该用例在本机以“窗口未完成置顶”失败，在未修改的 `main` 上同样复现，属于本机桌面/会话限制，未记为 PR 回归，命令退出 101 |
+| 新增回归 | 显式启用清除失败更新的重试回退；单个坏条目不清空目录；启动清理暂存目录；Windows 显示路径；发现页空状态；来源标签 |
+
+Linux/macOS 与桌面 smoke 的结果以本 PR 对应提交的 Actions 为准；本次没有执行 Windows
+实机的文件占用、junction、休眠恢复或文件选择器验收。
