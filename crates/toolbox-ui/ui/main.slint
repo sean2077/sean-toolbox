@@ -779,7 +779,8 @@ export component AppWindow inherits Window {
                             }
                         }
                     }
-                    Rectangle {
+                    // The skills page has its own status line; keep the shared one for errors only.
+                    if root.page != 4 || root.status-error: Rectangle {
                         height: root.status-error ? 62px : 24px;
                         border-radius: 7px;
                         background: root.status-error ? Theme.danger-soft : transparent;

@@ -102,6 +102,51 @@ fn repository_label(snapshot: &SkillsSnapshot, id: &str) -> String {
         .unwrap_or_else(|| id.into())
 }
 
+fn short_revision(revision: &str) -> &str {
+    revision.get(..7).unwrap_or(revision)
+}
+
+/// Where a source chip leads: the repository page for the skill's folder,
+/// the live source of a link, or the managed copy of a local import.
+fn source_target(snapshot: &SkillsSnapshot, skill: &InstalledSkill) -> String {
+    if let Some(id) = skill.repository_id.as_deref() {
+        let Some(repository) = snapshot.repositories.iter().find(|repo| repo.id == id) else {
+            return String::new();
+        };
+        if !repository.url.starts_with("https://") {
+            return String::new();
+        }
+        let base = repository
+            .url
+            .trim_end_matches('/')
+            .trim_end_matches(".git");
+        let path = skill.source_path.as_deref().unwrap_or("").trim_matches('/');
+        if path.is_empty() || !base.starts_with("https://github.com/") {
+            return base.into();
+        }
+        // Open the installed commit so the page matches the "@sha" label.
+        let reference = skill
+            .revision
+            .as_deref()
+            .filter(|revision| !revision.is_empty())
+            .or(repository.branch.as_deref())
+            .unwrap_or("HEAD");
+        return format!("{base}/tree/{reference}/{path}");
+    }
+    if skill.linked
+        && let Some(target) = skill.target.as_deref()
+    {
+        return target.into();
+    }
+    if snapshot.storage_path.is_empty() {
+        return String::new();
+    }
+    std::path::Path::new(&snapshot.storage_path)
+        .join(&skill.directory)
+        .display()
+        .to_string()
+}
+
 fn directory_is_managed(snapshot: &SkillsSnapshot, directory: &str) -> bool {
     let directory = directory.to_lowercase();
     snapshot
@@ -197,7 +242,16 @@ fn filtered_rows(
                     skill
                         .repository_id
                         .as_deref()
-                        .map(|id| repository_label(snapshot, id))
+                        .map(|id| {
+                            // The installed commit makes drift from upstream visible.
+                            let label = repository_label(snapshot, id);
+                            match skill.revision.as_deref() {
+                                Some(revision) if !revision.is_empty() => {
+                                    format!("{label}@{}", short_revision(revision))
+                                }
+                                _ => label,
+                            }
+                        })
                         .unwrap_or_else(|| local.into())
                 };
                 let apps = skill
@@ -225,7 +279,9 @@ fn filtered_rows(
                     problem: skill.last_error.is_some(),
                     linked: skill.linked,
                     selected: false,
+                    updatable: skill.repository_id.is_some(),
                     source: source.into(),
+                    source_target: source_target(snapshot, skill).into(),
                     status: if enabled {
                         if english { "Enabled" } else { "已启用" }
                     } else if english {
@@ -260,7 +316,9 @@ fn filtered_rows(
                 problem: false,
                 linked: false,
                 selected: false,
+                updatable: false,
                 source: "".into(),
+                source_target: "".into(),
                 status: "".into(),
                 enabled: false,
                 app0: false,
@@ -292,7 +350,9 @@ fn filtered_rows(
                     problem: false,
                     linked: skill.linked,
                     selected: false,
+                    updatable: false,
                     source: "".into(),
+                    source_target: "".into(),
                     status: "".into(),
                     enabled: false,
                     app0: false,
@@ -494,7 +554,23 @@ impl Controller {
                 .into(),
             );
         }
-        skills.set_notice_text(notices.join("\n").into());
+        skills.set_notice_detail(notices.join("\n").into());
+        skills.set_notice_text(
+            if notices.is_empty() {
+                String::new()
+            } else if english {
+                format!(
+                    "{} skill notice(s). Open Details for the full message.",
+                    notices.len()
+                )
+            } else {
+                format!(
+                    "有 {} 条技能提示，点击「查看详情」查看完整信息。",
+                    notices.len()
+                )
+            }
+            .into(),
+        );
         let repositories = snapshot
             .repositories
             .iter()
@@ -997,6 +1073,9 @@ pub(super) fn connect_callbacks(ui: &crate::AppWindow) {
     skills.on_install(|| with_controller(Controller::install_selected_skill));
     skills.on_update_selected(|| with_controller(Controller::update_selected_skill));
     skills.on_uninstall(|| with_controller(Controller::uninstall_selected_skill));
+    skills.on_open_source(|target| {
+        with_controller(|controller| controller.send(Work::OpenTarget(target.to_string())));
+    });
     skills.on_show_details(|| {
         with_controller(|controller| controller.navigate(crate::page_index(UiPage::Diagnostics)))
     });
@@ -1005,6 +1084,74 @@ pub(super) fn connect_callbacks(ui: &crate::AppWindow) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn source_chips_lead_to_the_repository_folder_link_or_managed_copy() {
+        use toolbox_core::skills::SkillRepository;
+        let repository = |id: &str, url: &str, branch: Option<&str>| SkillRepository {
+            id: id.into(),
+            url: url.into(),
+            branch: branch.map(Into::into),
+            revision: None,
+            last_error: None,
+        };
+        let snapshot = SkillsSnapshot {
+            storage_path: "C:\\Users\\me\\skills\\managed".into(),
+            repositories: vec![
+                repository("main", "https://github.com/owner/skills.git", None),
+                repository("pinned", "https://github.com/owner/other", Some("dev")),
+            ],
+            ..SkillsSnapshot::default()
+        };
+        let skill = |repository: Option<&str>, path: Option<&str>, linked: bool| InstalledSkill {
+            id: "id".into(),
+            directory: "review".into(),
+            name: "review".into(),
+            description: String::new(),
+            repository_id: repository.map(Into::into),
+            source_path: path.map(Into::into),
+            revision: None,
+            apps: vec![],
+            updated_at: 0,
+            last_error: None,
+            linked,
+            target: linked.then(|| "D:\\vault\\review".into()),
+        };
+        assert_eq!(
+            source_target(
+                &snapshot,
+                &skill(Some("main"), Some("skills/review"), false)
+            ),
+            "https://github.com/owner/skills/tree/HEAD/skills/review"
+        );
+        assert_eq!(
+            source_target(&snapshot, &skill(Some("pinned"), Some("review"), false)),
+            "https://github.com/owner/other/tree/dev/review"
+        );
+        assert_eq!(
+            source_target(&snapshot, &skill(Some("main"), Some(""), false)),
+            "https://github.com/owner/skills"
+        );
+        let mut installed = skill(Some("pinned"), Some("review"), false);
+        installed.revision = Some("0123456789abcdef".into());
+        assert_eq!(
+            source_target(&snapshot, &installed),
+            "https://github.com/owner/other/tree/0123456789abcdef/review",
+            "the page matches the installed commit shown as @sha"
+        );
+        assert_eq!(
+            source_target(&snapshot, &skill(Some("gone"), None, false)),
+            ""
+        );
+        assert_eq!(
+            source_target(&snapshot, &skill(None, None, true)),
+            "D:\\vault\\review"
+        );
+        assert!(
+            source_target(&snapshot, &skill(None, None, false)).ends_with("review"),
+            "a local copy opens its managed folder"
+        );
+    }
 
     #[test]
     fn schedule_distinguishes_failure_attempt_success_and_next_due() {

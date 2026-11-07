@@ -93,6 +93,8 @@ pub enum Work {
     Skills(SkillsCommand),
     Dialog(DialogKind, rfd::FileDialog),
     Link(i32),
+    /// Opens a skill source: an HTTPS page in the browser or a local folder.
+    OpenTarget(String),
 }
 
 pub enum Event {
@@ -273,6 +275,7 @@ pub fn run(receiver: Receiver<Work>, latest_query: Arc<AtomicU64>) {
                 ),
             },
             Work::Link(index) => Event::LinkOpened(open_link(index)),
+            Work::OpenTarget(target) => Event::LinkOpened(open_target(&target)),
         };
         crate::post(event);
     }
@@ -340,6 +343,37 @@ fn open_link(index: i32) -> Result<(), String> {
     } else {
         "https://github.com/sean2077/sean-toolbox"
     };
+    open_with_system(url.as_ref())
+}
+
+fn open_target(target: &str) -> Result<(), String> {
+    if target.starts_with("https://") {
+        return open_with_system(target.as_ref());
+    }
+    let path = std::path::Path::new(target);
+    if !path.is_absolute() || !path.is_dir() {
+        return Err(format!("目录不存在 / Folder not found: {target}"));
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Explorer reports a non-zero status even on success, so only a
+        // failure to start counts as an error.
+        Command::new("explorer.exe")
+            .arg(path)
+            .creation_flags(0x0800_0000)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    open_with_system(path.as_os_str())
+}
+
+fn open_with_system(target: &std::ffi::OsStr) -> Result<(), String> {
     #[cfg(windows)]
     let mut command = {
         use std::os::windows::process::CommandExt;
@@ -354,7 +388,7 @@ fn open_link(index: i32) -> Result<(), String> {
     #[cfg(all(unix, not(target_os = "macos")))]
     let mut command = Command::new("xdg-open");
     let status = command
-        .arg(url)
+        .arg(target)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -363,7 +397,7 @@ fn open_link(index: i32) -> Result<(), String> {
     if status.success() {
         Ok(())
     } else {
-        Err(format!("浏览器打开失败 / Browser open failed: {status}"))
+        Err(format!("打开失败 / Open failed: {status}"))
     }
 }
 

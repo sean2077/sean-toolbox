@@ -2886,10 +2886,10 @@ mod tests {
                     .contains("nothing was overwritten")
             );
             let skills = ui.global::<SkillsState>();
-            assert!(skills.get_notice_text().contains("只显示部分条目"));
+            assert!(skills.get_notice_detail().contains("只显示部分条目"));
             assert!(
                 skills
-                    .get_notice_text()
+                    .get_notice_detail()
                     .contains("Recovery backup preserved")
             );
         });
