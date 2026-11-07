@@ -30,7 +30,7 @@ Sean Toolbox 使用 Rust + Slint，支持 Windows、macOS 和 Linux，优先面�
 
 ## 下载与开始使用
 
-正式版下载：[最新版本](https://github.com/sean2077/sean-toolbox/releases/latest) · [0.1.0](https://github.com/sean2077/sean-toolbox/releases/tag/v0.1.0)。
+正式版下载：[最新版本](https://github.com/sean2077/sean-toolbox/releases/latest) · [0.2.0](https://github.com/sean2077/sean-toolbox/releases/tag/v0.2.0)。
 
 按系统和处理器选择 Release 中的压缩包；开发构建仍可从 [Actions](https://github.com/sean2077/sean-toolbox/actions/workflows/ci.yml) 的成功运行记录中下载。
 
