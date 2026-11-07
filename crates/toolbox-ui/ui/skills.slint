@@ -623,8 +623,13 @@ export component SkillsPage inherits Rectangle {
                                 padding: 24px;
                                 alignment: center;
                                 spacing: 12px;
-                                Icon { source: @image-url("icons/box.svg"); width: 28px; horizontal-stretch: 0; colorize: Theme.muted; }
-                                Caption { text: SkillsState.empty-text; }
+                                // Centre the fixed-size icon in a row: as a direct child its
+                                // width would cap this column and, through it, the window.
+                                HorizontalLayout {
+                                    alignment: center;
+                                    Icon { source: @image-url("icons/box.svg"); width: 28px; colorize: Theme.muted; }
+                                }
+                                Caption { text: SkillsState.empty-text; horizontal-alignment: center; }
                             }
                         }
                     }

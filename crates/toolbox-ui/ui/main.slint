@@ -695,8 +695,9 @@ export component AppWindow inherits Window {
                                 ActionButton { text: root.saving ? (root.english ? "Saving…" : "保存中…") : (root.english ? "Save settings" : "保存设置"); enabled: root.loaded && root.settings-dirty && !root.saving; primary: true; clicked => { root.save-settings(); } }
                             }
                         }
+                        // No explicit width: it would pin the page's max-width to its
+                        // current width, and that cap becomes the window's maximum size.
                         skills-page := SkillsPage {
-                            width: parent.width;
                             horizontal-stretch: 1;
                             visible: root.page == 4;
                             english: root.english;
