@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Sean Toolbox\n"
 "Report-Msgid-Bugs-To: https://github.com/sean2077/sean-toolbox/issues\n"
-"POT-Creation-Date: 2026-11-07 11:21+0000\n"
+"POT-Creation-Date: 2026-11-07 13:56+0000\n"
 "PO-Revision-Date: 2026-11-07 19:07+0800\n"
 "Last-Translator: Sean Toolbox contributors\n"
 "Language-Team: Simplified Chinese\n"
@@ -44,7 +44,7 @@ msgid "Connecting…"
 msgstr "正在连接…"
 
 #: crates/toolbox-ui/ui/launcher.slint:241
-msgctxt "ui.projects.loading"
+msgctxt "ui.common.reading_recent_projects"
 msgid "Reading recent projects…"
 msgstr "正在读取最近项目…"
 
@@ -109,7 +109,7 @@ msgid "Refresh projects · Ctrl+R"
 msgstr "刷新项目 · Ctrl+R"
 
 #: crates/toolbox-ui/ui/main.slint:125 crates/toolbox-ui/ui/main.slint:218
-msgctxt "ui.navigation.projects"
+msgctxt "ui.common.recent_projects"
 msgid "Recent projects"
 msgstr "最近项目"
 
@@ -119,12 +119,12 @@ msgid "Window switcher"
 msgstr "窗口切换"
 
 #: crates/toolbox-ui/ui/main.slint:125 crates/toolbox-ui/ui/main.slint:223
-msgctxt "ui.navigation.settings"
+msgctxt "ui.common.settings"
 msgid "Settings"
 msgstr "设置"
 
 #: crates/toolbox-ui/ui/main.slint:125 crates/toolbox-ui/ui/main.slint:220
-msgctxt "ui.navigation.skills"
+msgctxt "ui.common.skills"
 msgid "Skills"
 msgstr "技能管理"
 
@@ -444,23 +444,23 @@ msgctxt "ui.main.screen_edge"
 msgid "Screen edge"
 msgstr "停靠边缘"
 
-#: crates/toolbox-ui/ui/main.slint:522
-msgctxt "ui.quake.edge.top"
+#: crates/toolbox-ui/ui/main.slint:522 crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.common.top"
 msgid "Top"
 msgstr "顶部"
 
-#: crates/toolbox-ui/ui/main.slint:522
-msgctxt "ui.quake.edge.bottom"
+#: crates/toolbox-ui/ui/main.slint:522 crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.common.bottom"
 msgid "Bottom"
 msgstr "底部"
 
-#: crates/toolbox-ui/ui/main.slint:522
-msgctxt "ui.quake.edge.left"
+#: crates/toolbox-ui/ui/main.slint:522 crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.common.left"
 msgid "Left"
 msgstr "左侧"
 
-#: crates/toolbox-ui/ui/main.slint:522
-msgctxt "ui.quake.edge.right"
+#: crates/toolbox-ui/ui/main.slint:522 crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.common.right"
 msgid "Right"
 msgstr "右侧"
 
@@ -470,34 +470,14 @@ msgid "Alignment"
 msgstr "对齐位置"
 
 #: crates/toolbox-ui/ui/main.slint:527
-msgctxt "ui.quake.horizontal_alignment.left"
-msgid "Left"
-msgstr "靠左"
-
-#: crates/toolbox-ui/ui/main.slint:527
 msgctxt "ui.quake.horizontal_alignment.center"
 msgid "Center"
 msgstr "居中"
 
 #: crates/toolbox-ui/ui/main.slint:527
-msgctxt "ui.quake.horizontal_alignment.right"
-msgid "Right"
-msgstr "靠右"
-
-#: crates/toolbox-ui/ui/main.slint:527
-msgctxt "ui.quake.vertical_alignment.top"
-msgid "Top"
-msgstr "靠上"
-
-#: crates/toolbox-ui/ui/main.slint:527
 msgctxt "ui.quake.vertical_alignment.center"
 msgid "Center"
 msgstr "居中"
-
-#: crates/toolbox-ui/ui/main.slint:527
-msgctxt "ui.quake.vertical_alignment.bottom"
-msgid "Bottom"
-msgstr "靠下"
 
 #: crates/toolbox-ui/ui/main.slint:534
 msgctxt "ui.quake.width_percent"
@@ -515,17 +495,17 @@ msgid "Show on display"
 msgstr "唤出位置"
 
 #: crates/toolbox-ui/ui/main.slint:544
-msgctxt "ui.quake.monitor.at_mouse_pointer"
+msgctxt "ui.common.at_mouse_pointer"
 msgid "At mouse pointer"
 msgstr "鼠标所在显示器"
 
 #: crates/toolbox-ui/ui/main.slint:544
-msgctxt "ui.quake.monitor.with_foreground_window"
+msgctxt "ui.common.with_foreground_window"
 msgid "With foreground window"
 msgstr "当前前台窗口所在显示器"
 
 #: crates/toolbox-ui/ui/main.slint:544
-msgctxt "ui.quake.monitor.primary_display"
+msgctxt "ui.common.primary_display"
 msgid "Primary display"
 msgstr "主显示器"
 
@@ -645,17 +625,17 @@ msgid "Preview instantly in the manager and project launcher. Save to keep your 
 msgstr "管理窗口与最近项目面板同步预览，保存后保留。"
 
 #: crates/toolbox-ui/ui/main.slint:606
-msgctxt "ui.main.system"
+msgctxt "ui.common.system"
 msgid "System"
 msgstr "跟随系统"
 
 #: crates/toolbox-ui/ui/main.slint:607
-msgctxt "ui.main.light"
+msgctxt "ui.common.light"
 msgid "Light"
 msgstr "浅色"
 
 #: crates/toolbox-ui/ui/main.slint:608
-msgctxt "ui.main.dark"
+msgctxt "ui.common.dark"
 msgid "Dark"
 msgstr "深色"
 
@@ -815,12 +795,12 @@ msgid "Unchecked"
 msgstr "尚未确认"
 
 #: crates/toolbox-ui/ui/main.slint:722 crates/toolbox-ui/ui/main.slint:723
-msgctxt "ui.status.available"
+msgctxt "ui.common.available"
 msgid "Available"
 msgstr "可用"
 
 #: crates/toolbox-ui/ui/main.slint:722 crates/toolbox-ui/ui/main.slint:723
-msgctxt "ui.status.unavailable"
+msgctxt "ui.common.unavailable"
 msgid "Unavailable"
 msgstr "不可用"
 
@@ -1019,17 +999,17 @@ msgid "Status"
 msgstr "状态"
 
 #: crates/toolbox-ui/ui/skills.slint:377
-msgctxt "ui.skills.status_filter.all"
+msgctxt "ui.common.all"
 msgid "All"
 msgstr "全部"
 
 #: crates/toolbox-ui/ui/skills.slint:377
-msgctxt "ui.skills.status_filter.enabled"
+msgctxt "ui.common.enabled"
 msgid "Enabled"
 msgstr "已启用"
 
 #: crates/toolbox-ui/ui/skills.slint:377
-msgctxt "ui.skills.status_filter.disabled"
+msgctxt "ui.common.disabled"
 msgid "Disabled"
 msgstr "未启用"
 
@@ -1064,9 +1044,9 @@ msgid "Update"
 msgstr "更新"
 
 #: crates/toolbox-ui/ui/skills.slint:586
-msgctxt "ui.skills.local_import"
+msgctxt "ui.common.local"
 msgid "Local"
-msgstr "本机导入"
+msgstr "本地"
 
 #: crates/toolbox-ui/ui/skills.slint:597
 msgctxt "ui.action.confirm_uninstall"
@@ -1218,10 +1198,6 @@ msgctxt "rust.skills_empty_sources"
 msgid "Add a source in Repositories, then reload repositories to discover skills."
 msgstr "先在「仓库」添加来源，再点击「刷新仓库」发现技能。"
 
-msgctxt "rust.skills_source_all"
-msgid "All"
-msgstr "全部"
-
 msgctxt "rust.error_app_list_changed_reload_configuration"
 msgid "App list changed; reload configuration"
 msgstr "应用列表已变化，请重新载入"
@@ -1230,21 +1206,9 @@ msgctxt "rust.invalid_arguments"
 msgid "Arguments must be a JSON string array, e.g. [\"--new-window\"]: {error}"
 msgstr "参数必须是 JSON 字符串数组，例如 [\"--new-window\"]：{error}"
 
-msgctxt "rust.monitor_cursor"
-msgid "At mouse pointer"
-msgstr "鼠标所在"
-
-msgctxt "rust.available"
-msgid "Available"
-msgstr "可用"
-
 msgctxt "rust.error_background_worker_stopped_reopen_the_toolbox"
 msgid "Background worker stopped; reopen the toolbox"
 msgstr "后台任务已停止，请重新打开工具箱"
-
-msgctxt "rust.edge_bottom"
-msgid "Bottom"
-msgstr "底部"
 
 msgctxt "rust.launch_candidate"
 msgid "Candidate {number}"
@@ -1278,10 +1242,6 @@ msgctxt "rust.status_connected_to_the_resident_host"
 msgid "Connected to the resident host."
 msgstr "已连接常驻服务。"
 
-msgctxt "rust.theme_dark"
-msgid "Dark"
-msgstr "深色"
-
 msgctxt "rust.confirm_delete_this_app_profile"
 msgid "Delete this app profile?"
 msgstr "删除这个应用配置？"
@@ -1312,14 +1272,6 @@ msgstr ""
 "更新：{updated}\n"
 "链接：{target}"
 
-msgctxt "rust.disabled"
-msgid "Disabled"
-msgstr "已禁用"
-
-msgctxt "rust.skills_disabled"
-msgid "Disabled"
-msgstr "未启用"
-
 msgctxt "rust.confirm_discard_app_changes"
 msgid "Discard app changes?"
 msgstr "放弃应用的修改？"
@@ -1335,14 +1287,6 @@ msgstr "先放弃尚未保存的修改？"
 msgctxt "rust.confirm_discard_unsaved_changes"
 msgid "Discard unsaved changes?"
 msgstr "放弃尚未保存的修改？"
-
-msgctxt "rust.enabled"
-msgid "Enabled"
-msgstr "已启用"
-
-msgctxt "rust.skills_enabled"
-msgid "Enabled"
-msgstr "已启用"
 
 msgctxt "rust.skills_enter_repository"
 msgid "Enter a GitHub repository"
@@ -1396,14 +1340,6 @@ msgctxt "rust.skills_schedule"
 msgid "Last attempt: {attempt} · Last success: {success} · Next: {next}"
 msgstr "上次尝试：{attempt} · 上次成功：{success} · 下次更新：{next}"
 
-msgctxt "rust.edge_left"
-msgid "Left"
-msgstr "左侧"
-
-msgctxt "rust.theme_light"
-msgid "Light"
-msgstr "浅色"
-
 msgctxt "rust.skills_source_linked"
 msgid "Linked"
 msgstr "链接"
@@ -1411,10 +1347,6 @@ msgstr "链接"
 msgctxt "rust.skills_loading"
 msgid "Loading skills from the host…"
 msgstr "正在从宿主读取技能…"
-
-msgctxt "rust.skills_source_local"
-msgid "Local"
-msgstr "本地"
 
 msgctxt "rust.match_macos"
 msgid "Match a bundle ID, app name or executable name. Accessibility permission is required."
@@ -1456,10 +1388,6 @@ msgctxt "rust.path_invalid_unicode"
 msgid "Path is not valid Unicode."
 msgstr "路径不是有效的 Unicode。"
 
-msgctxt "rust.monitor_primary"
-msgid "Primary"
-msgstr "主屏"
-
 msgctxt "rust.project_list_changed"
 msgid "Project list changed; refresh and retry."
 msgstr "项目列表已变化，请刷新后重试。"
@@ -1480,14 +1408,6 @@ msgctxt "rust.tray_quit"
 msgid "Quit Sean Toolbox"
 msgstr "退出工具箱"
 
-msgctxt "rust.projects_reading"
-msgid "Reading recent projects…"
-msgstr "正在读取最近项目…"
-
-msgctxt "rust.tray_projects"
-msgid "Recent projects"
-msgstr "最近项目"
-
 msgctxt "rust.skills_empty_discovery"
 msgid "Reload repositories to discover skills from your configured sources."
 msgstr "点击「刷新仓库」从已配置来源发现技能。"
@@ -1503,10 +1423,6 @@ msgstr "将移除工具箱管理的副本或链接；链接的源目录会保留
 msgctxt "rust.confirm_restore_saved_settings_application_profile_edits_will_be_kept"
 msgid "Restore saved settings. Application profile edits will be kept."
 msgstr "将恢复已保存的设置，应用配置的修改会保留。"
-
-msgctxt "rust.edge_right"
-msgid "Right"
-msgstr "右侧"
 
 msgctxt "rust.status_save_or_cancel_your_changes_before_opening_a_project"
 msgid "Save or cancel your changes before opening a project."
@@ -1532,25 +1448,13 @@ msgctxt "rust.tray_tooltip"
 msgid "Sean Toolbox · Personal toolbox"
 msgstr "Sean Toolbox · 个人工具箱"
 
-msgctxt "rust.tray_settings"
-msgid "Settings"
-msgstr "设置"
-
 msgctxt "rust.skills_shared"
 msgid "Shared"
 msgstr "共享"
 
-msgctxt "rust.tray_skills"
-msgid "Skills"
-msgstr "Skills 管理"
-
 msgctxt "rust.skills_submitting"
 msgid "Submitting skills operation…"
 msgstr "正在提交技能操作…"
-
-msgctxt "rust.theme_system"
-msgid "System"
-msgstr "跟随系统"
 
 msgctxt "rust.diagnostics_summary"
 msgid ""
@@ -1608,17 +1512,9 @@ msgctxt "rust.confirm_this_removes_the_profile_and_shortcut_the_application_rema
 msgid "This removes the profile and shortcut. The application remains installed."
 msgstr "此操作移除配置及快捷键，不会卸载应用。"
 
-msgctxt "rust.edge_top"
-msgid "Top"
-msgstr "顶部"
-
 msgctxt "rust.activation_failed"
 msgid "UI activation service failed: {error}"
 msgstr "界面唤起服务失败：{error}"
-
-msgctxt "rust.unavailable"
-msgid "Unavailable"
-msgstr "不可用"
 
 msgctxt "rust.skills_uninstall_title"
 msgid "Uninstall the selected skill?"
@@ -1639,10 +1535,6 @@ msgstr "请等待当前技能操作完成。"
 msgctxt "rust.tray_windows"
 msgid "Window shortcuts"
 msgstr "窗口快捷键"
-
-msgctxt "rust.monitor_foreground"
-msgid "With foreground window"
-msgstr "前台窗口所在"
 
 msgctxt "rust.match_linux"
 msgid "X11: match WM_CLASS or executable name. Wayland window control is limited."

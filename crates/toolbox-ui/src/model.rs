@@ -80,43 +80,43 @@ impl ImportedConfig {
         let mut out = messages::import_heading(self.profiles.len(), &self.filename).render(locale);
         for profile in &self.profiles {
             let enabled = if profile.enabled {
-                messages::enabled()
+                messages::common_enabled()
             } else {
-                messages::disabled()
+                messages::common_disabled()
             };
             out.push_str(
-                &messages::import_profile(
-                    enabled.render(locale),
-                    &profile.id,
-                    &profile.matcher,
-                    &profile.name,
-                    platform_name(profile.platform),
-                    &profile.hotkey,
-                )
+                &messages::import_profile(messages::ImportProfileArgs {
+                    enabled: enabled.render(locale),
+                    id: profile.id.clone(),
+                    matcher: profile.matcher.clone(),
+                    name: profile.name.clone(),
+                    platform: platform_name(profile.platform).to_owned(),
+                    shortcut: profile.hotkey.clone(),
+                })
                 .render(locale),
             );
             if profile.quake.enabled {
                 let q = &profile.quake;
                 let edge = match q.edge {
-                    QuakeEdge::Top => messages::edge_top(),
-                    QuakeEdge::Bottom => messages::edge_bottom(),
-                    QuakeEdge::Left => messages::edge_left(),
-                    QuakeEdge::Right => messages::edge_right(),
+                    QuakeEdge::Top => messages::common_top(),
+                    QuakeEdge::Bottom => messages::common_bottom(),
+                    QuakeEdge::Left => messages::common_left(),
+                    QuakeEdge::Right => messages::common_right(),
                 };
                 let monitor = match q.monitor {
-                    QuakeMonitor::Cursor => messages::monitor_cursor(),
-                    QuakeMonitor::Foreground => messages::monitor_foreground(),
-                    QuakeMonitor::Primary => messages::monitor_primary(),
+                    QuakeMonitor::Cursor => messages::common_at_mouse_pointer(),
+                    QuakeMonitor::Foreground => messages::common_with_foreground_window(),
+                    QuakeMonitor::Primary => messages::common_primary_display(),
                 };
                 out.push_str(
-                    &messages::import_quake(
-                        boolean(q.hide_on_focus_loss),
-                        edge.render(locale),
-                        q.height_percent,
-                        monitor.render(locale),
-                        boolean(q.always_on_top),
-                        q.width_percent,
-                    )
+                    &messages::import_quake(messages::ImportQuakeArgs {
+                        auto_hide: boolean(q.hide_on_focus_loss),
+                        edge: edge.render(locale),
+                        height: q.height_percent.to_string(),
+                        monitor: monitor.render(locale),
+                        topmost: boolean(q.always_on_top),
+                        width: q.width_percent.to_string(),
+                    })
                     .render(locale),
                 );
             }
@@ -134,20 +134,20 @@ impl ImportedConfig {
         }
         if let Some(config) = &self.config {
             let theme = match config.theme {
-                ThemePreference::System => messages::theme_system(),
-                ThemePreference::Light => messages::theme_light(),
-                ThemePreference::Dark => messages::theme_dark(),
+                ThemePreference::System => messages::common_system(),
+                ThemePreference::Light => messages::common_light(),
+                ThemePreference::Dark => messages::common_dark(),
             };
             out.push_str(
-                &messages::import_settings(
-                    boolean(config.autostart),
-                    config.ui_idle_seconds,
-                    &config.language,
-                    boolean(config.projects_enabled),
-                    &config.launcher_hotkey,
-                    theme.render(locale),
-                    boolean(config.windows_enabled),
-                )
+                &messages::import_settings(messages::ImportSettingsArgs {
+                    autostart: boolean(config.autostart),
+                    idle: config.ui_idle_seconds.to_string(),
+                    language: config.language.clone(),
+                    projects: boolean(config.projects_enabled),
+                    shortcut: config.launcher_hotkey.clone(),
+                    theme: theme.render(locale),
+                    windows: boolean(config.windows_enabled),
+                })
                 .render(locale),
             );
         }
@@ -430,10 +430,10 @@ mod tests {
         assert!(english.contains("language=en, theme=Dark, shortcut=Ctrl+Alt+S, autostart=Yes, projects=No, windows=Yes, UI idle=120 s"));
         let chinese = imported.summary(Locale::ZhCn);
         assert!(chinese.contains(
-            "• Distinct {name}  [Windows]  Ctrl+Alt+D · 已禁用\n  标识：unique-id\n  Matcher.exe\n"
+            "• Distinct {name}  [Windows]  Ctrl+Alt+D · 未启用\n  标识：unique-id\n  Matcher.exe\n"
         ));
         assert!(chinese.contains(
-            "Quake 停靠：右侧，宽 40% × 高 75%，显示器=前台窗口所在，置顶=是，失焦收起=否"
+            "Quake 停靠：右侧，宽 40% × 高 75%，显示器=当前前台窗口所在显示器，置顶=是，失焦收起=否"
         ));
         assert!(chinese.contains("语言=en，主题=深色，唤出快捷键=Ctrl+Alt+S，自启=是，项目模块=否，窗口模块=是，界面释放=120 秒"));
     }

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: toolbox-ui VERSION\n"
-"POT-Creation-Date: 2026-11-07 11:21+0000\n"
+"POT-Creation-Date: 2026-11-07 13:56+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -43,7 +43,7 @@ msgid "Connecting…"
 msgstr ""
 
 #: crates/toolbox-ui/ui/launcher.slint:241
-msgctxt "ui.projects.loading"
+msgctxt "ui.common.reading_recent_projects"
 msgid "Reading recent projects…"
 msgstr ""
 
@@ -109,7 +109,7 @@ msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:125 crates/toolbox-ui/ui/main.slint:218
 #: crates/toolbox-ui/ui/main.slint:125 crates/toolbox-ui/ui/main.slint:218
-msgctxt "ui.navigation.projects"
+msgctxt "ui.common.recent_projects"
 msgid "Recent projects"
 msgstr ""
 
@@ -120,12 +120,12 @@ msgid "Window switcher"
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:125 crates/toolbox-ui/ui/main.slint:223
-msgctxt "ui.navigation.settings"
+msgctxt "ui.common.settings"
 msgid "Settings"
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:125 crates/toolbox-ui/ui/main.slint:220
-msgctxt "ui.navigation.skills"
+msgctxt "ui.common.skills"
 msgid "Skills"
 msgstr ""
 
@@ -445,23 +445,23 @@ msgctxt "ui.main.screen_edge"
 msgid "Screen edge"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:522
-msgctxt "ui.quake.edge.top"
+#: crates/toolbox-ui/ui/main.slint:522 crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.common.top"
 msgid "Top"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:522
-msgctxt "ui.quake.edge.bottom"
+#: crates/toolbox-ui/ui/main.slint:522 crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.common.bottom"
 msgid "Bottom"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:522
-msgctxt "ui.quake.edge.left"
+#: crates/toolbox-ui/ui/main.slint:522 crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.common.left"
 msgid "Left"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:522
-msgctxt "ui.quake.edge.right"
+#: crates/toolbox-ui/ui/main.slint:522 crates/toolbox-ui/ui/main.slint:527
+msgctxt "ui.common.right"
 msgid "Right"
 msgstr ""
 
@@ -471,33 +471,13 @@ msgid "Alignment"
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:527
-msgctxt "ui.quake.horizontal_alignment.left"
-msgid "Left"
-msgstr ""
-
-#: crates/toolbox-ui/ui/main.slint:527
 msgctxt "ui.quake.horizontal_alignment.center"
 msgid "Center"
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:527
-msgctxt "ui.quake.horizontal_alignment.right"
-msgid "Right"
-msgstr ""
-
-#: crates/toolbox-ui/ui/main.slint:527
-msgctxt "ui.quake.vertical_alignment.top"
-msgid "Top"
-msgstr ""
-
-#: crates/toolbox-ui/ui/main.slint:527
 msgctxt "ui.quake.vertical_alignment.center"
 msgid "Center"
-msgstr ""
-
-#: crates/toolbox-ui/ui/main.slint:527
-msgctxt "ui.quake.vertical_alignment.bottom"
-msgid "Bottom"
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:534
@@ -516,17 +496,17 @@ msgid "Show on display"
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:544
-msgctxt "ui.quake.monitor.at_mouse_pointer"
+msgctxt "ui.common.at_mouse_pointer"
 msgid "At mouse pointer"
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:544
-msgctxt "ui.quake.monitor.with_foreground_window"
+msgctxt "ui.common.with_foreground_window"
 msgid "With foreground window"
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:544
-msgctxt "ui.quake.monitor.primary_display"
+msgctxt "ui.common.primary_display"
 msgid "Primary display"
 msgstr ""
 
@@ -655,17 +635,17 @@ msgid ""
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:606
-msgctxt "ui.main.system"
+msgctxt "ui.common.system"
 msgid "System"
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:607
-msgctxt "ui.main.light"
+msgctxt "ui.common.light"
 msgid "Light"
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:608
-msgctxt "ui.main.dark"
+msgctxt "ui.common.dark"
 msgid "Dark"
 msgstr ""
 
@@ -831,13 +811,13 @@ msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:722 crates/toolbox-ui/ui/main.slint:723
 #: crates/toolbox-ui/ui/main.slint:722 crates/toolbox-ui/ui/main.slint:723
-msgctxt "ui.status.available"
+msgctxt "ui.common.available"
 msgid "Available"
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:722 crates/toolbox-ui/ui/main.slint:723
 #: crates/toolbox-ui/ui/main.slint:722 crates/toolbox-ui/ui/main.slint:723
-msgctxt "ui.status.unavailable"
+msgctxt "ui.common.unavailable"
 msgid "Unavailable"
 msgstr ""
 
@@ -1038,17 +1018,17 @@ msgid "Status"
 msgstr ""
 
 #: crates/toolbox-ui/ui/skills.slint:377
-msgctxt "ui.skills.status_filter.all"
+msgctxt "ui.common.all"
 msgid "All"
 msgstr ""
 
 #: crates/toolbox-ui/ui/skills.slint:377
-msgctxt "ui.skills.status_filter.enabled"
+msgctxt "ui.common.enabled"
 msgid "Enabled"
 msgstr ""
 
 #: crates/toolbox-ui/ui/skills.slint:377
-msgctxt "ui.skills.status_filter.disabled"
+msgctxt "ui.common.disabled"
 msgid "Disabled"
 msgstr ""
 
@@ -1083,7 +1063,7 @@ msgid "Update"
 msgstr ""
 
 #: crates/toolbox-ui/ui/skills.slint:586
-msgctxt "ui.skills.local_import"
+msgctxt "ui.common.local"
 msgid "Local"
 msgstr ""
 

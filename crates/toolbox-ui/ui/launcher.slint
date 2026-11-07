@@ -238,7 +238,7 @@ export component LauncherWindow inherits Window {
                         padding: 24px;
                         spacing: 10px;
                         Text {
-                            text: !root.loaded ? (@tr("ui.status.connecting" => "Connecting…")) : root.project-loading ? (@tr("ui.projects.loading" => "Reading recent projects…")) : !root.projects-enabled ? (@tr("ui.projects.disabled" => "Recent projects is turned off")) : root.project-error ? (@tr("ui.projects.read_failed" => "Couldn't read recent projects")) : root.query != "" ? (@tr("ui.projects.no_matches" => "No matching projects")) : (@tr("ui.projects.empty" => "No recent projects yet"));
+                            text: !root.loaded ? (@tr("ui.status.connecting" => "Connecting…")) : root.project-loading ? (@tr("ui.common.reading_recent_projects" => "Reading recent projects…")) : !root.projects-enabled ? (@tr("ui.projects.disabled" => "Recent projects is turned off")) : root.project-error ? (@tr("ui.projects.read_failed" => "Couldn't read recent projects")) : root.query != "" ? (@tr("ui.projects.no_matches" => "No matching projects")) : (@tr("ui.projects.empty" => "No recent projects yet"));
                             color: Theme.secondary;
                             font-size: 14px;
                             font-weight: 600;

@@ -502,10 +502,13 @@ impl App {
         let build = || -> Result<TrayIcon, String> {
             let menu = Menu::new();
             for (id, label) in [
-                ("projects", messages::tray_projects().render(locale)),
+                (
+                    "projects",
+                    messages::common_recent_projects().render(locale),
+                ),
                 ("windows", messages::tray_windows().render(locale)),
-                ("skills", messages::tray_skills().render(locale)),
-                ("settings", messages::tray_settings().render(locale)),
+                ("skills", messages::common_skills().render(locale)),
+                ("settings", messages::common_settings().render(locale)),
                 ("diagnostics", messages::tray_diagnostics().render(locale)),
                 ("quit", messages::tray_quit().render(locale)),
             ] {

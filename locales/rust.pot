@@ -39,10 +39,6 @@ msgctxt "rust.skills_empty_sources"
 msgid "Add a source in Repositories, then reload repositories to discover skills."
 msgstr ""
 
-msgctxt "rust.skills_source_all"
-msgid "All"
-msgstr ""
-
 msgctxt "rust.error_app_list_changed_reload_configuration"
 msgid "App list changed; reload configuration"
 msgstr ""
@@ -51,20 +47,8 @@ msgctxt "rust.invalid_arguments"
 msgid "Arguments must be a JSON string array, e.g. [\"--new-window\"]: {error}"
 msgstr ""
 
-msgctxt "rust.monitor_cursor"
-msgid "At mouse pointer"
-msgstr ""
-
-msgctxt "rust.available"
-msgid "Available"
-msgstr ""
-
 msgctxt "rust.error_background_worker_stopped_reopen_the_toolbox"
 msgid "Background worker stopped; reopen the toolbox"
-msgstr ""
-
-msgctxt "rust.edge_bottom"
-msgid "Bottom"
 msgstr ""
 
 msgctxt "rust.launch_candidate"
@@ -99,10 +83,6 @@ msgctxt "rust.status_connected_to_the_resident_host"
 msgid "Connected to the resident host."
 msgstr ""
 
-msgctxt "rust.theme_dark"
-msgid "Dark"
-msgstr ""
-
 msgctxt "rust.confirm_delete_this_app_profile"
 msgid "Delete this app profile?"
 msgstr ""
@@ -126,14 +106,6 @@ msgid ""
 "Link: {target}"
 msgstr ""
 
-msgctxt "rust.disabled"
-msgid "Disabled"
-msgstr ""
-
-msgctxt "rust.skills_disabled"
-msgid "Disabled"
-msgstr ""
-
 msgctxt "rust.confirm_discard_app_changes"
 msgid "Discard app changes?"
 msgstr ""
@@ -148,14 +120,6 @@ msgstr ""
 
 msgctxt "rust.confirm_discard_unsaved_changes"
 msgid "Discard unsaved changes?"
-msgstr ""
-
-msgctxt "rust.enabled"
-msgid "Enabled"
-msgstr ""
-
-msgctxt "rust.skills_enabled"
-msgid "Enabled"
 msgstr ""
 
 msgctxt "rust.skills_enter_repository"
@@ -210,24 +174,12 @@ msgctxt "rust.skills_schedule"
 msgid "Last attempt: {attempt} · Last success: {success} · Next: {next}"
 msgstr ""
 
-msgctxt "rust.edge_left"
-msgid "Left"
-msgstr ""
-
-msgctxt "rust.theme_light"
-msgid "Light"
-msgstr ""
-
 msgctxt "rust.skills_source_linked"
 msgid "Linked"
 msgstr ""
 
 msgctxt "rust.skills_loading"
 msgid "Loading skills from the host…"
-msgstr ""
-
-msgctxt "rust.skills_source_local"
-msgid "Local"
 msgstr ""
 
 msgctxt "rust.match_macos"
@@ -270,10 +222,6 @@ msgctxt "rust.path_invalid_unicode"
 msgid "Path is not valid Unicode."
 msgstr ""
 
-msgctxt "rust.monitor_primary"
-msgid "Primary"
-msgstr ""
-
 msgctxt "rust.project_list_changed"
 msgid "Project list changed; refresh and retry."
 msgstr ""
@@ -294,14 +242,6 @@ msgctxt "rust.tray_quit"
 msgid "Quit Sean Toolbox"
 msgstr ""
 
-msgctxt "rust.projects_reading"
-msgid "Reading recent projects…"
-msgstr ""
-
-msgctxt "rust.tray_projects"
-msgid "Recent projects"
-msgstr ""
-
 msgctxt "rust.skills_empty_discovery"
 msgid "Reload repositories to discover skills from your configured sources."
 msgstr ""
@@ -316,10 +256,6 @@ msgstr ""
 
 msgctxt "rust.confirm_restore_saved_settings_application_profile_edits_will_be_kept"
 msgid "Restore saved settings. Application profile edits will be kept."
-msgstr ""
-
-msgctxt "rust.edge_right"
-msgid "Right"
 msgstr ""
 
 msgctxt "rust.status_save_or_cancel_your_changes_before_opening_a_project"
@@ -346,24 +282,12 @@ msgctxt "rust.tray_tooltip"
 msgid "Sean Toolbox · Personal toolbox"
 msgstr ""
 
-msgctxt "rust.tray_settings"
-msgid "Settings"
-msgstr ""
-
 msgctxt "rust.skills_shared"
 msgid "Shared"
 msgstr ""
 
-msgctxt "rust.tray_skills"
-msgid "Skills"
-msgstr ""
-
 msgctxt "rust.skills_submitting"
 msgid "Submitting skills operation…"
-msgstr ""
-
-msgctxt "rust.theme_system"
-msgid "System"
 msgstr ""
 
 msgctxt "rust.diagnostics_summary"
@@ -406,16 +330,8 @@ msgctxt "rust.confirm_this_removes_the_profile_and_shortcut_the_application_rema
 msgid "This removes the profile and shortcut. The application remains installed."
 msgstr ""
 
-msgctxt "rust.edge_top"
-msgid "Top"
-msgstr ""
-
 msgctxt "rust.activation_failed"
 msgid "UI activation service failed: {error}"
-msgstr ""
-
-msgctxt "rust.unavailable"
-msgid "Unavailable"
 msgstr ""
 
 msgctxt "rust.skills_uninstall_title"
@@ -436,10 +352,6 @@ msgstr ""
 
 msgctxt "rust.tray_windows"
 msgid "Window shortcuts"
-msgstr ""
-
-msgctxt "rust.monitor_foreground"
-msgid "With foreground window"
 msgstr ""
 
 msgctxt "rust.match_linux"
