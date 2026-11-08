@@ -4815,6 +4815,114 @@ mod tests {
     }
 
     #[test]
+    fn skills_tabs_icons_and_source_chips_accept_pointer_clicks() {
+        with_test_ui(|ui, controller, _| {
+            use slint::platform::{PointerEventButton, WindowEvent};
+            ui.set_setting_language(1);
+            controller.settings_changed();
+            ui.set_page(4);
+            ui.window().set_size(slint::LogicalSize::new(1120.0, 780.0));
+            ui.show().unwrap();
+            let render = || {
+                TEST_WINDOWS.with(|windows| {
+                    let windows = windows.borrow();
+                    let mut pixels = slint::SharedPixelBuffer::<slint::Rgb8Pixel>::new(1120, 780);
+                    windows[0].draw_if_needed(|renderer| {
+                        renderer.render(pixels.make_mut_slice(), 1120);
+                    });
+                });
+            };
+            let skills = ui.global::<SkillsState>();
+            let requested = Rc::new(std::cell::Cell::new(-1));
+            let observed = requested.clone();
+            skills.on_change_view(move |view| observed.set(view));
+            // Tab centers observed in the real layout: Discover, On this device,
+            // Repositories, then back to Installed.
+            for (x, view) in [(350.0, 1), (445.0, 2), (551.0, 3), (270.0, 0)] {
+                render();
+                let position = slint::LogicalPosition::new(x, 94.0);
+                ui.window()
+                    .dispatch_event(WindowEvent::PointerMoved { position });
+                ui.window().dispatch_event(WindowEvent::PointerPressed {
+                    position,
+                    button: PointerEventButton::Left,
+                });
+                ui.window().dispatch_event(WindowEvent::PointerReleased {
+                    position,
+                    button: PointerEventButton::Left,
+                });
+                assert_eq!(
+                    requested.get(),
+                    view,
+                    "a tab click must request its Skills view"
+                );
+                skills.set_view(view);
+            }
+
+            // The first row's Claude Code toggle, and the first enabled toggle
+            // found along that row, must receive the click as well.
+            receive_skills_snapshot(controller, skills_snapshot());
+            let toggled = Rc::new(std::cell::Cell::new(-1));
+            let toggles = toggled.clone();
+            skills.on_toggle_row_app(move |_, app, _| toggles.set(app));
+            let mut hits = Vec::new();
+            for y in (330..=420).step_by(6) {
+                render();
+                let position = slint::LogicalPosition::new(887.0, y as f32);
+                ui.window()
+                    .dispatch_event(WindowEvent::PointerMoved { position });
+                ui.window().dispatch_event(WindowEvent::PointerPressed {
+                    position,
+                    button: PointerEventButton::Left,
+                });
+                ui.window().dispatch_event(WindowEvent::PointerReleased {
+                    position,
+                    button: PointerEventButton::Left,
+                });
+                if toggled.get() >= 0 {
+                    hits.push((y, toggled.get()));
+                    toggled.set(-1);
+                }
+            }
+            assert!(
+                hits.iter().any(|&(_, app)| app == 0),
+                "an app icon click must toggle that app: {hits:?}"
+            );
+
+            // The source chip beside the first skill name opens its repository.
+            let opened = Rc::new(std::cell::RefCell::new(String::new()));
+            let opens = opened.clone();
+            skills.on_open_source(move |target| *opens.borrow_mut() = target.to_string());
+            'scan: for y in (340..=370).step_by(5) {
+                for x in (300..=700).step_by(8) {
+                    render();
+                    let position = slint::LogicalPosition::new(x as f32, y as f32);
+                    ui.window()
+                        .dispatch_event(WindowEvent::PointerMoved { position });
+                    ui.window().dispatch_event(WindowEvent::PointerPressed {
+                        position,
+                        button: PointerEventButton::Left,
+                    });
+                    ui.window().dispatch_event(WindowEvent::PointerReleased {
+                        position,
+                        button: PointerEventButton::Left,
+                    });
+                    if !opened.borrow().is_empty() {
+                        break 'scan;
+                    }
+                }
+            }
+            assert!(
+                opened
+                    .borrow()
+                    .starts_with("https://github.com/sean2077/skills/tree/0123456789abcdef/"),
+                "the source chip must open the installed commit: {:?}",
+                opened.borrow()
+            );
+        });
+    }
+
+    #[test]
     fn action_and_navigation_buttons_accept_the_first_pointer_click() {
         with_test_ui(|ui, controller, _| {
             use slint::platform::{PointerEventButton, WindowEvent};
