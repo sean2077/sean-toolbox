@@ -177,7 +177,7 @@ impl ImportedConfig {
         if filename.to_ascii_lowercase().ends_with(".json") || text.trim_start().starts_with('{') {
             let config: Config =
                 serde_json::from_str(text).map_err(messages::config_invalid_json)?;
-            config.validate()?;
+            config.check()?;
             Ok(Self {
                 profiles: config.windows.profiles.clone(),
                 config: Some(config),
@@ -195,7 +195,7 @@ impl ImportedConfig {
         }
     }
 
-    pub fn apply(&self, current: &Config, replace: bool) -> Result<Config, String> {
+    pub fn apply(&self, current: &Config, replace: bool) -> Result<Config, UiText> {
         let mut next = if replace {
             self.config.clone().unwrap_or_else(|| current.clone())
         } else {
@@ -217,7 +217,7 @@ impl ImportedConfig {
                 }
             }
         }
-        next.validate()?;
+        next.check()?;
         Ok(next)
     }
 
@@ -652,7 +652,17 @@ mod tests {
             warnings: vec![],
             filename: "test.ini".into(),
         };
-        assert!(imported.apply(&current, false).is_err());
+        let error = imported.apply(&current, false).unwrap_err();
+        assert!(matches!(error, UiText::Localized(_)));
+        let shortcut = &current.projects.hotkey;
+        assert_eq!(
+            error.render(Locale::ZhCn),
+            format!("快捷键 {shortcut} 已被其他应用使用，请选择其他组合。")
+        );
+        assert_eq!(
+            error.render(Locale::En),
+            format!("{shortcut} is already used by another application. Choose another shortcut.")
+        );
     }
 
     #[test]

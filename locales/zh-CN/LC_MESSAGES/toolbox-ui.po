@@ -2078,6 +2078,50 @@ msgctxt "rust.shortcut_capture_failed"
 msgid "Recording stopped: {error}. Your shortcut is unchanged."
 msgstr "录制已停止：{error}。原快捷键已保留。"
 
+msgctxt "rust.config_error_unsupported_version"
+msgid "This configuration version is not supported."
+msgstr "不支持此配置版本。"
+
+msgctxt "rust.config_error_language"
+msgid "Choose Chinese or English as the interface language."
+msgstr "界面语言只能选择中文或英文。"
+
+msgctxt "rust.config_error_too_many_profiles"
+msgid "At most 100 applications are supported."
+msgstr "最多支持 100 个应用。"
+
+msgctxt "rust.config_error_profile_shortcut"
+msgid "{id}: Invalid shortcut. Use modifiers with A–Z, 0–9, Space, Tab, Enter or Escape, or press F1–F24."
+msgstr "{id}：快捷键无效。请使用修饰键配合 A–Z、0–9、空格、Tab、Enter 或 Escape，或使用 F1–F24。"
+
+msgctxt "rust.config_error_quake_dimensions"
+msgid "{id}: Docked window width and height must be 10–100%."
+msgstr "{id}：下拉窗口的宽高须为 10–100%。"
+
+msgctxt "rust.config_error_profile_id"
+msgid "Invalid or duplicate application ID: {id}. Use a unique ID with 1–64 letters, digits, - or _."
+msgstr "应用标识「{id}」无效或重复。请使用不重复的应用标识，由 1–64 个字母、数字、- 或 _ 组成。"
+
+msgctxt "rust.config_error_name_or_matcher"
+msgid "{id}: Enter a name and a window match."
+msgstr "{id}：请填写名称和匹配标识。"
+
+msgctxt "rust.config_error_duplicate_shortcut"
+msgid "{shortcut} is already used by another application. Choose another shortcut."
+msgstr "快捷键 {shortcut} 已被其他应用使用，请选择其他组合。"
+
+msgctxt "rust.config_error_launch_candidates"
+msgid "{id}: Each application needs 1–8 launch candidates."
+msgstr "{id}：每个应用需要 1–8 个启动候选。"
+
+msgctxt "rust.config_error_launch_command"
+msgid "{id}: Check the program path, arguments and working directory."
+msgstr "{id}：请检查程序路径、启动参数和工作目录。"
+
+msgctxt "rust.config_error_vscode_path"
+msgid "The VS Code path is invalid."
+msgstr "VS Code 路径无效。"
+
 #~ msgctxt "ui.navigation.projects"
 #~ msgid "Recent projects"
 #~ msgstr "最近项目"

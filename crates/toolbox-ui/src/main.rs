@@ -1408,7 +1408,7 @@ impl Controller {
             .map_err(|_| UiText::from(messages::invalid_idle_timeout()))?;
         let code = ui.get_setting_code_path().trim().to_owned();
         config.projects.vscode_path = (!code.is_empty()).then_some(code);
-        config.validate()?;
+        config.check()?;
         Ok(config)
     }
 
@@ -1417,12 +1417,14 @@ impl Controller {
             return;
         }
         self.end_shortcut_capture();
-        if let Err(error) = config.validate() {
+        if let Err(error) = config.check() {
+            let error = UiText::from(error);
+            let text = error.render(self.locale());
             if kind == SaveKind::Profile {
-                self.ui().set_profile_error(error.clone().into());
+                self.ui().set_profile_error(text.into());
                 self.ui().set_form_advanced(true);
             } else if kind == SaveKind::Settings {
-                self.ui().set_settings_error(error.clone().into());
+                self.ui().set_settings_error(text.into());
             }
             self.error(error);
             return;

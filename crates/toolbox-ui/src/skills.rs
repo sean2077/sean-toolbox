@@ -28,6 +28,27 @@ pub(super) struct SkillsUiState {
     operation: Option<SkillsCommand>,
     operation_pending: bool,
     operation_error: Option<UiText>,
+    /// Repository ids behind source filter entries 3.. at the last render.
+    source_repository_ids: Vec<String>,
+}
+
+/// Source filter entries are `[All, Local, Linked, repositories…]`. Follow a
+/// repository choice by id when the list changes, falling back to All when it
+/// is gone, so a removal never silently filters by another repository.
+fn remap_source_filter(filter: i32, previous: &[String], current: &[String]) -> i32 {
+    let Some(index) = usize::try_from(filter)
+        .ok()
+        .and_then(|index| index.checked_sub(3))
+    else {
+        return filter;
+    };
+    if previous.is_empty() || previous == current {
+        return filter;
+    }
+    previous
+        .get(index)
+        .and_then(|id| current.iter().position(|current| current == id))
+        .map_or(0, |position| position as i32 + 3)
 }
 
 /// A batch always targets the explicit selection, including filtered-out rows.
@@ -723,6 +744,23 @@ impl Controller {
         let ui = self.ui();
         let skills = ui.global::<SkillsState>();
         let locale = self.locale();
+        {
+            let mut state = self.state.borrow_mut();
+            let skills_state = &mut state.skills;
+            if let Some(snapshot) = &skills_state.snapshot {
+                let ids = snapshot
+                    .repositories
+                    .iter()
+                    .map(|repository| repository.id.clone())
+                    .collect::<Vec<_>>();
+                skills.set_source_filter(remap_source_filter(
+                    skills.get_source_filter(),
+                    &skills_state.source_repository_ids,
+                    &ids,
+                ));
+                skills_state.source_repository_ids = ids;
+            }
+        }
         let state = self.state.borrow();
         let error = if state.skills.submitting {
             String::new()
@@ -1002,10 +1040,19 @@ impl Controller {
             skills.set_selected_updatable(installed.repository_id.is_some());
             skills.set_selected_error(installed.last_error.clone().unwrap_or_default().into());
         } else if let Some(path) = pending_import {
+            // The host names an imported skill after its folder, so a picked
+            // folder gets the same "already managed" review as a scanned one.
+            let managed = std::path::Path::new(path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .and_then(|name| managed_skill_for_directory(snapshot, name));
+            if let Some(managed) = managed {
+                skills.set_selected_managed_id(managed.id.clone().into());
+            }
             skills.set_selected_name(messages::skills_review_local_import().render(locale).into());
             skills.set_selected_description("".into());
             skills.set_selected_source(path.into());
-            skills.set_selected_installed(false);
+            skills.set_selected_installed(managed.is_some());
             skills.set_selected_linked(false);
             skills.set_selected_master_path(path.into());
             skills.set_selected_source_target(path.into());
@@ -2316,6 +2363,74 @@ mod tests {
             controller.show_skill_problems();
             assert_eq!(skills.get_rows().row_count(), 1);
             assert_eq!(skills.get_rows().row_data(0).unwrap().id, "beta");
+        });
+    }
+
+    #[test]
+    fn source_filter_follows_its_repository_when_the_list_changes() {
+        use toolbox_core::skills::SkillRepository;
+        let repository = |id: &str| SkillRepository {
+            id: id.into(),
+            url: format!("https://github.com/example/{id}.git"),
+            branch: None,
+            revision: None,
+            last_error: None,
+        };
+        let mut snapshot = ux_snapshot();
+        snapshot.repositories = vec![repository("a"), repository("b"), repository("c")];
+        snapshot.installed = vec![
+            installed_skill("from-a", Some("a"), &[], false),
+            installed_skill("from-b", Some("b"), &[], false),
+            installed_skill("from-c", Some("c"), &[], false),
+        ];
+        crate::tests::with_test_ui(move |ui, controller, _| {
+            receive_snapshot(controller, snapshot.clone(), false);
+            let skills = ui.global::<SkillsState>();
+            skills.set_source_filter(5);
+            controller.render_skills();
+            assert_eq!(skills.get_rows().row_data(0).unwrap().id, "from-c");
+
+            // Removing an earlier repository shifts c, but the filter still means c.
+            let mut without_b = snapshot.clone();
+            without_b
+                .repositories
+                .retain(|repository| repository.id != "b");
+            without_b.installed.retain(|skill| skill.id != "from-b");
+            receive_snapshot(controller, without_b.clone(), true);
+            assert_eq!(skills.get_source_filter(), 4);
+            assert_eq!(skills.get_rows().row_count(), 1);
+            assert_eq!(skills.get_rows().row_data(0).unwrap().id, "from-c");
+
+            // Once c itself is gone, the filter returns to All instead of picking a.
+            let mut without_c = without_b;
+            without_c
+                .repositories
+                .retain(|repository| repository.id != "c");
+            without_c.installed.retain(|skill| skill.id != "from-c");
+            receive_snapshot(controller, without_c, true);
+            assert_eq!(skills.get_source_filter(), 0);
+            assert_eq!(skills.get_rows().row_count(), 1);
+        });
+    }
+
+    #[test]
+    fn picked_folder_matching_a_managed_skill_offers_the_installed_item() {
+        crate::tests::with_test_ui(|ui, controller, receive| {
+            receive_snapshot(controller, ux_snapshot(), false);
+            controller.import_skill_folder(Ok(Some("/elsewhere/Alpha".into())));
+            let skills = ui.global::<SkillsState>();
+            assert!(skills.get_import_from_folder());
+            assert!(skills.get_selected_installed());
+            assert_eq!(skills.get_selected_managed_id(), "alpha");
+            controller.install_selected_skill();
+            assert!(
+                receive.try_recv().is_err(),
+                "a folder that is already managed is not submitted"
+            );
+
+            controller.import_skill_folder(Ok(Some("/elsewhere/gamma".into())));
+            assert!(!skills.get_selected_installed());
+            assert_eq!(skills.get_selected_managed_id(), "");
         });
     }
 

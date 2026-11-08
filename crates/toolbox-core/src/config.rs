@@ -411,21 +411,75 @@ impl From<LegacyConfig> for Config {
     }
 }
 
+/// Why a configuration is rejected. `Display` is the stable English
+/// diagnostic shared by the host, IPC and logs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConfigError {
+    UnsupportedVersion,
+    InvalidLanguage,
+    TooManyProfiles,
+    IdleTimeout,
+    /// The recent-projects shortcut does not parse; carries the parser reason.
+    LauncherShortcut(String),
+    /// A profile shortcut does not parse: profile id and parser reason.
+    ProfileShortcut(String, String),
+    QuakeDimensions(String),
+    InvalidProfileId(String),
+    InvalidNameOrMatcher(String),
+    DuplicateShortcut(String),
+    LaunchCandidates(String),
+    InvalidLaunchCommand(String),
+    InvalidVsCodePath,
+}
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedVersion => {
+                f.write_str("Unsupported configuration version / 不支持的配置版本")
+            }
+            Self::InvalidLanguage => f.write_str("Invalid language"),
+            Self::TooManyProfiles => f.write_str("At most 100 application profiles are supported"),
+            Self::IdleTimeout => f.write_str("UI idle timeout must be between 0 and 3600 seconds"),
+            Self::LauncherShortcut(error) | Self::ProfileShortcut(_, error) => f.write_str(error),
+            Self::QuakeDimensions(id) => write!(
+                f,
+                "{id}: Quake dimensions must be between 10 and 100 percent / 下拉窗口宽高须为 10–100%"
+            ),
+            Self::InvalidProfileId(id) => write!(f, "Invalid or duplicate profile id: {id}"),
+            Self::InvalidNameOrMatcher(id) => write!(f, "Invalid name or matcher: {id}"),
+            Self::DuplicateShortcut(hotkey) => write!(f, "Duplicate shortcut: {hotkey}"),
+            Self::LaunchCandidates(_) => f.write_str("Each profile needs 1–8 launch candidates"),
+            Self::InvalidLaunchCommand(id) => write!(f, "Invalid launch command: {id}"),
+            Self::InvalidVsCodePath => f.write_str("Invalid VS Code override"),
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
 impl Config {
+    /// Validates with the stable English diagnostic used by the host and IPC.
     pub fn validate(&self) -> Result<(), String> {
+        self.check().map_err(|error| error.to_string())
+    }
+
+    /// Validates and keeps the reason, so a UI can present it in its own language.
+    pub fn check(&self) -> Result<(), ConfigError> {
         if self.schema_version != 2 {
-            return Err("Unsupported configuration version / 不支持的配置版本".into());
+            return Err(ConfigError::UnsupportedVersion);
         }
         if !matches!(self.general.language.as_str(), "zh-CN" | "en") {
-            return Err("Invalid language".into());
+            return Err(ConfigError::InvalidLanguage);
         }
         if self.windows.profiles.len() > 100 {
-            return Err("At most 100 application profiles are supported".into());
+            return Err(ConfigError::TooManyProfiles);
         }
         if self.ui.idle_seconds > 3600 {
-            return Err("UI idle timeout must be between 0 and 3600 seconds".into());
+            return Err(ConfigError::IdleTimeout);
         }
-        let launcher = HotkeySpec::parse(&self.projects.hotkey)?;
+        let launcher =
+            HotkeySpec::parse(&self.projects.hotkey).map_err(ConfigError::LauncherShortcut)?;
         let mut hotkeys = HashSet::new();
         hotkeys.insert(launcher.canonical());
         let mut ids = HashSet::new();
@@ -433,10 +487,7 @@ impl Config {
             if !(10..=100).contains(&p.quake.width_percent)
                 || !(10..=100).contains(&p.quake.height_percent)
             {
-                return Err(format!(
-                    "{}: Quake dimensions must be between 10 and 100 percent / 下拉窗口宽高须为 10–100%",
-                    p.id
-                ));
+                return Err(ConfigError::QuakeDimensions(p.id.clone()));
             }
             if p.id.is_empty()
                 || p.id.len() > 64
@@ -446,7 +497,7 @@ impl Config {
                     .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
                 || !ids.insert(p.id.to_ascii_lowercase())
             {
-                return Err(format!("Invalid or duplicate profile id: {}", p.id));
+                return Err(ConfigError::InvalidProfileId(p.id.clone()));
             }
             if p.name.trim().is_empty()
                 || p.name.len() > 160
@@ -454,22 +505,26 @@ impl Config {
                 || p.matcher.len() > 1024
                 || p.matcher.contains('\0')
             {
-                return Err(format!("Invalid name or matcher: {}", p.id));
+                return Err(ConfigError::InvalidNameOrMatcher(p.id.clone()));
             }
             let key = if p.hotkey.is_empty() {
                 None
             } else {
-                Some(HotkeySpec::parse(&p.hotkey)?.canonical())
+                Some(
+                    HotkeySpec::parse(&p.hotkey)
+                        .map_err(|error| ConfigError::ProfileShortcut(p.id.clone(), error))?
+                        .canonical(),
+                )
             };
             if self.windows.enabled
                 && p.enabled
                 && p.platform == Platform::current()
                 && key.is_some_and(|k| !hotkeys.insert(k))
             {
-                return Err(format!("Duplicate shortcut: {}", p.hotkey));
+                return Err(ConfigError::DuplicateShortcut(p.hotkey.clone()));
             }
             if p.launch.is_empty() || p.launch.len() > 8 {
-                return Err("Each profile needs 1–8 launch candidates".into());
+                return Err(ConfigError::LaunchCandidates(p.id.clone()));
             }
             for command in &p.launch {
                 if command.executable.trim().is_empty()
@@ -485,7 +540,7 @@ impl Config {
                         .as_ref()
                         .is_some_and(|s| s.contains('\0') || s.len() > 4096)
                 {
-                    return Err(format!("Invalid launch command: {}", p.id));
+                    return Err(ConfigError::InvalidLaunchCommand(p.id.clone()));
                 }
             }
         }
@@ -495,7 +550,7 @@ impl Config {
             .as_ref()
             .is_some_and(|s| s.contains('\0') || s.len() > 4096)
         {
-            return Err("Invalid VS Code override".into());
+            return Err(ConfigError::InvalidVsCodePath);
         }
         Ok(())
     }
@@ -734,6 +789,31 @@ mod tests {
         assert_eq!((partial.width_percent, partial.height_percent), (100, 50));
         assert!(!partial.always_on_top);
         assert!(!partial.hide_on_focus_loss);
+    }
+
+    #[test]
+    fn typed_validation_keeps_the_english_host_diagnostics() {
+        let mut config = Config::default();
+        config.ui.idle_seconds = 3601;
+        assert_eq!(config.check(), Err(ConfigError::IdleTimeout));
+        assert_eq!(
+            config.validate().unwrap_err(),
+            "UI idle timeout must be between 0 and 3600 seconds"
+        );
+        let mut config = Config::default();
+        config.windows.profiles[0].id = "bad id".into();
+        assert_eq!(
+            config.check(),
+            Err(ConfigError::InvalidProfileId("bad id".into()))
+        );
+        assert_eq!(
+            config.validate().unwrap_err(),
+            "Invalid or duplicate profile id: bad id"
+        );
+        config.windows.profiles[0].id = "app".into();
+        config.projects.vscode_path = Some("bad\0path".into());
+        assert_eq!(config.check(), Err(ConfigError::InvalidVsCodePath));
+        assert_eq!(config.validate().unwrap_err(), "Invalid VS Code override");
     }
 
     #[test]
