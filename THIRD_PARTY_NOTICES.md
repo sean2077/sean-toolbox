@@ -41,7 +41,8 @@ Source: <https://github.com/farion1231/cc-switch>, commit
 The centralized skills library, repository discovery, local import and per-app
 enable/disable workflows were informed by CC Switch's skills service and user
 manual. Sean Toolbox implements these independently in Rust and Slint, using
-copy deployments with ownership checks and a host-owned daily update scheduler.
+managed master copies with ownership checks, per-app symlink or copy deployment,
+and a host-owned daily update scheduler.
 No CC Switch source code or runtime dependencies are bundled. The app icons are
 used with attribution; see the next section.
 

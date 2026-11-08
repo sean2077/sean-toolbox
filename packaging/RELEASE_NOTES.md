@@ -1,31 +1,47 @@
-# Sean Toolbox 0.2.0
+# Sean Toolbox 0.3.0
 
-新增 Skills 管理：集中安装、部署并每日更新 AI 编程工具的 Skills。原有应用快捷键、下拉/停靠、最近项目和按需界面继续可用。
+本次更新重做管理窗口的导航与设置布局，新增可选的 Skills 复制部署方式，并改进 Skills 的批量操作与来源展示；界面和 `sean-toolbox --version` 现在显示构建版本。原有应用快捷键、下拉/停靠、最近项目和按需界面继续可用。
 
-## 新增：Skills 管理
+## 新增：Skills 部署方式
 
-- 从 GitHub 仓库发现和安装 Skills，可指定分支；也可扫描本机已有目录，或导入包含 `SKILL.md` 的文件夹。
-- 支持 Claude Code、Codex、Gemini CLI、OpenCode、Grok Build 的默认 Skills 目录；私有主副本加复制部署，不需要 Windows 开发者模式。
-- “已安装”页可按应用启用/停用、单项或全部更新、卸载；本机导入保留原目录，不接管已有同名目录。
-- 每日自动更新默认关闭；开启后立即检查，成功后间隔 24 小时，失败后 1 小时重试。宿主运行时执行，关闭界面后继续，下次启动补跑。
-- 更新和卸载前校验 SHA-256 指纹；检测到本地修改会停止并报告，不覆盖用户文件。Git 只读取裸仓库和归档，不执行 Skill 代码、hooks、filters 或 submodule。
-- 私有仓库沿用已配置的非交互 Git 凭据；需要 `git` 位于 `PATH`。当前支持 GitHub 默认用户路径，不含 skills.sh 市场、ZIP 导入或自定义应用目录。
-- 入口：托盘“Skills 管理”、`sean-toolbox show skills`，或管理窗口左侧“技能管理”（`Ctrl+5`）。CLI 支持 `skills list|status|discover|update|daily on|off`。
+- “仓库”页新增“默认部署方式”，可选“符号链接”（默认）或“复制”，对仓库安装和复制导入的受管技能生效。切换只改变之后启用的应用目录；关闭再启用对应应用开关即可按当前方式重新部署。链接方式的本机导入始终使用符号链接，不受此设置影响。
+- 本机导入确认页可选择添加方式：“复制”（默认）保存独立主副本；或“链接”保留原目录并在应用目录创建符号链接，源目录修改立即生效。
+- 符号链接方式在 Windows 需要开发者模式或符号链接权限，创建失败会报错并可切换为复制后重试；复制方式不需要额外系统权限。
+- CLI 支持 `sean-toolbox skills deploy symlink` 或 `sean-toolbox skills deploy copy`；部署方式与每日更新保存在 `skills/state.json`。
 
-| 应用 | 默认部署目录 |
-| --- | --- |
-| Claude Code | `~/.claude/skills` |
-| Codex | `~/.codex/skills` |
-| Gemini CLI | `~/.gemini/skills` |
-| OpenCode | `~/.config/opencode/skills` |
-| Grok Build | `~/.grok/skills` |
+## 改进：Skills 管理
+
+- 已安装列表每行直接切换各应用的部署状态，窄窗口可在详情中调整；可按状态和来源筛选，来源筛选按仓库记忆。
+- 勾选多个技能后，批量栏的应用图标可统一启用或停用：勾选标识表示所选技能都已部署，点击全部停用；“−”表示部分部署，点击全部启用。悬停图标可查看部署数量和点击效果。
+- 技能名称右侧恢复来源标签 `owner/repo@提交`，点击可打开对应提交下的技能目录；详情集中显示完整描述、源路径、主副本或链接方式、各应用部署目录和具体错误。
+- 修复“发现 / 本机技能 / 仓库”标签页无法点击切换的问题。
+- 自动更新适配两种部署方式：符号链接直接跟随主副本更新，复制部署先校验副本指纹再替换；检测到本地修改时仍会停止并报告，不覆盖用户文件。
+
+## 改进：管理窗口与设置
+
+- 设置页按“通用”“最近项目”“窗口切换”“技能管理”“配置文件”五类分组，左侧切换，搜索跨类匹配；保存失败自动切到出错字段所在分类，保存与撤销固定在底部。
+- “窗口切换”页支持搜索或选择已有应用；基本编辑区集中显示程序、显示名称、快捷键和窗口行为，匹配标识、配置 ID 和启动参数移入“高级选项”。
+- 快捷键录制流程重做：录制前显示提示，`Esc` 取消并保留原值，`Backspace` / `Delete` 清空；语法错误或重复配置在字段旁提示，系统注册失败在保存时报告并保留草稿。
+- 语言和主题即时预览；语言切换同步更新管理窗口、最近项目面板及操作提示和摘要，托盘菜单在保存语言设置后更新。
+- 配置改为按通用、最近项目、窗口切换、界面分组的结构（`schema_version` 2），已有的版本 1 配置读取后自动迁移，并在下次保存时写为分组格式。
+- 确认框按内容自适应并居中，破坏性操作使用红色警告图标；导航快捷键改为悬停提示；窄窗口导航折叠为带提示的图标。
+
+## 改进：最近项目面板
+
+- 新增 `Page Up` / `Page Down` 按页移动。
+- `Alt+Enter` 或底部信息按钮展开完整路径，展开后可选中并复制；较长路径在列表中省略中间部分，悬停可查看完整路径。
+- 详情展开时第一次 `Esc` 收起详情，再次按下才收起面板。
+
+## 构建版本显示
+
+- 界面侧栏、关于区域和 `sean-toolbox --version` 显示构建时的 `git describe --tags --dirty`，例如 `v0.2.0-26-gaf25bd0`；正好位于发布 tag 时显示 `v0.3.0`，没有 Git 信息时回退为 `v<Cargo 版本>`。
 
 ## 主要功能
 
 - **应用快捷键**：按需启动应用，切回或最小化窗口；同一应用有多个窗口时依次切换。默认示例为 WezTerm `F3`、VS Code `F4`、Chrome `F5`。
 - **下拉与停靠**：窗口可停靠到四边，按工作区比例设置宽高，选择显示器与对齐位置。Windows 支持独立的 WezTerm 下拉终端、显示时置顶与失焦自动收起；Linux X11 支持置顶。
 - **最近项目**：`Ctrl+Alt+Space` 打开独立搜索面板，按名称或路径搜索 VS Code Stable 的文件夹、工作区与远程项目，使用键盘或鼠标打开。
-- **Skills 管理**：统一管理 Claude Code、Codex、Gemini CLI、OpenCode 和 Grok Build 的 Skills，支持仓库发现、本机导入、按应用复制部署、单项/全部更新和每日自动更新。
+- **Skills 管理**：统一管理 Claude Code、Codex、Gemini CLI、OpenCode 和 Grok Build 的 Skills，支持仓库发现、本机导入、按应用以符号链接或复制方式部署、单项/全部更新、批量启用和每日自动更新。
 - **界面与配置**：跟随系统、浅色和深色主题，中文和英文界面，配置导入与导出，可选开机启动。
 - **按需界面**：主界面关闭后默认退出界面进程，宿主继续处理托盘和全局快捷键。
 
@@ -33,13 +49,13 @@
 
 | 系统与处理器 | 压缩包 |
 | --- | --- |
-| Windows x64 | `sean-toolbox-0.2.0-windows-x86_64.zip` |
-| macOS Apple 芯片 | `sean-toolbox-0.2.0-macos-aarch64.zip` |
-| macOS Intel | `sean-toolbox-0.2.0-macos-x86_64.zip` |
-| Linux x64 | `sean-toolbox-0.2.0-linux-x86_64.tar.gz` |
+| Windows x64 | `sean-toolbox-0.3.0-windows-x86_64.zip` |
+| macOS Apple 芯片 | `sean-toolbox-0.3.0-macos-aarch64.zip` |
+| macOS Intel | `sean-toolbox-0.3.0-macos-x86_64.zip` |
+| Linux x64 | `sean-toolbox-0.3.0-linux-x86_64.tar.gz` |
 
-每份归档附同名 `.sha256` 校验文件。完整解压后按 `INSTALL.md` 启动；Windows 保留两个 `.exe` 在同一目录，macOS 保持整个 `.app` 完整。升级前从托盘退出工具箱，再替换程序；已有配置和 Skills 管理数据继续保留。
+每份归档附同名 `.sha256` 校验文件。完整解压后按 `INSTALL.md` 启动；Windows 保留两个 `.exe` 在同一目录，macOS 保持整个 `.app` 完整。升级前从托盘退出工具箱，再替换程序；已有配置和 Skills 管理数据继续保留，版本 1 配置会自动迁移。
 
 当前 Windows 包未做 Authenticode 签名；macOS 包未做 Developer ID 签名及 Apple 公证。macOS 窗口控制需要辅助功能权限，Linux 外部窗口控制使用 X11。
 
-[使用指南](https://github.com/sean2077/sean-toolbox/blob/v0.2.0/docs/USAGE.md) · [验证记录](https://github.com/sean2077/sean-toolbox/blob/v0.2.0/docs/VALIDATION.md)
+[使用指南](https://github.com/sean2077/sean-toolbox/blob/v0.3.0/docs/USAGE.md) · [验证记录](https://github.com/sean2077/sean-toolbox/blob/v0.3.0/docs/VALIDATION.md)
