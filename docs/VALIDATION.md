@@ -674,3 +674,24 @@ Quake 截图更新了共享的“已启用／未启用”文案。截图使用�
 本地无法创建 Xvfb 所需 socket；这组修复的四平台构建、完整 IPC 与 Linux 原生 smoke 结果，
 以同一 PR 的最新 Actions 检查项为准。Windows/macOS 的人工字体、缩放、文件选择器与多显示器检查
 仍需在对应桌面环境执行。
+
+## 2026-11-08：UI/UX PR 审阅修复
+
+审阅 `58e6cce` 后修正三处交互问题，均附回归测试：
+
+- 通用设置的最近项目快捷键和缓存时间在每次编辑后重新校验，冲突与格式错误在字段旁即时出现并随修正消失，不再等到保存或切换语言。
+- 最近项目面板在搜索无结果、详情被隐藏时，`Esc` 直接收起面板，不再先消耗一次按键收起不可见的详情。
+- Skills 详情页中的操作让技能离开当前筛选（例如“需要处理”筛选下修复错误）时，详情保持在该技能上；技能被移除后才关闭。
+
+环境为 Windows 11 x86_64，Rust 1.99.1 MSVC 工具链（本机默认 GNU 工具链缺少 `dlltool`，按开发指南改用 MSVC）。
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked -p toolbox-ui` | 100 项通过，含新增 2 项和扩展的启动器 `Esc` 用例；临时撤销 Skills 修复时新用例确定失败 |
+| `cargo test --locked --workspace`（修复前的 PR 头） | 除下述 1 项外全部通过 |
+
+`toolbox-windows` 的 `native_quake_hides_reuses_and_recovers_without_activation` 在本机置顶确认失败；
+同一机器上的 `main`（`132d045`）复现相同失败，PR 未改动该 crate，同一 PR 的 Windows CI 通过，判断为本机桌面环境限制。
+未执行原生桌面人工验收。

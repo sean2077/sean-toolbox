@@ -925,9 +925,21 @@ impl Controller {
         skills.set_batch_app3(fully_deployed(3));
         skills.set_batch_app4(fully_deployed(4));
         let previous_id = skills.get_selected_id();
+        // An open detail page keeps its skill when an edit made there moves it
+        // out of the current filter; it closes only once the skill is gone.
+        let pinned = (view == 0
+            && skills.get_details_visible()
+            && !rows.iter().any(|row| row.id == previous_id))
+        .then(|| {
+            filtered_rows(snapshot, view, "", locale, 0, 0)
+                .into_iter()
+                .find(|row| row.id == previous_id)
+        })
+        .flatten();
         let selected = rows
             .iter()
             .find(|row| row.id == previous_id)
+            .or(pinned.as_ref())
             .or_else(|| rows.first());
         let pending_import = state.skills.pending_import.as_deref();
         let selected_id = pending_import
@@ -2304,6 +2316,32 @@ mod tests {
             controller.show_skill_problems();
             assert_eq!(skills.get_rows().row_count(), 1);
             assert_eq!(skills.get_rows().row_data(0).unwrap().id, "beta");
+        });
+    }
+
+    #[test]
+    fn open_details_keep_a_skill_that_an_edit_moves_out_of_the_filter() {
+        let mut failing = ux_snapshot();
+        failing.installed[1].last_error = Some("Local copy modified".into());
+        crate::tests::with_test_ui(move |ui, controller, _| {
+            receive_snapshot(controller, failing.clone(), false);
+            controller.show_skill_problems();
+            controller.open_skill_details("beta".into());
+            let skills = ui.global::<SkillsState>();
+            assert!(skills.get_details_visible());
+
+            // A successful repair clears the error, so beta leaves the attention filter.
+            receive_snapshot(controller, ux_snapshot(), true);
+            assert_eq!(skills.get_rows().row_count(), 0);
+            assert!(skills.get_details_visible());
+            assert_eq!(skills.get_selected_id(), "beta");
+            assert_eq!(skills.get_selected_name(), "beta");
+            assert_eq!(skills.get_selected_error(), "");
+
+            let mut removed = ux_snapshot();
+            removed.installed.retain(|skill| skill.id != "beta");
+            receive_snapshot(controller, removed, true);
+            assert!(!skills.get_details_visible());
         });
     }
 

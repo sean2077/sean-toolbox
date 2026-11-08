@@ -110,8 +110,9 @@ export component LauncherWindow inherits Window {
     keys := FocusScope {
         capture-key-pressed(event) => {
             if event.text == Key.Escape {
-                if root.details-expanded { root.details-expanded = false; search.focus(); }
-                else { root.dismiss(); }
+                // Details hidden by an empty result set must not swallow Esc.
+                if root.details-expanded && root.selected-path != "" { root.details-expanded = false; search.focus(); }
+                else { root.details-expanded = false; root.dismiss(); }
                 return accept;
             }
             if event.text == Key.Return && event.modifiers.alt {

@@ -1031,7 +1031,11 @@ impl Controller {
         ui.set_settings_error("".into());
         self.apply_theme();
         if self.locale() != self.state.borrow().applied_language {
+            // Re-rendering the language also refreshes every field error.
             self.apply_language();
+        } else {
+            // Keep field errors current while editing, as the app editor does.
+            self.validate_settings();
         }
     }
 
@@ -3490,6 +3494,29 @@ mod tests {
     }
 
     #[test]
+    fn settings_field_errors_follow_each_edit_before_saving() {
+        with_test_ui(|ui, controller, receive| {
+            ui.set_page(2);
+            ui.set_setting_hotkey("F3".into());
+            controller.settings_changed();
+            assert!(
+                !ui.get_setting_hotkey_error().is_empty(),
+                "a conflict is reported next to the field while editing"
+            );
+            ui.set_setting_hotkey("Ctrl+Alt+Space".into());
+            controller.settings_changed();
+            assert!(ui.get_setting_hotkey_error().is_empty());
+            ui.set_setting_idle("abc".into());
+            controller.settings_changed();
+            assert!(!ui.get_setting_idle_error().is_empty());
+            ui.set_setting_idle("60".into());
+            controller.settings_changed();
+            assert!(ui.get_setting_idle_error().is_empty());
+            assert!(receive.try_recv().is_err(), "editing never saves");
+        });
+    }
+
+    #[test]
     fn launcher_full_path_preview_uses_alt_enter_and_escape_before_dismissal() {
         with_test_ui(|_, controller, _| {
             use slint::platform::{Key, WindowEvent};
@@ -3540,6 +3567,19 @@ mod tests {
                 text: Key::Escape.into(),
             });
             assert_eq!(dismissals.get(), 1);
+            launcher.window().dispatch_event(WindowEvent::KeyReleased {
+                text: Key::Escape.into(),
+            });
+
+            // A search without results hides the details; Esc then dismisses at once.
+            launcher.set_details_expanded(true);
+            launcher.set_projects(ModelRc::new(VecModel::from(Vec::<ProjectRow>::new())));
+            launcher.set_selected_project(-1);
+            launcher.window().dispatch_event(WindowEvent::KeyPressed {
+                text: Key::Escape.into(),
+            });
+            assert_eq!(dismissals.get(), 2);
+            assert!(!launcher.get_details_expanded());
         });
     }
 
