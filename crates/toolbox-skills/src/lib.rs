@@ -85,6 +85,17 @@ impl Default for State {
     }
 }
 
+struct ManagerLock(fs::File);
+
+impl Drop for ManagerLock {
+    fn drop(&mut self) {
+        // Closing one descriptor does not release a Unix flock while a fork
+        // or duplicate still shares it. End ownership explicitly, including
+        // when opening the service returns early with an error.
+        let _ = self.0.unlock();
+    }
+}
+
 /// The host runs this service on one worker; the file lock also excludes another host.
 pub struct SkillsService {
     root: PathBuf,
@@ -95,7 +106,7 @@ pub struct SkillsService {
     caches: BTreeMap<String, git::Checkout>,
     fetcher: Box<dyn git::Fetcher>,
     cancel: Arc<AtomicBool>,
-    _lock: fs::File,
+    _lock: ManagerLock,
 }
 
 pub fn unix_now() -> u64 {
@@ -175,6 +186,7 @@ impl SkillsService {
             .map_err(|e| e.to_string())?;
         lock.try_lock()
             .map_err(|_| "Another skills manager is running")?;
+        let lock = ManagerLock(lock);
         let path = root.join("state.json");
         let state = if files::exists(&path)? {
             serde_json::from_slice(&files::read_limited(&path, MAX_STATE_BYTES)?)

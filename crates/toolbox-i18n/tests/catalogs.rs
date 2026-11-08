@@ -69,6 +69,58 @@ fn parses_catalogs_and_allows_translators_to_reorder_arguments() {
 }
 
 #[test]
+fn shared_ui_messages_generate_rust_constructors() {
+    let shared_ui = r#"msgctxt "ui.common.enabled"
+msgid "Enabled"
+msgstr ""
+"#;
+    let chinese =
+        format!("{CHINESE}\nmsgctxt \"ui.common.enabled\"\nmsgid \"Enabled\"\nmsgstr \"已启用\"\n");
+    let directory = fixture(RUST, &format!("{UI}\n{shared_ui}"), &chinese);
+    let messages = catalog::load(directory.path()).unwrap();
+    let shared = messages
+        .rust
+        .iter()
+        .find(|message| message.id == "common_enabled")
+        .unwrap();
+    assert_eq!(shared.english, "Enabled");
+    assert_eq!(shared.chinese, "已启用");
+    assert_eq!(shared.plural, None);
+    assert!(shared.parameters.is_empty());
+}
+
+#[test]
+fn shared_ui_messages_reject_placeholders_and_plurals() {
+    let placeholder_ui = r#"msgctxt "ui.common.bad"
+msgid "{0} enabled"
+msgstr ""
+"#;
+    let placeholder_chinese = format!(
+        "{CHINESE}\nmsgctxt \"ui.common.bad\"\nmsgid \"{{0}} enabled\"\nmsgstr \"{{0}} 已启用\"\n"
+    );
+    let directory = fixture(
+        RUST,
+        &format!("{UI}\n{placeholder_ui}"),
+        &placeholder_chinese,
+    );
+    let error = catalog::load(directory.path()).unwrap_err();
+    assert!(error.contains("must not contain placeholders"), "{error}");
+
+    let plural_ui = r#"msgctxt "ui.common.many"
+msgid "One item"
+msgid_plural "{n} items"
+msgstr[0] ""
+msgstr[1] ""
+"#;
+    let plural_chinese = format!(
+        "{CHINESE}\nmsgctxt \"ui.common.many\"\nmsgid \"One item\"\nmsgid_plural \"{{n}} items\"\nmsgstr[0] \"{{n}} 项\"\n"
+    );
+    let directory = fixture(RUST, &format!("{UI}\n{plural_ui}"), &plural_chinese);
+    let error = catalog::load(directory.path()).unwrap_err();
+    assert!(error.contains("must not be plural"), "{error}");
+}
+
+#[test]
 fn catalog_validation_rejects_translation_regressions() {
     let cases = [
         (
@@ -229,6 +281,39 @@ fn generated_code_preserves_literal_braces_and_reorders_named_arguments() {
             let message = messages::example("{{second}}", "工具");
             assert_eq!(message.render(Locale::En), "{{JSON}} {{second}} then 工具");
             assert_eq!(message.render(Locale::ZhCn), "{{JSON}} 工具，再 {{second}}");
+        }}
+    "#
+    );
+    compile_and_run(directory.path(), &source);
+}
+
+#[test]
+fn many_parameter_messages_use_named_args_structs() {
+    let directory = tempfile::tempdir().unwrap();
+    let messages = [catalog::RustMessage {
+        id: "example".into(),
+        english: "{a} {b} {c} {d}".into(),
+        plural: None,
+        chinese: "{d} {c} {b} {a}".into(),
+        parameters: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+    }];
+    let generated = generate::rust(&messages);
+    assert!(generated.contains("pub struct ExampleArgs"));
+    assert!(generated.contains("pub a: String,"));
+    assert!(generated.contains("pub d: String,"));
+    let source = format!(
+        r#"
+        #[derive(Clone, Copy)] pub enum Locale {{ En, ZhCn }}
+        {generated}
+        fn main() {{
+            let message = messages::example(messages::ExampleArgs {{
+                a: "A".into(),
+                b: "B".into(),
+                c: "C".into(),
+                d: "D".into(),
+            }});
+            assert_eq!(message.render(Locale::En), "A B C D");
+            assert_eq!(message.render(Locale::ZhCn), "D C B A");
         }}
     "#
     );

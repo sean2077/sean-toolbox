@@ -120,7 +120,8 @@ cargo clippy --locked -p toolbox-ui --all-targets -- -D warnings
 `ui/main.slint` generates the Rust bindings and exports `ui/launcher.slint`
 and `ui/skills.slint`.
 Shared rows are defined in `ui/project-types.slint`, components in
-`ui/components.slint`, and embedded icons in `ui/icons/`. The frontend uses
+`ui/components.slint`, shared messages in `ui/common-messages.slint`, and
+embedded icons in `ui/icons/`. The frontend uses
 Slint's Winit backend and software renderer.
 
 Every page stays mounted, and layout constraints propagate from each page up

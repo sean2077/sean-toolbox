@@ -116,9 +116,9 @@ Skills 的网络和文件操作在宿主的独立 worker 串行执行，桌面�
 
 | 资源 | 维护方式 |
 | --- | --- |
-| `.slint` 中的 `@tr("ui.context" => "English source")` | 静态界面的英文源文与稳定上下文；以语义命名，组件改名不影响翻译 |
+| `.slint` 中的 `@tr("ui.context" => "English source")` | 静态界面的英文源文与稳定上下文；以语义命名，组件改名不影响翻译；`ui.common.*` 表示 Rust 与 Slint 共用的无参数消息 |
 | [`locales/ui.pot`](../locales/ui.pot) | 官方 `slint-tr-extractor` 提取的界面模板，不手工修改 |
-| [`locales/rust.pot`](../locales/rust.pot) | Rust 消息的英文模板；`msgctxt` 使用 `rust.snake_case`，生成同名构造函数 |
+| [`locales/rust.pot`](../locales/rust.pot) | Rust 专属消息的英文模板；`msgctxt` 使用 `rust.snake_case`，生成同名构造函数；共享标签放在 `ui.common.*`，不在此重复 |
 | [`locales/zh-CN/LC_MESSAGES/toolbox-ui.po`](../locales/zh-CN/LC_MESSAGES/toolbox-ui.po) | 界面、Rust 消息和托盘共用的简体中文翻译；可用 PO 编辑器维护 |
 
 首次维护翻译需安装与项目 Slint 版本一致的提取器及 GNU gettext 工具（`msgcat`、`msgmerge`、`msgfmt`）：
@@ -132,7 +132,9 @@ python scripts/translations.py check
 
 也可使用 `make translations` 和 `make translations-check`。普通构建不需要上述命令行工具。每次构建都会检查重复、缺失、空白、fuzzy 条目和占位符契约；CI 额外重新提取界面源文，检查 `ui.pot` 是否过期。`update` 不使用模糊匹配自动采纳旧译文；检查只比较翻译语义，不因提取日期和源行号变化报错。
 
-新增 Rust 消息时，在 `rust.pot` 定义完整句子，再更新中文 PO。通过 `messages::config_exported(path)` 等生成函数取得 `Message`，在呈现时调用 `.render(locale)`；不要在业务逻辑中传入成对的中英文字符串。Rust 模板只接受 `{name}` 命名参数与 `{{` / `}}` 字面括号；构造函数参数按名字字母序排列，修改英文语序不会改变调用顺序。含 `msgid_plural` 的消息把 `count: usize` 固定为首参数，其余参数仍按名字排序；英文区分 1 与其他数量，中文使用单一复数形式。
+新增 Rust 消息时，在 `rust.pot` 定义完整句子，再更新中文 PO。通过 `messages::config_exported(path)` 等生成函数取得 `Message`，在呈现时调用 `.render(locale)`；不要在业务逻辑中传入成对的中英文字符串。Rust 模板只接受 `{name}` 命名参数与 `{{` / `}}` 字面括号；四个及以上参数的消息生成具名参数结构体（例如 `DiagnosticsSummaryArgs`），调用方按字段名构造，重命名占位符不会静默换参；更小的消息保持按名字排序的位置参数。含 `msgid_plural` 的消息把 `count: usize` 固定为首参数，其余参数仍按名字排序；英文区分 1 与其他数量，中文使用单一复数形式。
+
+Rust 与 Slint 都需要显示的无参数标签（例如 Enabled、Quake 边缘、主题名）统一定义在 [`common-messages.slint`](../crates/toolbox-ui/ui/common-messages.slint) 的 `ui.common.*` 上下文中。Slint 通过 `SharedMessages` 属性读取，由提取器写入 `ui.pot`，构建时为 Rust 生成 `messages::common_*` 构造函数。独立于具体控件的定义可保留 Rust 格式化模型使用的文案，避免布局调整时误删生成 API。同一概念只有一条 PO 条目；共享条目不得含占位符或复数。
 
 Slint 使用 `{0}`、`{1}` 等参数和原生复数语法。整句话属于同一模板，翻译可以调整参数顺序；用户路径、Skill 描述、仓库地址等值不参与模板解析。英文源文是默认回退；受支持的中文条目必须完整，缺翻译会使构建失败。增加新语言还需扩展 `Locale`、配置校验与对应复数规则。
 

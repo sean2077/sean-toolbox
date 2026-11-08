@@ -23,6 +23,14 @@ assert_eq!(message.render(Locale::En), "2 shown · 3 recent projects");
 assert_eq!(message.render(Locale::ZhCn), "显示 2 项 · 共 3 个最近项目");
 ```
 
+Rust also receives constructors for parameterless UI messages with an
+`ui.common.*` context. `toolbox-ui/ui/common-messages.slint` owns those entries;
+Slint bindings read `SharedMessages` and Rust calls generated
+`messages::common_*` constructors, so labels such as "Enabled" or "Top" have
+exactly one PO entry and cannot drift between surfaces. Keeping these definitions
+separate from a particular control preserves Rust-formatted model labels when
+the layout changes.
+
 Keep messages and their arguments until presentation, rather than storing their
 rendered text. Rendering takes an explicit locale and does not mutate global
 state. Configuration tags remain `en` and `zh-CN`; unknown tags use English.
@@ -33,13 +41,16 @@ arguments. Arguments are captured with `Display`, then passed to generated Rust
 `format!` expressions; argument text is never parsed as a template.
 
 Constructor parameters are sorted alphabetically by their placeholder names.
-This is a stable API rule, independent of the order of placeholders in either
-language: editing a sentence's word order cannot swap the values passed by Rust
-callers. Renaming a placeholder changes the API and requires reviewing callers.
+Messages with four or more parameters use a generated named-field
+`<Variant>Args` struct instead of positional arguments, so renaming a
+placeholder cannot silently transpose call-site values. Smaller messages keep
+the sorted positional constructor. Renaming a placeholder still changes the API
+and requires reviewing callers.
 
 A Rust plural has `msgid` and `msgid_plural` in the POT, and one Chinese
 `msgstr[0]`. Its constructor takes `count: usize` first, followed by the remaining
-arguments sorted alphabetically by name. English selects the singular
+arguments sorted alphabetically by name (or the named-field args struct when
+there are four or more parameters). English selects the singular
 only for one; Chinese uses its single form. Other languages are not yet supported
 by this generator. Slint templates use Slint's own `{0}` / `{1}` and `{n}` syntax.
 

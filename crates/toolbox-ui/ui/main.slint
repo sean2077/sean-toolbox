@@ -1,3 +1,4 @@
+import { SharedMessages } from "common-messages.slint";
 import { CheckBox, ComboBox, LineEdit, ScrollView, TextEdit, AboutSlint, Switch, Spinner, SpinBox } from "std-widgets.slint";
 import { Theme, Hint, Icon, Caption, FieldLabel, SectionLabel, Divider, Card, Keycap, ActionButton, NavButton, SearchInput, SettingRow, CapabilityCard, ThemeChoice, QuakePreview } from "components.slint";
 import { ProjectRow } from "project-types.slint";
@@ -5,6 +6,7 @@ import { SkillsPage } from "skills.slint";
 
 export { Palette } from "std-widgets.slint";
 export { Theme } from "components.slint";
+export { SharedMessages } from "common-messages.slint";
 export { ProjectRow } from "project-types.slint";
 export { LauncherWindow } from "launcher.slint";
 export { SkillsState, SkillListRow, SkillAppRow, SkillRepositoryRow } from "skills.slint";
@@ -227,7 +229,7 @@ export component AppWindow inherits Window {
     private property <bool> show-configuration: root.settings-query == "" || root.text-matches(root.settings-query, @tr("ui.settings.search_configuration" => "Configuration import export backup reload JSON INI"));
     callback reset-settings;
     private property <bool> blocked: root.confirm-visible || root.import-visible || root.dialog-busy;
-    private property <string> page-title: root.page == 0 ? (@tr("ui.navigation.projects" => "Recent projects")) : root.page == 1 ? (@tr("ui.navigation.windows" => "Window switcher")) : root.page == 2 ? (@tr("ui.navigation.settings" => "Settings")) : root.page == 4 ? (@tr("ui.navigation.skills" => "Skills")) : (@tr("ui.navigation.status" => "Status & about"));
+    private property <string> page-title: root.page == 0 ? (SharedMessages.recent-projects) : root.page == 1 ? (@tr("ui.navigation.windows" => "Window switcher")) : root.page == 2 ? (SharedMessages.settings) : root.page == 4 ? (SharedMessages.skills) : (@tr("ui.navigation.status" => "Status & about"));
     private property <string> page-description: root.page == 0 ? (@tr("ui.page.projects_description" => "Pick up where you left off in VS Code.")) : root.page == 1 ? (@tr("ui.page.windows_description" => "Your everyday apps, one shortcut away.")) : root.page == 2 ? (@tr("ui.page.settings_description" => "Make the toolbox work your way.")) : root.page == 4 ? (@tr("ui.page.skills_description" => "Manage skills across your agents and keep them up to date.")) : (@tr("ui.page.status_description" => "Check what is available on this device."));
 
     public function focus-page() {
@@ -363,12 +365,12 @@ export component AppWindow inherits Window {
                     }
                     Rectangle { height: 14px; }
                     SectionLabel { visible: !root.compact-navigation; text: @tr("ui.main.workspace" => "WORKSPACE"); height: 22px; }
-                    NavButton { text: @tr("ui.navigation.projects" => "Recent projects"); shortcut: "1"; compact: root.compact-navigation; icon: @image-url("icons/folder.svg"); selected: root.page == 0; clicked => { root.navigate(0); } }
+                    NavButton { text: SharedMessages.recent-projects; shortcut: "1"; compact: root.compact-navigation; icon: @image-url("icons/folder.svg"); selected: root.page == 0; clicked => { root.navigate(0); } }
                     NavButton { text: @tr("ui.navigation.windows" => "Window switcher"); shortcut: "2"; compact: root.compact-navigation; icon: @image-url("icons/windows.svg"); selected: root.page == 1; dirty: root.profile-dirty; clicked => { root.navigate(1); } }
-                    NavButton { text: @tr("ui.navigation.skills" => "Skills"); shortcut: "5"; compact: root.compact-navigation; icon: @image-url("icons/code.svg"); selected: root.page == 4; clicked => { root.navigate(4); } }
+                    NavButton { text: SharedMessages.skills; shortcut: "5"; compact: root.compact-navigation; icon: @image-url("icons/code.svg"); selected: root.page == 4; clicked => { root.navigate(4); } }
                     Rectangle { vertical-stretch: 1; }
                     SectionLabel { visible: !root.compact-navigation; text: @tr("ui.main.preferences" => "PREFERENCES"); height: 22px; }
-                    NavButton { text: @tr("ui.navigation.settings" => "Settings"); shortcut: "3"; compact: root.compact-navigation; icon: @image-url("icons/settings.svg"); selected: root.page == 2; dirty: root.settings-dirty; clicked => { root.navigate(2); } }
+                    NavButton { text: SharedMessages.settings; shortcut: "3"; compact: root.compact-navigation; icon: @image-url("icons/settings.svg"); selected: root.page == 2; dirty: root.settings-dirty; clicked => { root.navigate(2); } }
                     NavButton { text: @tr("ui.navigation.status" => "Status & about"); shortcut: "4"; compact: root.compact-navigation; icon: @image-url("icons/activity.svg"); selected: root.page == 3; clicked => { root.navigate(3); } }
                     Caption { visible: !root.compact-navigation; text: @tr("ui.navigation.shortcut_hint" => "Ctrl / ⌘ + number"); font-size: 11px; }
                     Rectangle { height: 10px; }
@@ -669,12 +671,12 @@ export component AppWindow inherits Window {
                                                         VerticalLayout {
                                                             spacing: 5px;
                                                             FieldLabel { text: @tr("ui.main.screen_edge" => "Screen edge"); }
-                                                            ComboBox { height: 34px; model: [@tr("ui.quake.edge.top" => "Top"), @tr("ui.quake.edge.bottom" => "Bottom"), @tr("ui.quake.edge.left" => "Left"), @tr("ui.quake.edge.right" => "Right")]; current-index <=> root.form-quake-edge; accessible-label: @tr("ui.main.screen_edge" => "Screen edge"); enabled: !root.saving; selected => { root.profile-changed(); } }
+                                                            ComboBox { height: 34px; model: [SharedMessages.top, SharedMessages.bottom, SharedMessages.left, SharedMessages.right]; current-index <=> root.form-quake-edge; accessible-label: @tr("ui.main.screen_edge" => "Screen edge"); enabled: !root.saving; selected => { root.profile-changed(); } }
                                                         }
                                                         VerticalLayout {
                                                             spacing: 5px;
                                                             FieldLabel { text: @tr("ui.main.alignment" => "Alignment"); }
-                                                            ComboBox { height: 34px; model: root.form-quake-edge < 2 ? [@tr("ui.quake.horizontal_alignment.left" => "Left"), @tr("ui.quake.horizontal_alignment.center" => "Center"), @tr("ui.quake.horizontal_alignment.right" => "Right")] : [@tr("ui.quake.vertical_alignment.top" => "Top"), @tr("ui.quake.vertical_alignment.center" => "Center"), @tr("ui.quake.vertical_alignment.bottom" => "Bottom")]; current-index <=> root.form-quake-alignment; accessible-label: @tr("ui.main.alignment" => "Alignment"); enabled: !root.saving; selected => { root.profile-changed(); } }
+                                                            ComboBox { height: 34px; model: root.form-quake-edge < 2 ? [SharedMessages.left, @tr("ui.quake.horizontal_alignment.center" => "Center"), SharedMessages.right] : [SharedMessages.top, @tr("ui.quake.vertical_alignment.center" => "Center"), SharedMessages.bottom]; current-index <=> root.form-quake-alignment; accessible-label: @tr("ui.main.alignment" => "Alignment"); enabled: !root.saving; selected => { root.profile-changed(); } }
                                                         }
                                                     }
                                                     HorizontalLayout {
@@ -691,7 +693,7 @@ export component AppWindow inherits Window {
                                                         }
                                                     }
                                                     FieldLabel { text: @tr("ui.main.show_on_display" => "Show on display"); }
-                                                    ComboBox { height: 34px; model: [@tr("ui.quake.monitor.at_mouse_pointer" => "At mouse pointer"), @tr("ui.quake.monitor.with_foreground_window" => "With foreground window"), @tr("ui.quake.monitor.primary_display" => "Primary display")]; current-index <=> root.form-quake-monitor; accessible-label: @tr("ui.main.show_on_display" => "Show on display"); enabled: !root.saving; selected => { root.profile-changed(); } }
+                                                    ComboBox { height: 34px; model: [SharedMessages.at-mouse-pointer, SharedMessages.with-foreground-window, SharedMessages.primary-display]; current-index <=> root.form-quake-monitor; accessible-label: @tr("ui.main.show_on_display" => "Show on display"); enabled: !root.saving; selected => { root.profile-changed(); } }
                                                     CheckBox { text: @tr("ui.quake.always_on_top" => "Keep on top while shown"); checked <=> root.form-quake-topmost; enabled: !root.saving && root.form-platform != 1; toggled => { root.profile-changed(); } }
                                                     CheckBox { text: @tr("ui.quake.hide_on_blur" => "Hide when focus leaves · Windows"); checked <=> root.form-quake-auto-hide; enabled: !root.saving && root.form-platform == 0; toggled => { root.profile-changed(); } }
                                                     Caption { text: root.form-platform == 1 ? @tr("ui.quake.macos_hint" => "macOS supports placement through Accessibility. Keep-on-top and auto-hide are unavailable.") : root.form-platform == 2 ? @tr("ui.quake.linux_hint" => "Requires an X11 / EWMH desktop. Auto-hide is currently available on Windows only.") : @tr("ui.quake.placement_hint" => "Uses the display work area, leaving room for the taskbar. Esc stays available to your app."); }
@@ -784,9 +786,9 @@ export component AppWindow inherits Window {
                                                 Caption { text: @tr("ui.settings.theme_hint" => "Preview instantly in the manager and project launcher. Save to keep your choice."); }
                                                 HorizontalLayout {
                                                     spacing: 12px;
-                                                    ThemeChoice { text: @tr("ui.main.system" => "System"); scheme: 0; selected: root.setting-theme == 0; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 0; root.settings-changed(); } }
-                                                    ThemeChoice { text: @tr("ui.main.light" => "Light"); scheme: 1; selected: root.setting-theme == 1; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 1; root.settings-changed(); } }
-                                                    ThemeChoice { text: @tr("ui.main.dark" => "Dark"); scheme: 2; selected: root.setting-theme == 2; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 2; root.settings-changed(); } }
+                                                    ThemeChoice { text: SharedMessages.system; scheme: 0; selected: root.setting-theme == 0; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 0; root.settings-changed(); } }
+                                                    ThemeChoice { text: SharedMessages.light; scheme: 1; selected: root.setting-theme == 1; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 1; root.settings-changed(); } }
+                                                    ThemeChoice { text: SharedMessages.dark; scheme: 2; selected: root.setting-theme == 2; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 2; root.settings-changed(); } }
                                                 }
                                             }
                                         }
@@ -859,7 +861,7 @@ export component AppWindow inherits Window {
                                             VerticalLayout {
                                                 spacing: 0px;
                                                 SettingRow {
-                                                    title: @tr("ui.navigation.projects" => "Recent projects");
+                                                    title: SharedMessages.recent-projects;
                                                     description: @tr("ui.settings.projects_hint" => "Find folders and workspaces from VS Code history.");
                                                     Switch { checked <=> root.setting-projects; accessible-label: @tr("ui.main.enable_recent_projects" => "Enable recent projects"); enabled: root.loaded && !root.saving; toggled => { root.settings-changed(); } }
                                                 }
@@ -933,9 +935,9 @@ export component AppWindow inherits Window {
                             }
                             HorizontalLayout {
                                 spacing: 12px;
-                                CapabilityCard { title: @tr("ui.main.window_control" => "Window control"); icon: @image-url("icons/windows.svg"); ready: root.diagnostic-loaded; available: root.diagnostic-window-control; value: !root.diagnostic-loaded ? (@tr("ui.status.unchecked" => "Unchecked")) : root.diagnostic-window-control ? (@tr("ui.status.available" => "Available")) : (@tr("ui.status.unavailable" => "Unavailable")); }
-                                CapabilityCard { title: @tr("ui.main.global_shortcuts" => "Global shortcuts"); icon: @image-url("icons/keyboard.svg"); ready: root.diagnostic-loaded; available: root.diagnostic-hotkeys; value: !root.diagnostic-loaded ? (@tr("ui.status.unchecked" => "Unchecked")) : root.diagnostic-hotkeys ? (@tr("ui.status.available" => "Available")) : (@tr("ui.status.unavailable" => "Unavailable")); }
-                                CapabilityCard { title: @tr("ui.main.system_tray" => "System tray"); icon: @image-url("icons/box.svg"); ready: root.diagnostic-loaded; available: root.diagnostic-tray; value: !root.diagnostic-loaded ? (@tr("ui.status.unchecked" => "Unchecked")) : root.diagnostic-tray ? (@tr("ui.status.available" => "Available")) : (@tr("ui.status.unavailable" => "Unavailable")); }
+                                CapabilityCard { title: @tr("ui.main.window_control" => "Window control"); icon: @image-url("icons/windows.svg"); ready: root.diagnostic-loaded; available: root.diagnostic-window-control; value: !root.diagnostic-loaded ? (@tr("ui.status.unchecked" => "Unchecked")) : root.diagnostic-window-control ? (SharedMessages.available) : (SharedMessages.unavailable); }
+                                CapabilityCard { title: @tr("ui.main.global_shortcuts" => "Global shortcuts"); icon: @image-url("icons/keyboard.svg"); ready: root.diagnostic-loaded; available: root.diagnostic-hotkeys; value: !root.diagnostic-loaded ? (@tr("ui.status.unchecked" => "Unchecked")) : root.diagnostic-hotkeys ? (SharedMessages.available) : (SharedMessages.unavailable); }
+                                CapabilityCard { title: @tr("ui.main.system_tray" => "System tray"); icon: @image-url("icons/box.svg"); ready: root.diagnostic-loaded; available: root.diagnostic-tray; value: !root.diagnostic-loaded ? (@tr("ui.status.unchecked" => "Unchecked")) : root.diagnostic-tray ? (SharedMessages.available) : (SharedMessages.unavailable); }
                             }
                             ScrollView {
                                 vertical-stretch: 1;

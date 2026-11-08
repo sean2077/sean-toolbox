@@ -603,3 +603,74 @@ README 的六张截图已更新为上述最终组件渲染，使用示例数据�
 原快捷键路由的检查。本环境因 Unix socket 限制无法启动 Xvfb，未完成该原生验收。
 Windows/macOS 实机交互尚未在本轮验证；四平台构建、完整 IPC 与 Linux 原生窗口/宿主/UI smoke
 以此 PR 对应提交的 GitHub Actions 结果为准。
+
+## 2026-11-07：翻译目录去重、共享消息与生成 API 加固
+
+基于合并 PR #2/#3 后的 `main`，继续处理复核建议，并同步最新的 Skills 部署与配置分组改动：
+
+- 将 Rust 与 Slint 共用的 20 个无参数消息统一为 `.slint` 中的 `ui.common.*` 上下文；构建期为 Rust 生成 `messages::common_*`，`rust.pot` 移除 22 条重复条目，中文 PO 每个概念只保留一条译文。
+- 四个及以上参数的消息改为具名参数结构体（`DiagnosticsSummaryArgs`、`ImportProfileArgs` 等）；以 `sync_diagnostics` 回归测试校验字段映射。
+- `settings_changed` 只在语言实际变化时重渲染；`sync_diagnostics` 只渲染一次 `last_error` 并少一次 warnings 克隆；`Locale` 增加 `index()` / `from_index()`，UI 预览与宿主托盘共用同一映射。
+- `scripts/translations.py` 的 `msgfmt -o` 改用暂存目录中的 `.mo` 文件，避免 MSYS2 Windows 下在仓库根目录生成 `nul` 文件。
+- 小屏幕 900×650 夹取保持既有行为，并以常量与注释标明其与 `main.slint` 最小尺寸一致；低于该布局最小值的显示不在支持范围。
+
+环境：Windows 11、Rust 1.99.1 MSVC（本机 GNU 工具链缺少 dlltool/windres）、`slint-tr-extractor 1.18.1`、MSYS2 gettext。
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace` | 通过；UI 61 项、`toolbox-i18n` 16 项 |
+| `python scripts/translations.py check` | 通过；104 条 Rust + 230 条界面 = 334 条活动条目，20 条 `ui.common.*` 均有中文译文 |
+| `python -m py_compile scripts/translations.py` | 通过 |
+| 跨目录重复检查 | 共享英文标签的跨目录重复为 0；`ui.common.*` 共 20 条 |
+| 生成 API 回归 | 10 项目录测试通过，含共享消息生成、拒绝占位符/复数、具名参数结构体编译执行 |
+
+## 2026-11-08：UI/UX PR 的跨平台修复与主分支整合
+
+继续处理 [PR #5](https://github.com/sean2077/sean-toolbox/pull/5)，保留已确认的 UI/UX 方向，
+同步主分支 `132d0458225e4c47d6b5f163abd6a33090835ba5` 的翻译去重、共享消息和具名参数 API。
+下表对应代码版本 `ca34dea03843579110944cd3d1d8e00f11f06492`；之后仅更新本记录与 Quake 截图。
+环境为 Ubuntu 24.04 容器、Rust/Cargo 1.99.1、Slint 1.18.1，使用锁定依赖及任务目录中的开发库。
+
+### CI 失败与修复
+
+[首轮 Actions](https://github.com/sean2077/sean-toolbox/actions/runs/42381533397) 的两种 macOS 架构通过；
+Windows 与 Linux 在测试阶段失败，Linux 原生 smoke 尚未执行。
+
+- Windows 的 3 个新 Skills UI 用例把完整路径硬编码为 POSIX 分隔符。生产代码使用 `Path::join()`，
+  本次将用例改为完整 `Path` 比较，保留来源、部署目标、应用提示及具体错误关联的断言。
+- Linux 的 `stale_staging_directories_are_cleaned_on_open_without_touching_unknown_entries`
+  在关闭服务后立即重开时遇到残留文件锁。本次以 RAII 守卫显式解锁；守卫只在成功取得锁后创建，
+  并覆盖读取状态失败的提前返回，服务资源清理后才释放锁。
+- 新增确定性的 Unix 重复描述符回归：保留旧锁文件的重复描述符时，服务关闭后仍可立即重开；
+  服务存活时继续拒绝第二个实例，关闭旧描述符不会释放新实例的锁。此模型复现了共享描述符延长锁
+  生命周期的边界，但首轮 CI 日志不足以确定当时持有描述符的具体子进程。
+- 将 20 个共享界面标签集中在 `common-messages.slint`，同步生产界面及渲染 fixture 的调用，
+  保留新的 Skills 布局、快捷键捕获协议、应用编辑行为和 800×580 最小尺寸。
+
+### 提交前验证
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --offline --workspace --all-targets -- -D warnings` | 通过，包括渲染 example |
+| `cargo test --locked --offline --workspace --no-fail-fast` | 262 通过、3 失败、1 ignored；命令退出 101，失败均为下述 IPC 环境限制 |
+| UI / Skills / 国际化测试 | 分别为 98 / 41 / 16 项通过；首轮 CI 失败的相关用例均通过 |
+| 文件锁回归敏感性 | 临时恢复旧的仅关闭句柄行为时，新用例确定失败；还原显式解锁后通过，源文件已完整恢复 |
+| `python3 scripts/translations.py check` | 通过；139 条 Rust + 285 条界面文案，共 424 条活动中文译文，包含 20 个共享标签 |
+| `python3 -m unittest discover -s scripts -p 'test_*.py' -v` | 27 项通过 |
+| 整合后的 Slint 软件渲染 | 52 张预览成功，覆盖项目、应用、设置、Quake、Skills 列表/详情、启动器；中英文、浅深主题及默认/最小尺寸 |
+| 原生 smoke 共用控件探针 | 12 组通过，覆盖 100%/150%/200% 缩放、浅深主题的 11 类关键目标 |
+| `git diff --check` | 通过 |
+
+3 项 IPC 失败仍为 `owner_only_socket_round_trips_and_is_removed_on_drop`、
+`stale_owner_socket_is_recovered_but_active_socket_is_rejected` 和
+`unix_transport_rejects_relative_and_oversized_messages`，均在创建 Unix socket 时返回 `EPERM`。
+与前述同环境基线一致；未跳过用例或修改 IPC 实现。
+
+已目视复核重点默认/最小窗口、共享文案和固定操作栏。README 的 5 张截图与新渲染逐字节相同；
+Quake 截图更新了共享的“已启用／未启用”文案。截图使用示例数据，不表示已发布版本或原生桌面验收。
+本地无法创建 Xvfb 所需 socket；这组修复的四平台构建、完整 IPC 与 Linux 原生 smoke 结果，
+以同一 PR 的最新 Actions 检查项为准。Windows/macOS 的人工字体、缩放、文件选择器与多显示器检查
+仍需在对应桌面环境执行。

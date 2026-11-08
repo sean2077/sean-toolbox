@@ -281,8 +281,8 @@ fn installed_matches(
 
 fn source_options(snapshot: &SkillsSnapshot, locale: Locale) -> Vec<String> {
     let mut options = vec![
-        messages::skills_source_all().render(locale),
-        messages::skills_source_local().render(locale),
+        messages::common_all().render(locale),
+        messages::common_local().render(locale),
         messages::skills_source_linked().render(locale),
     ];
     options.extend(
@@ -347,7 +347,7 @@ fn filtered_rows(
                                 _ => label,
                             }
                         })
-                        .unwrap_or_else(|| messages::skills_source_local().render(locale))
+                        .unwrap_or_else(|| messages::common_local().render(locale))
                 };
                 let apps = skill
                     .apps
@@ -386,9 +386,9 @@ fn filtered_rows(
                     source: source.into(),
                     source_target: source_target(snapshot, skill).into(),
                     status: if enabled {
-                        messages::skills_enabled()
+                        messages::common_enabled()
                     } else {
-                        messages::skills_disabled()
+                        messages::common_disabled()
                     }
                     .render(locale)
                     .into(),
@@ -1923,6 +1923,11 @@ mod tests {
         }
     }
 
+    fn assert_path_eq(actual: &str, expected: &str) {
+        // Compare the complete location using the platform's separator rules.
+        assert_eq!(std::path::Path::new(actual), std::path::Path::new(expected));
+    }
+
     fn receive_snapshot(controller: &Controller, snapshot: SkillsSnapshot, submitted: bool) {
         controller.receive_skills(
             Ok(Response {
@@ -2143,24 +2148,24 @@ mod tests {
                 skills.get_selected_error(),
                 "Preserve edits in /apps/Claude Code/alpha"
             );
-            assert_eq!(skills.get_selected_master_path(), "/toolbox/managed/alpha");
+            assert_path_eq(
+                skills.get_selected_master_path().as_str(),
+                "/toolbox/managed/alpha",
+            );
             assert_eq!(
                 skills.get_selected_source_target(),
                 "https://github.com/sean2077/skills/tree/0123456789abcdef/skills/alpha"
             );
             assert!(skills.get_selected_summary().contains("0123456789abcdef"));
-            assert_eq!(
-                skills.get_apps().row_data(1).unwrap().path,
-                "/apps/Codex/alpha"
+            assert_path_eq(
+                skills.get_apps().row_data(1).unwrap().path.as_str(),
+                "/apps/Codex/alpha",
             );
-            assert!(
-                skills
-                    .get_rows()
-                    .row_data(0)
-                    .unwrap()
-                    .app0_hint
-                    .contains("/apps/Claude Code/alpha")
-            );
+            let hint = skills.get_rows().row_data(0).unwrap().app0_hint;
+            let (_, deployment_path) = hint
+                .split_once('\n')
+                .expect("application tooltip includes its deployment path");
+            assert_path_eq(deployment_path, "/apps/Claude Code/alpha");
             assert!(
                 receive.try_recv().is_err(),
                 "opening details never changes deployments"
@@ -2232,7 +2237,10 @@ mod tests {
             assert!(skills.get_selected_source().contains("sean2077/skills"));
             assert!(skills.get_apps().row_data(0).unwrap().enabled);
             assert!(!skills.get_apps().row_data(1).unwrap().enabled);
-            assert_eq!(skills.get_selected_master_path(), "/toolbox/managed/alpha");
+            assert_path_eq(
+                skills.get_selected_master_path().as_str(),
+                "/toolbox/managed/alpha",
+            );
             assert!(receive.try_recv().is_err());
         });
     }
@@ -2284,11 +2292,15 @@ mod tests {
             let skills = ui.global::<SkillsState>();
             assert_eq!(skills.get_problem_count(), 1);
             assert_eq!(skills.get_affected_skill_count(), 1);
-            assert!(
-                skills
-                    .get_activity_detail()
-                    .contains("beta\n/toolbox/managed/beta\nLocal copy modified")
-            );
+            let activity = skills.get_activity_detail();
+            let detail = activity
+                .split("\n\n")
+                .find(|detail| detail.starts_with("beta\n"))
+                .expect("the failed skill remains in the activity details");
+            let mut fields = detail.splitn(3, '\n');
+            assert_eq!(fields.next(), Some("beta"));
+            assert_path_eq(fields.next().unwrap(), "/toolbox/managed/beta");
+            assert_eq!(fields.next(), Some("Local copy modified"));
             controller.show_skill_problems();
             assert_eq!(skills.get_rows().row_count(), 1);
             assert_eq!(skills.get_rows().row_data(0).unwrap().id, "beta");

@@ -170,9 +170,9 @@ fn configure_manager(
                     }
                     .render(locale),
                     if index < 3 {
-                        messages::enabled()
+                        messages::common_enabled()
                     } else {
-                        messages::disabled()
+                        messages::common_disabled()
                     }
                     .render(locale)
                 )
@@ -255,8 +255,8 @@ fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
         );
     }
     skills.set_source_options(model(vec![
-        messages::skills_source_all().render(locale).into(),
-        messages::skills_source_local().render(locale).into(),
+        messages::common_all().render(locale).into(),
+        messages::common_local().render(locale).into(),
         messages::skills_source_linked().render(locale).into(),
         "sean2077/skills".into(),
     ]));
@@ -344,9 +344,9 @@ fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
                     "https://github.com/sean2077/skills".into()
                 },
                 status: if enabled {
-                    messages::skills_enabled()
+                    messages::common_enabled()
                 } else {
-                    messages::skills_disabled()
+                    messages::common_disabled()
                 }
                 .render(locale)
                 .into(),

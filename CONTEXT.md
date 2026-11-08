@@ -14,6 +14,11 @@ _Avoid_: 服务端、后台界面
 _Equivalent (en)_: UI, frontend
 _Avoid_: 主程序（主程序指宿主）
 
+**共享消息（shared message）**：
+Rust 与 Slint 都使用的无参数文案，定义在 `.slint` 的 `ui.common.*` 上下文中；构建期同时生成 `messages::common_*`，同一概念只有一条 PO 译文。
+_Equivalent (en)_: shared message, common message
+_Avoid_: 公共标签（含义不够具体）
+
 **应用窗口（application window）**：
 由 `toolbox-windows` 控制的外部应用窗口，例如终端、编辑器或浏览器窗口。
 _Equivalent (en)_: application window
