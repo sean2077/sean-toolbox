@@ -1129,16 +1129,6 @@ msgctxt "ui.skills.attention_details"
 msgid "Needs attention. Open details for the reason and recovery actions."
 msgstr "需要处理。打开详情查看原因与处理方式。"
 
-#: crates/toolbox-ui/ui/skills.slint:475
-msgctxt "ui.skills.not_deployed"
-msgid "Not deployed"
-msgstr "尚未部署"
-
-#: crates/toolbox-ui/ui/skills.slint:475
-msgctxt "ui.skills.deployment_count"
-msgid "Apps: {0}"
-msgstr "应用：{0}"
-
 #: crates/toolbox-ui/ui/skills.slint:486 crates/toolbox-ui/ui/skills.slint:712
 msgctxt "ui.skills.more_actions_for"
 msgid "Actions for {0}"
@@ -2160,6 +2150,16 @@ msgctxt "ui.skills.deploy_column"
 msgid "Deployed to"
 msgstr "部署到"
 
+#: crates/toolbox-ui/ui/skills.slint:524
+msgctxt "ui.skills.open_repository"
+msgid "Open repository: {0}"
+msgstr "打开仓库：{0}"
+
+#: crates/toolbox-ui/ui/skills.slint:524
+msgctxt "ui.skills.open_folder"
+msgid "Open folder: {0}"
+msgstr "打开目录：{0}"
+
 #~ msgctxt "ui.navigation.projects"
 #~ msgid "Recent projects"
 #~ msgstr "最近项目"
@@ -2450,14 +2450,6 @@ msgstr "部署到"
 #~ msgid "Disabled"
 #~ msgstr "未启用"
 
-#~ msgctxt "ui.skills.open_repository"
-#~ msgid "Open repository: {0}"
-#~ msgstr "打开仓库：{0}"
-
-#~ msgctxt "ui.skills.open_folder"
-#~ msgid "Open folder: {0}"
-#~ msgstr "打开目录：{0}"
-
 #~ msgctxt "ui.skills.more_actions"
 #~ msgid "More actions"
 #~ msgstr "更多操作"
@@ -2565,3 +2557,11 @@ msgstr "部署到"
 #~ msgctxt "ui.main.configuration"
 #~ msgid "CONFIGURATION"
 #~ msgstr "配置管理"
+
+#~ msgctxt "ui.skills.not_deployed"
+#~ msgid "Not deployed"
+#~ msgstr "尚未部署"
+
+#~ msgctxt "ui.skills.deployment_count"
+#~ msgid "Apps: {0}"
+#~ msgstr "应用：{0}"

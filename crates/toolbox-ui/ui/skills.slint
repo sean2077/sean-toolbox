@@ -21,11 +21,52 @@ component SkillTab inherits Rectangle {
     label := Text { text: root.text; color: root.selected ? Theme.accent : Theme.secondary; font-size: 13px; font-weight: root.selected ? 600 : 400; horizontal-alignment: center; vertical-alignment: center; }
     touch := TouchArea { mouse-cursor: pointer; clicked => { keys.focus(); root.clicked(); } }
     keys := FocusScope {
+        // Declared above the TouchArea: without this it takes the click to
+        // focus itself and the tab never switches.
+        focus-on-click: false;
         key-pressed(event) => {
             if event.text == Key.Return || event.text == Key.Space { if !event.repeat { root.clicked(); } return accept; }
             reject
         }
     }
+}
+
+/// A small label beside a skill name. With `link` set it opens a repository
+/// page or folder on click.
+component SkillChip inherits Rectangle {
+    in property <string> text;
+    in property <bool> accent: false;
+    in property <string> link;
+    in property <string> link-hint;
+    callback clicked;
+    private property <bool> hovered: root.link != "" && touch.has-hover;
+    height: 20px;
+    max-width: 220px;
+    min-width: 0px;
+    preferred-width: label.preferred-width + 14px;
+    horizontal-stretch: 0;
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: root.hovered ? Theme.accent : root.accent ? Theme.accent-border : Theme.border;
+    background: root.hovered || root.accent ? Theme.accent-soft : Theme.panel;
+    accessible-role: button;
+    accessible-label: root.link != "" ? root.link-hint : root.text;
+    accessible-action-default => { if root.link != "" { root.clicked(); } }
+    touch := TouchArea {
+        enabled: root.link != "";
+        mouse-cursor: root.link != "" ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+    label := Text {
+        x: 7px; width: parent.width - 14px;
+        text: root.text;
+        color: root.hovered || root.accent ? Theme.accent : Theme.secondary;
+        font-size: 11px;
+        overflow: elide;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    if root.link != "": Tooltip { Hint { text: root.link-hint; } }
 }
 
 component AppToggle inherits Rectangle {
@@ -238,7 +279,8 @@ export component SkillsPage inherits Rectangle {
     // Resolve the breakpoint from the window, outside this page's size hints.
     in property <bool> wide-layout: true;
     private property <bool> wide: root.wide-layout;
-    private property <length> row-height: 76px;
+    // Installed rows have two lines; the other views add a detail line.
+    private property <length> row-height: SkillsState.view == 0 ? 60px : 76px;
     private property <bool> detail-open: SkillsState.details-visible;
     private property <bool> activity-open: SkillsState.activity-visible;
     private property <length> menu-y;
@@ -474,12 +516,21 @@ export component SkillsPage inherits Rectangle {
                                                     horizontal-stretch: 1;
                                                     HorizontalLayout {
                                                         spacing: 7px;
-                                                        Text { text: item.name; color: Theme.text; font-size: 14px; font-weight: 600; overflow: elide; min-width: 0px; horizontal-stretch: 1; }
+                                                        // Installed rows keep source and status beside the name.
+                                                        Text { text: item.name; color: Theme.text; font-size: 14px; font-weight: 600; overflow: elide; min-width: 0px; horizontal-stretch: SkillsState.view == 0 ? 0 : 1; vertical-alignment: center; }
+                                                        if SkillsState.view == 0 && item.source != "": SkillChip {
+                                                            text: item.source;
+                                                            link: item.source-target;
+                                                            link-hint: item.source-target.starts-with("https://") ? @tr("ui.skills.open_repository" => "Open repository: {0}", item.source-target) : @tr("ui.skills.open_folder" => "Open folder: {0}", item.source-target);
+                                                            clicked => { SkillsState.open-source(item.source-target); }
+                                                        }
+                                                        if SkillsState.view == 0: SkillChip { text: item.status; accent: item.enabled; }
                                                         if item.problem: Icon { source: @image-url("icons/warning.svg"); width: 14px; colorize: Theme.warning; Tooltip { Hint { text: @tr("ui.skills.attention_details" => "Needs attention. Open details for the reason and recovery actions."); } } }
                                                         if item.installed && SkillsState.view != 0: Icon { source: @image-url("icons/check.svg"); width: 14px; colorize: Theme.success; }
+                                                        if SkillsState.view == 0: Rectangle { horizontal-stretch: 1; }
                                                     }
                                                     Text { text: item.description; color: Theme.secondary; font-size: 12px; overflow: elide; min-width: 0px; Tooltip { Hint { text: item.description; } } }
-                                                    Text { text: SkillsState.view == 0 ? item.source + " · " + (item.deployment-count == 0 ? @tr("ui.skills.not_deployed" => "Not deployed") : @tr("ui.skills.deployment_count" => "Apps: {0}", item.deployment-count)) : item.detail; color: Theme.muted; font-size: 12px; overflow: elide; min-width: 0px; }
+                                                    if SkillsState.view != 0: Text { text: item.detail; color: Theme.muted; font-size: 12px; overflow: elide; min-width: 0px; }
                                                 }
                                                 if SkillsState.view == 0: HorizontalLayout {
                                                     width: 166px; spacing: 4px; alignment: center;

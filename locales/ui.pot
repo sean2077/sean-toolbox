@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: toolbox-ui VERSION\n"
-"POT-Creation-Date: 2026-11-08 04:10+0000\n"
+"POT-Creation-Date: 2026-11-08 05:05+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -364,7 +364,7 @@ msgctxt "ui.main.search_results"
 msgid "SEARCH RESULTS"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:439 crates/toolbox-ui/ui/skills.slint:381
+#: crates/toolbox-ui/ui/main.slint:439 crates/toolbox-ui/ui/skills.slint:423
 msgctxt "ui.action.refresh"
 msgid "Refresh"
 msgstr ""
@@ -1025,8 +1025,8 @@ msgctxt "ui.main.slint_website"
 msgid "Slint website"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:1064 crates/toolbox-ui/ui/skills.slint:502
-#: crates/toolbox-ui/ui/main.slint:1064 crates/toolbox-ui/ui/skills.slint:502
+#: crates/toolbox-ui/ui/main.slint:1064 crates/toolbox-ui/ui/skills.slint:553
+#: crates/toolbox-ui/ui/main.slint:1064 crates/toolbox-ui/ui/skills.slint:553
 msgctxt "ui.action.details"
 msgid "Details"
 msgstr ""
@@ -1073,462 +1073,462 @@ msgctxt "ui.dialog.file_chooser_hint"
 msgid "Continue in the file chooser"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:216 crates/toolbox-ui/ui/skills.slint:222
+#: crates/toolbox-ui/ui/skills.slint:257 crates/toolbox-ui/ui/skills.slint:263
 msgctxt "ui.skills.default_deploy_mode"
 msgid "Default deployment mode"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:219
+#: crates/toolbox-ui/ui/skills.slint:260
 msgctxt "ui.skills.deploy_symlink"
 msgid "Symbolic link"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:219
+#: crates/toolbox-ui/ui/skills.slint:260
 msgctxt "ui.skills.deploy_copy"
 msgid "Copy"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:226
+#: crates/toolbox-ui/ui/skills.slint:267
 msgctxt "ui.skills.deploy_mode_hint"
 msgid ""
 "Changes save immediately. Only new deployments use this mode. To change an "
 "existing deployment, turn that skill's app switch off and on."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:227
+#: crates/toolbox-ui/ui/skills.slint:268
 msgctxt "ui.skills.deploy_symlink_hint"
 msgid ""
 "Application folders link to the managed copy. Windows needs Developer Mode "
 "or symbolic-link permission; choose Copy if unavailable."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:227
+#: crates/toolbox-ui/ui/skills.slint:268
 msgctxt "ui.skills.deploy_copy_hint"
 msgid ""
 "Application folders receive independent copies. Symbolic-link permission is "
 "not needed; local modifications remain protected."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:228
+#: crates/toolbox-ui/ui/skills.slint:269
 msgctxt "ui.skills.deploy_scope_hint"
 msgid ""
 "Applies to repository skills and imports copied into Toolbox. Linked local "
 "imports always use symbolic links to their original source."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:341
+#: crates/toolbox-ui/ui/skills.slint:383
 msgctxt "ui.skills.views"
 msgid "Skill views"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:342
+#: crates/toolbox-ui/ui/skills.slint:384
 msgctxt "ui.skills.installed"
 msgid "Installed"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:343
+#: crates/toolbox-ui/ui/skills.slint:385
 msgctxt "ui.skills.discover"
 msgid "Discover"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:344
+#: crates/toolbox-ui/ui/skills.slint:386
 msgctxt "ui.skills.local"
 msgid "On this device"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:345 crates/toolbox-ui/ui/skills.slint:699
+#: crates/toolbox-ui/ui/skills.slint:387 crates/toolbox-ui/ui/skills.slint:750
 msgctxt "ui.skills.repositories"
 msgid "Repositories"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:354 crates/toolbox-ui/ui/skills.slint:355
+#: crates/toolbox-ui/ui/skills.slint:396 crates/toolbox-ui/ui/skills.slint:397
 msgctxt "ui.skills.daily_update"
 msgid "Daily update"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:356 crates/toolbox-ui/ui/skills.slint:701
+#: crates/toolbox-ui/ui/skills.slint:398 crates/toolbox-ui/ui/skills.slint:752
 msgctxt "ui.skills.update_all"
 msgid "Update all"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:374
+#: crates/toolbox-ui/ui/skills.slint:416
 msgctxt "ui.skills.search_skills_or_repositories"
 msgid "Search skills or repositories…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:375
+#: crates/toolbox-ui/ui/skills.slint:417
 msgctxt "ui.skills.clear_search"
 msgid "Clear skill search"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:381 crates/toolbox-ui/ui/skills.slint:518
+#: crates/toolbox-ui/ui/skills.slint:423 crates/toolbox-ui/ui/skills.slint:569
 msgctxt "ui.skills.reload_repositories"
 msgid "Reload repositories"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:381 crates/toolbox-ui/ui/skills.slint:519
+#: crates/toolbox-ui/ui/skills.slint:423 crates/toolbox-ui/ui/skills.slint:570
 msgctxt "ui.skills.scan_this_device"
 msgid "Scan this device"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:389
+#: crates/toolbox-ui/ui/skills.slint:431
 msgctxt "ui.skills.local_intro"
 msgid "Import an existing skill, then choose how to manage and deploy it."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:390
+#: crates/toolbox-ui/ui/skills.slint:432
 msgctxt "ui.skills.import_folder"
 msgid "Import folder"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:394
+#: crates/toolbox-ui/ui/skills.slint:436
 msgctxt "ui.skills.select_visible"
 msgid "Select visible"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:398
+#: crates/toolbox-ui/ui/skills.slint:440
 msgctxt "ui.skills.status"
 msgid "Status"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:399
+#: crates/toolbox-ui/ui/skills.slint:441
 msgctxt "ui.skills.status_filter.all_deployments"
 msgid "All deployments"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:399
+#: crates/toolbox-ui/ui/skills.slint:441
 msgctxt "ui.skills.status_filter.deployed"
 msgid "Deployed"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:399
+#: crates/toolbox-ui/ui/skills.slint:441
 msgctxt "ui.skills.status_filter.not_deployed"
 msgid "Not deployed"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:399
+#: crates/toolbox-ui/ui/skills.slint:441
 msgctxt "ui.skills.status_filter.attention"
 msgid "Needs attention"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:403
+#: crates/toolbox-ui/ui/skills.slint:445
 msgctxt "ui.skills.source"
 msgid "Source"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:412
+#: crates/toolbox-ui/ui/skills.slint:454
 msgctxt "ui.skills.clear_selection"
 msgid "Clear selection"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:416
+#: crates/toolbox-ui/ui/skills.slint:458
 msgctxt "ui.skills.batch_icons_hint"
 msgid "Click an app to enable or disable it for every selected skill."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:437
+#: crates/toolbox-ui/ui/skills.slint:479
 msgctxt "ui.skills.skill_column"
 msgid "Skill"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:438
+#: crates/toolbox-ui/ui/skills.slint:480
 msgctxt "ui.skills.deploy_column"
 msgid "Deployed to"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:451
+#: crates/toolbox-ui/ui/skills.slint:493
 msgctxt "ui.skills.skill_list"
 msgid "Skills. Use arrow keys to navigate and Enter for details."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:471
+#: crates/toolbox-ui/ui/skills.slint:513
 msgctxt "ui.skills.select_named"
 msgid "Select {0}"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:478
+#: crates/toolbox-ui/ui/skills.slint:524
+msgctxt "ui.skills.open_repository"
+msgid "Open repository: {0}"
+msgstr ""
+
+#: crates/toolbox-ui/ui/skills.slint:524
+msgctxt "ui.skills.open_folder"
+msgid "Open folder: {0}"
+msgstr ""
+
+#: crates/toolbox-ui/ui/skills.slint:528
 msgctxt "ui.skills.attention_details"
 msgid "Needs attention. Open details for the reason and recovery actions."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:482
-msgctxt "ui.skills.not_deployed"
-msgid "Not deployed"
-msgstr ""
-
-#: crates/toolbox-ui/ui/skills.slint:482
-msgctxt "ui.skills.deployment_count"
-msgid "Apps: {0}"
-msgstr ""
-
-#: crates/toolbox-ui/ui/skills.slint:493 crates/toolbox-ui/ui/skills.slint:719
+#: crates/toolbox-ui/ui/skills.slint:544 crates/toolbox-ui/ui/skills.slint:770
 msgctxt "ui.skills.more_actions_for"
 msgid "Actions for {0}"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:515
+#: crates/toolbox-ui/ui/skills.slint:566
 msgctxt "ui.skills.clear_filters"
 msgid "Clear filters"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:516
+#: crates/toolbox-ui/ui/skills.slint:567
 msgctxt "ui.skills.find_skills"
 msgid "Discover skills"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:517
+#: crates/toolbox-ui/ui/skills.slint:568
 msgctxt "ui.skills.add_source"
 msgid "Add a repository"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:536 crates/toolbox-ui/ui/skills.slint:537
+#: crates/toolbox-ui/ui/skills.slint:587 crates/toolbox-ui/ui/skills.slint:588
 msgctxt "ui.skills.github_skill_repository"
 msgid "GitHub skill repository"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:540
+#: crates/toolbox-ui/ui/skills.slint:591
 msgctxt "ui.skills.branch_blank_default"
 msgid "Branch (blank = default)"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:541
+#: crates/toolbox-ui/ui/skills.slint:592
 msgctxt "ui.skills.add_and_discover"
 msgid "Add and discover"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:543
+#: crates/toolbox-ui/ui/skills.slint:594
 msgctxt "ui.skills.repository_flow_hint"
 msgid "Git is required. After adding the source, its skills open in Discover."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:549
+#: crates/toolbox-ui/ui/skills.slint:600
 msgctxt "ui.skills.no_repository_hint"
 msgid "Add a repository above to discover its skills."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:557
+#: crates/toolbox-ui/ui/skills.slint:608
 msgctxt "ui.skills.browse_source"
 msgid "Browse skills"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:558 crates/toolbox-ui/ui/skills.slint:603
+#: crates/toolbox-ui/ui/skills.slint:609 crates/toolbox-ui/ui/skills.slint:654
 msgctxt "ui.skills.open_source"
 msgid "Open source"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:560
+#: crates/toolbox-ui/ui/skills.slint:611
 msgctxt "ui.action.remove"
 msgid "Remove"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:562
+#: crates/toolbox-ui/ui/skills.slint:613
 msgctxt "ui.skills.source_in_use"
 msgid ""
 "This source is used by installed skills. Uninstall those skills before "
 "removing it."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:575
+#: crates/toolbox-ui/ui/skills.slint:626
 msgctxt "ui.skills.deployment_settings"
 msgid "Deployment settings"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:576 crates/toolbox-ui/ui/skills.slint:684
+#: crates/toolbox-ui/ui/skills.slint:627 crates/toolbox-ui/ui/skills.slint:735
 msgctxt "ui.skills.activity"
 msgid "Activity"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:587
+#: crates/toolbox-ui/ui/skills.slint:638
 msgctxt "ui.skills.back_to_list"
 msgid "Back to list"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:589
+#: crates/toolbox-ui/ui/skills.slint:640
 msgctxt "ui.skills.deployment_saved_immediately"
 msgid "Deployment changes apply immediately"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:589
+#: crates/toolbox-ui/ui/skills.slint:640
 msgctxt "ui.skills.already_installed"
 msgid "Already installed"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:589
+#: crates/toolbox-ui/ui/skills.slint:640
 msgctxt "ui.skills.review_before_install"
 msgid "Review before installing"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:604
+#: crates/toolbox-ui/ui/skills.slint:655
 msgctxt "ui.skills.open_managed_folder"
 msgid "Open managed folder"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:609
+#: crates/toolbox-ui/ui/skills.slint:660
 msgctxt "ui.skills.managed_folder"
 msgid "Managed folder"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:609
+#: crates/toolbox-ui/ui/skills.slint:660
 msgctxt "ui.skills.source_folder"
 msgid "Source folder"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:610
+#: crates/toolbox-ui/ui/skills.slint:661
 msgctxt "ui.skills.skill_folder_path"
 msgid "Skill folder path"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:616
+#: crates/toolbox-ui/ui/skills.slint:667
 msgctxt "ui.skills.needs_attention"
 msgid "Needs attention"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:618
+#: crates/toolbox-ui/ui/skills.slint:669
 msgctxt "ui.skills.conflict_recovery"
 msgid ""
 "Check the reported cause before retrying. Local modifications and unrelated "
 "folders are not overwritten automatically."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:623 crates/toolbox-ui/ui/skills.slint:629
+#: crates/toolbox-ui/ui/skills.slint:674 crates/toolbox-ui/ui/skills.slint:680
 msgctxt "ui.skills.import_method"
 msgid "Source handling"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:626
+#: crates/toolbox-ui/ui/skills.slint:677
 msgctxt "ui.skills.copy_method"
 msgid "Copy into Toolbox"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:626
+#: crates/toolbox-ui/ui/skills.slint:677
 msgctxt "ui.skills.link_method"
 msgid "Link to the source folder"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:632
+#: crates/toolbox-ui/ui/skills.slint:683
 msgctxt "ui.skills.link_method_hint"
 msgid ""
 "Source changes stay live. Windows needs Developer Mode or symbolic-link "
 "permission. Removing a managed link keeps its source folder."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:632
+#: crates/toolbox-ui/ui/skills.slint:683
 msgctxt "ui.skills.copy_method_hint"
 msgid ""
 "Toolbox keeps an independent copy and preserves the original folder. Choose "
 "how applications receive that managed copy under Default deployment mode."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:634
+#: crates/toolbox-ui/ui/skills.slint:685
 msgctxt "ui.skills.linked_detail_hint"
 msgid ""
 "This is a linked skill. Its source stays live and is excluded from "
 "repository updates."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:635
+#: crates/toolbox-ui/ui/skills.slint:686
 msgctxt "ui.skills.local_update_hint"
 msgid "Local imports have no remote update source."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:636
+#: crates/toolbox-ui/ui/skills.slint:687
 msgctxt "ui.skills.directory_already_managed"
 msgid ""
 "A skill with this directory name is already managed. Open the installed item "
 "to review its source and deployments."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:640
+#: crates/toolbox-ui/ui/skills.slint:691
 msgctxt "ui.skills.deployment_targets"
 msgid "Application deployments"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:641
+#: crates/toolbox-ui/ui/skills.slint:692
 msgctxt "ui.skills.link_source_deployment_hint"
 msgid ""
 "Applications always link to this original source, regardless of the default "
 "deployment mode. Windows needs Developer Mode or symbolic-link permission."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:643
+#: crates/toolbox-ui/ui/skills.slint:694
 msgctxt "ui.skills.deployment_scope_hint"
 msgid ""
 "These switches manage Toolbox deployments. Applications may also read skills "
 "from shared or project directories."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:643
+#: crates/toolbox-ui/ui/skills.slint:694
 msgctxt "ui.skills.install_targets_hint"
 msgid ""
 "Choose applications to deploy to. Leaving all unchecked adds the skill to "
 "Toolbox only."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:649
+#: crates/toolbox-ui/ui/skills.slint:700
 msgctxt "ui.skills.application_directory"
 msgid "{0} deployment directory"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:653
+#: crates/toolbox-ui/ui/skills.slint:704
 msgctxt "ui.skills.import_directory_hint"
 msgid ""
 "Source and destination folders are checked before importing. Local "
 "modifications and unrelated folders remain protected."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:662
+#: crates/toolbox-ui/ui/skills.slint:713
 msgctxt "ui.action.uninstall"
 msgid "Uninstall"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:663 crates/toolbox-ui/ui/skills.slint:725
+#: crates/toolbox-ui/ui/skills.slint:714 crates/toolbox-ui/ui/skills.slint:776
 msgctxt "ui.action.update"
 msgid "Update"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:665
+#: crates/toolbox-ui/ui/skills.slint:716
 msgctxt "ui.skills.view_installed"
 msgid "View installed skill"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:670
+#: crates/toolbox-ui/ui/skills.slint:721
 msgctxt "ui.skills.import_as_link"
 msgid "Import as link"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:670
+#: crates/toolbox-ui/ui/skills.slint:721
 msgctxt "ui.skills.import_as_copy"
 msgid "Import as copy"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:670
+#: crates/toolbox-ui/ui/skills.slint:721
 msgctxt "ui.skills.install_selected"
 msgid "Install selected"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:683
+#: crates/toolbox-ui/ui/skills.slint:734
 msgctxt "ui.skills.back"
 msgid "Back"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:692
+#: crates/toolbox-ui/ui/skills.slint:743
 msgctxt "ui.skills.background_hint"
 msgid ""
 "Work continues while the toolbox is running in the tray. You can return to "
 "the list."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:695
+#: crates/toolbox-ui/ui/skills.slint:746
 msgctxt "ui.skills.operation_details"
 msgid "Operation results and individual skill errors"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:698
+#: crates/toolbox-ui/ui/skills.slint:749
 msgctxt "ui.skills.show_affected"
 msgid "Show affected skills"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:726
+#: crates/toolbox-ui/ui/skills.slint:777
 msgctxt "ui.action.confirm_uninstall"
 msgid "Uninstall..."
 msgstr ""
