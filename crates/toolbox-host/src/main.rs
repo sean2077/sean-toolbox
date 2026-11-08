@@ -61,7 +61,7 @@ fn start() -> Result<(), String> {
             return Ok(());
         }
         Some("--version" | "-V") => {
-            println!("Sean Toolbox {}", env!("CARGO_PKG_VERSION"));
+            println!("Sean Toolbox {}", env!("SEAN_TOOLBOX_VERSION"));
             return Ok(());
         }
         Some("config-path") => {

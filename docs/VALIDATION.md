@@ -716,3 +716,9 @@ Quake 截图更新了共享的“已启用／未启用”文案。截图使用�
 
 本机未安装 GNU gettext，`python scripts/translations.py check` 的 `msgfmt` 步骤以 CI 结果为准；
 新增条目只在 `rust.pot` 与中文 PO 中手工添加，`ui.pot` 未变。
+
+## 2026-11-08：构建版本显示与批量应用图标
+
+- 界面与 `--version` 改为显示构建时的 `git describe`。本机构建显示 `v0.2.0-26-gaf25bd0`（未提交时带 `-dirty`），与命令行 `git describe --tags --match 'v[0-9]*' --dirty` 一致；无 tag 时回退为 `v<Cargo 版本>`。
+- Skills 批量栏恢复应用图标操作，与列表应用列对齐：全部部署显示勾选标识，部分部署显示“−”标识，悬停提示部署数量与点击效果。UI 测试覆盖部分与全部部署两种状态。
+- 中文软件渲染核对了批量栏（浅色，1120×780，Microsoft YaHei UI）。`ui.pot` 用 slint-tr-extractor 1.18.1 重新生成，与 `compare-ui` 一致；本机缺少 GNU gettext，`msgfmt` 校验以 CI 为准。

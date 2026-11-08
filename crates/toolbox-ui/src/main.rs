@@ -2565,7 +2565,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_platform_font_family("Microsoft YaHei UI".into());
         launcher.set_platform_font_family("Microsoft YaHei UI".into());
     }
-    ui.set_version_label(format!("v{}", env!("CARGO_PKG_VERSION")).into());
+    // `git describe` of the build, or `v<package version>` without tags.
+    ui.set_version_label(env!("SEAN_TOOLBOX_VERSION").into());
     let (send, receive) = mpsc::channel();
     let query_generation = Arc::new(AtomicU64::new(0));
     let controller = Rc::new(Controller {

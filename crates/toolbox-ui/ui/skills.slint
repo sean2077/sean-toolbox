@@ -33,6 +33,8 @@ component AppToggle inherits Rectangle {
     in property <string> name;
     in property <string> hint;
     in property <bool> checked;
+    // Some, but not all, of a batch already use this app.
+    in property <bool> partial: false;
     in property <bool> enabled: true;
     callback toggled(bool);
     width: 56px;
@@ -47,6 +49,11 @@ component AppToggle inherits Rectangle {
         x: parent.width - 15px; y: parent.height - 15px; width: 12px; height: 12px;
         border-radius: 6px; background: Theme.accent;
         Image { x: 2px; y: 2px; width: 8px; height: 8px; source: @image-url("icons/check.svg"); colorize: Theme.surface; }
+    }
+    if root.partial && !root.checked: Rectangle {
+        x: parent.width - 15px; y: parent.height - 15px; width: 12px; height: 12px;
+        border-radius: 6px; background: Theme.surface; border-width: 1.5px; border-color: Theme.accent;
+        Rectangle { x: 3px; y: 5px; width: 6px; height: 2px; border-radius: 1px; background: Theme.accent; }
     }
     accessible-role: checkbox;
     accessible-label: root.hint == "" ? root.name : root.hint;
@@ -143,8 +150,9 @@ export global SkillsState {
     in-out property <int> visible-selected-count: 0;
     in-out property <int> hidden-selected-count: 0;
     in-out property <string> selection-text;
-    in-out property <int> batch-target: 0;
-    in-out property <string> batch-deployment-text;
+    // Per-app batch state: partly deployed flags and tooltip text with counts.
+    in-out property <[bool]> batch-partial: [false, false, false, false, false];
+    in-out property <[string]> batch-hints: ["", "", "", "", ""];
     in-out property <bool> batch-app0: false;
     in-out property <bool> batch-app1: false;
     in-out property <bool> batch-app2: false;
@@ -404,13 +412,19 @@ export component SkillsPage inherits Rectangle {
                             ActionButton { text: @tr("ui.skills.clear_selection" => "Clear selection"); subtle: true; enabled: root.editable; clicked => { SkillsState.clear-selection(); } }
                         }
                         HorizontalLayout {
-                            spacing: 8px;
-                            ComboBox { width: 160px; height: 34px; accessible-label: @tr("ui.skills.batch_app" => "Target application for selected skills"); model: ["Claude Code", "Codex", "Gemini CLI", "OpenCode", "Grok Build"]; current-index <=> SkillsState.batch-target; enabled: root.editable; selected => { SkillsState.filter-changed(); } }
-                            Rectangle { horizontal-stretch: 1; }
-                            ActionButton { text: @tr("ui.skills.batch_enable" => "Enable selected"); enabled: root.editable; clicked => { SkillsState.batch-app(SkillsState.batch-target, true); } }
-                            ActionButton { text: @tr("ui.skills.batch_disable" => "Disable selected"); enabled: root.editable; clicked => { SkillsState.batch-app(SkillsState.batch-target, false); } }
+                            spacing: 10px;
+                            Caption { text: @tr("ui.skills.batch_icons_hint" => "Click an app to enable or disable it for every selected skill."); color: Theme.secondary; vertical-alignment: center; horizontal-stretch: 1; }
+                            // Aligned with the app columns of the rows below.
+                            HorizontalLayout {
+                                width: 312px; spacing: 8px; alignment: center;
+                                AppToggle { icon: @image-url("icons/apps/claude.svg"); name: "Claude Code"; hint: SkillsState.batch-hints[0]; checked: SkillsState.batch-app0; partial: SkillsState.batch-partial[0]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(0, value); } }
+                                AppToggle { icon: @image-url("icons/apps/codex.svg"); name: "Codex"; hint: SkillsState.batch-hints[1]; checked: SkillsState.batch-app1; partial: SkillsState.batch-partial[1]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(1, value); } }
+                                AppToggle { icon: @image-url("icons/apps/gemini.svg"); name: "Gemini CLI"; hint: SkillsState.batch-hints[2]; checked: SkillsState.batch-app2; partial: SkillsState.batch-partial[2]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(2, value); } }
+                                AppToggle { icon: @image-url("icons/apps/opencode.svg"); name: "OpenCode"; hint: SkillsState.batch-hints[3]; checked: SkillsState.batch-app3; partial: SkillsState.batch-partial[3]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(3, value); } }
+                                AppToggle { icon: @image-url("icons/apps/grok.svg"); name: "Grok Build"; hint: SkillsState.batch-hints[4]; checked: SkillsState.batch-app4; partial: SkillsState.batch-partial[4]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(4, value); } }
+                            }
+                            if root.wide: Rectangle { width: 38px; }
                         }
-                        Caption { text: SkillsState.batch-deployment-text; color: Theme.secondary; }
                     }
                 }
                 Card {

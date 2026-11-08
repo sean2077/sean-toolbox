@@ -1144,20 +1144,10 @@ msgctxt "ui.skills.clear_selection"
 msgid "Clear selection"
 msgstr "清空选择"
 
-#: crates/toolbox-ui/ui/skills.slint:408
-msgctxt "ui.skills.batch_app"
-msgid "Target application for selected skills"
-msgstr "所选技能的目标应用"
-
-#: crates/toolbox-ui/ui/skills.slint:410
-msgctxt "ui.skills.batch_enable"
-msgid "Enable selected"
-msgstr "启用所选"
-
-#: crates/toolbox-ui/ui/skills.slint:411
-msgctxt "ui.skills.batch_disable"
-msgid "Disable selected"
-msgstr "停用所选"
+#: crates/toolbox-ui/ui/skills.slint:416
+msgctxt "ui.skills.batch_icons_hint"
+msgid "Click an app to enable or disable it for every selected skill."
+msgstr "点击应用图标，为所有已选技能统一启用或停用。"
 
 #: crates/toolbox-ui/ui/skills.slint:423
 msgctxt "ui.skills.skill_column"
@@ -2122,6 +2112,14 @@ msgctxt "rust.config_error_vscode_path"
 msgid "The VS Code path is invalid."
 msgstr "VS Code 路径无效。"
 
+msgctxt "rust.skills_batch_click_enable"
+msgid "Click to enable for all selected skills."
+msgstr "点击为所选技能全部启用。"
+
+msgctxt "rust.skills_batch_click_disable"
+msgid "Click to disable for all selected skills."
+msgstr "点击为所选技能全部停用。"
+
 #~ msgctxt "ui.navigation.projects"
 #~ msgid "Recent projects"
 #~ msgstr "最近项目"
@@ -2483,3 +2481,15 @@ msgstr "VS Code 路径无效。"
 #~ msgctxt "ui.skills.deploy_mode_hint"
 #~ msgid "New app deployments use this mode. Existing deployments stay as they are; turn an app switch off and on to change it."
 #~ msgstr "新启用的应用目录使用该方式；已有部署保持不变，关闭再启用对应应用即可切换。"
+
+#~ msgctxt "ui.skills.batch_app"
+#~ msgid "Target application for selected skills"
+#~ msgstr "所选技能的目标应用"
+
+#~ msgctxt "ui.skills.batch_enable"
+#~ msgid "Enable selected"
+#~ msgstr "启用所选"
+
+#~ msgctxt "ui.skills.batch_disable"
+#~ msgid "Disable selected"
+#~ msgstr "停用所选"

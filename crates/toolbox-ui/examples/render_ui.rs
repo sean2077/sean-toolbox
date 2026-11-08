@@ -247,12 +247,9 @@ fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
         skills.set_hidden_selected_count(1);
         skills.set_all_selected(true);
         skills.set_selection_text(messages::skills_selection_scope(1, 3).render(locale).into());
-        skills.set_batch_target(1);
-        skills.set_batch_deployment_text(
-            messages::skills_batch_deployment("Codex", 2, 3)
-                .render(locale)
-                .into(),
-        );
+        // Mixed deployments: Claude Code on all three, Codex on two of them.
+        skills.set_batch_app0(true);
+        skills.set_batch_partial(model(vec![false, true, false, false, false]));
     }
     skills.set_source_options(model(vec![
         messages::common_all().render(locale).into(),
