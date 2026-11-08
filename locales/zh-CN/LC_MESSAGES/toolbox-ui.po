@@ -2155,6 +2155,11 @@ msgctxt "ui.settings.open_skill_repositories"
 msgid "Open repositories"
 msgstr "打开仓库设置"
 
+#: crates/toolbox-ui/ui/skills.slint:438
+msgctxt "ui.skills.deploy_column"
+msgid "Deployed to"
+msgstr "部署到"
+
 #~ msgctxt "ui.navigation.projects"
 #~ msgid "Recent projects"
 #~ msgstr "最近项目"
