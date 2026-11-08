@@ -36,22 +36,24 @@ component AppToggle inherits Rectangle {
     // Some, but not all, of a batch already use this app.
     in property <bool> partial: false;
     in property <bool> enabled: true;
+    // Narrow windows keep the icons, in a tighter footprint.
+    in property <bool> compact: false;
     callback toggled(bool);
-    width: 56px;
-    height: 34px;
+    width: root.compact ? 34px : 56px;
+    height: root.compact ? 30px : 34px;
     border-radius: 6px;
     border-width: keys.has-focus ? 2px : 1px;
     border-color: keys.has-focus ? Theme.focus : root.checked ? Theme.accent-border : Theme.border;
     background: root.checked ? Theme.accent-soft : touch.has-hover ? Theme.hover : transparent;
     opacity: root.enabled ? 1 : 0.5;
-    Image { x: (parent.width - self.width) / 2; y: 7px; width: 18px; height: 18px; source: root.icon; image-fit: contain; }
+    Image { x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2 - (root.compact ? 0px : 1px); width: root.compact ? 16px : 18px; height: self.width; source: root.icon; image-fit: contain; }
     if root.checked: Rectangle {
-        x: parent.width - 15px; y: parent.height - 15px; width: 12px; height: 12px;
+        x: parent.width - (root.compact ? 12px : 15px); y: parent.height - (root.compact ? 12px : 15px); width: 12px; height: 12px;
         border-radius: 6px; background: Theme.accent;
         Image { x: 2px; y: 2px; width: 8px; height: 8px; source: @image-url("icons/check.svg"); colorize: Theme.surface; }
     }
     if root.partial && !root.checked: Rectangle {
-        x: parent.width - 15px; y: parent.height - 15px; width: 12px; height: 12px;
+        x: parent.width - (root.compact ? 12px : 15px); y: parent.height - (root.compact ? 12px : 15px); width: 12px; height: 12px;
         border-radius: 6px; background: Theme.surface; border-width: 1.5px; border-color: Theme.accent;
         Rectangle { x: 3px; y: 5px; width: 6px; height: 2px; border-radius: 1px; background: Theme.accent; }
     }
@@ -416,14 +418,14 @@ export component SkillsPage inherits Rectangle {
                             Caption { text: @tr("ui.skills.batch_icons_hint" => "Click an app to enable or disable it for every selected skill."); color: Theme.secondary; vertical-alignment: center; horizontal-stretch: 1; }
                             // Aligned with the app columns of the rows below.
                             HorizontalLayout {
-                                width: 312px; spacing: 8px; alignment: center;
-                                AppToggle { icon: @image-url("icons/apps/claude.svg"); name: "Claude Code"; hint: SkillsState.batch-hints[0]; checked: SkillsState.batch-app0; partial: SkillsState.batch-partial[0]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(0, value); } }
-                                AppToggle { icon: @image-url("icons/apps/codex.svg"); name: "Codex"; hint: SkillsState.batch-hints[1]; checked: SkillsState.batch-app1; partial: SkillsState.batch-partial[1]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(1, value); } }
-                                AppToggle { icon: @image-url("icons/apps/gemini.svg"); name: "Gemini CLI"; hint: SkillsState.batch-hints[2]; checked: SkillsState.batch-app2; partial: SkillsState.batch-partial[2]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(2, value); } }
-                                AppToggle { icon: @image-url("icons/apps/opencode.svg"); name: "OpenCode"; hint: SkillsState.batch-hints[3]; checked: SkillsState.batch-app3; partial: SkillsState.batch-partial[3]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(3, value); } }
-                                AppToggle { icon: @image-url("icons/apps/grok.svg"); name: "Grok Build"; hint: SkillsState.batch-hints[4]; checked: SkillsState.batch-app4; partial: SkillsState.batch-partial[4]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(4, value); } }
+                                width: root.wide ? 312px : 186px; spacing: root.wide ? 8px : 4px; alignment: center;
+                                AppToggle { compact: !root.wide; icon: @image-url("icons/apps/claude.svg"); name: "Claude Code"; hint: SkillsState.batch-hints[0]; checked: SkillsState.batch-app0; partial: SkillsState.batch-partial[0]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(0, value); } }
+                                AppToggle { compact: !root.wide; icon: @image-url("icons/apps/codex.svg"); name: "Codex"; hint: SkillsState.batch-hints[1]; checked: SkillsState.batch-app1; partial: SkillsState.batch-partial[1]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(1, value); } }
+                                AppToggle { compact: !root.wide; icon: @image-url("icons/apps/gemini.svg"); name: "Gemini CLI"; hint: SkillsState.batch-hints[2]; checked: SkillsState.batch-app2; partial: SkillsState.batch-partial[2]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(2, value); } }
+                                AppToggle { compact: !root.wide; icon: @image-url("icons/apps/opencode.svg"); name: "OpenCode"; hint: SkillsState.batch-hints[3]; checked: SkillsState.batch-app3; partial: SkillsState.batch-partial[3]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(3, value); } }
+                                AppToggle { compact: !root.wide; icon: @image-url("icons/apps/grok.svg"); name: "Grok Build"; hint: SkillsState.batch-hints[4]; checked: SkillsState.batch-app4; partial: SkillsState.batch-partial[4]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(4, value); } }
                             }
-                            if root.wide: Rectangle { width: 38px; }
+                            Rectangle { width: 38px; }
                         }
                     }
                 }
@@ -437,11 +439,11 @@ export component SkillsPage inherits Rectangle {
                             Text { text: @tr("ui.skills.skill_column" => "Skill"); color: Theme.muted; font-size: 12px; vertical-alignment: center; horizontal-stretch: 1; }
                             HorizontalLayout {
                                 width: 312px; spacing: 8px;
-                                Text { width: 56px; text: "Claude"; font-size: 12px; color: Theme.muted; horizontal-alignment: center; vertical-alignment: center; }
-                                Text { width: 56px; text: "Codex"; font-size: 12px; color: Theme.muted; horizontal-alignment: center; vertical-alignment: center; }
-                                Text { width: 56px; text: "Gemini"; font-size: 12px; color: Theme.muted; horizontal-alignment: center; vertical-alignment: center; }
-                                Text { width: 56px; text: "OpenCode"; font-size: 12px; color: Theme.muted; horizontal-alignment: center; vertical-alignment: center; }
-                                Text { width: 56px; text: "Grok"; font-size: 12px; color: Theme.muted; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { width: 56px; text: "Claude"; font-size: 11px; color: Theme.muted; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { width: 56px; text: "Codex"; font-size: 11px; color: Theme.muted; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { width: 56px; text: "Gemini"; font-size: 11px; color: Theme.muted; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { width: 56px; text: "OpenCode"; font-size: 11px; color: Theme.muted; horizontal-alignment: center; vertical-alignment: center; }
+                                Text { width: 56px; text: "Grok"; font-size: 11px; color: Theme.muted; horizontal-alignment: center; vertical-alignment: center; }
                             }
                             Rectangle { width: 34px; }
                         }
@@ -488,13 +490,13 @@ export component SkillsPage inherits Rectangle {
                                                     Text { text: item.description; color: Theme.secondary; font-size: 12px; overflow: elide; min-width: 0px; Tooltip { Hint { text: item.description; } } }
                                                     Text { text: SkillsState.view == 0 ? item.source + " · " + (item.deployment-count == 0 ? @tr("ui.skills.not_deployed" => "Not deployed") : @tr("ui.skills.deployment_count" => "Apps: {0}", item.deployment-count)) : item.detail; color: Theme.muted; font-size: 12px; overflow: elide; min-width: 0px; }
                                                 }
-                                                if root.wide && SkillsState.view == 0: HorizontalLayout {
-                                                    width: 312px; spacing: 8px; alignment: center;
-                                                    AppToggle { icon: @image-url("icons/apps/claude.svg"); name: "Claude Code"; hint: item.app0-hint; checked: item.app0; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 0, value); } }
-                                                    AppToggle { icon: @image-url("icons/apps/codex.svg"); name: "Codex"; hint: item.app1-hint; checked: item.app1; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 1, value); } }
-                                                    AppToggle { icon: @image-url("icons/apps/gemini.svg"); name: "Gemini CLI"; hint: item.app2-hint; checked: item.app2; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 2, value); } }
-                                                    AppToggle { icon: @image-url("icons/apps/opencode.svg"); name: "OpenCode"; hint: item.app3-hint; checked: item.app3; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 3, value); } }
-                                                    AppToggle { icon: @image-url("icons/apps/grok.svg"); name: "Grok Build"; hint: item.app4-hint; checked: item.app4; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 4, value); } }
+                                                if SkillsState.view == 0: HorizontalLayout {
+                                                    width: root.wide ? 312px : 186px; spacing: root.wide ? 8px : 4px; alignment: center;
+                                                    AppToggle { compact: !root.wide; icon: @image-url("icons/apps/claude.svg"); name: "Claude Code"; hint: item.app0-hint; checked: item.app0; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 0, value); } }
+                                                    AppToggle { compact: !root.wide; icon: @image-url("icons/apps/codex.svg"); name: "Codex"; hint: item.app1-hint; checked: item.app1; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 1, value); } }
+                                                    AppToggle { compact: !root.wide; icon: @image-url("icons/apps/gemini.svg"); name: "Gemini CLI"; hint: item.app2-hint; checked: item.app2; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 2, value); } }
+                                                    AppToggle { compact: !root.wide; icon: @image-url("icons/apps/opencode.svg"); name: "OpenCode"; hint: item.app3-hint; checked: item.app3; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 3, value); } }
+                                                    AppToggle { compact: !root.wide; icon: @image-url("icons/apps/grok.svg"); name: "Grok Build"; hint: item.app4-hint; checked: item.app4; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 4, value); } }
                                                 }
                                                 if SkillsState.view == 0: ActionButton {
                                                     width: 34px; text: @tr("ui.skills.more_actions_for" => "Actions for {0}", item.name); icon-only: true; with-icon: false; subtle: true;

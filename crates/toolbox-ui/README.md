@@ -49,6 +49,9 @@ requests. Results return through `slint::invoke_from_event_loop`.
   shortcuts. A token-scoped three-second host lease intercepts the latter while
   the recorder polls. Native registrations stay intact; closing, focus loss or
   cancellation ends capture, and a missing UI expires without a resident timer.
+- Settings are grouped by component (general, recent projects, window
+  switcher, skills, configuration file); a search spans every category and a
+  failed save opens the category of the invalid field.
 - Settings previews apply language and theme immediately. Discarding settings
   restores their saved values and preserves any application draft.
 - Static text uses Slint's bundled gettext translations. Rust-generated status

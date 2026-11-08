@@ -1,8 +1,8 @@
 import { SharedMessages } from "common-messages.slint";
 import { CheckBox, ComboBox, LineEdit, ScrollView, TextEdit, AboutSlint, Switch, Spinner, SpinBox } from "std-widgets.slint";
-import { Theme, Hint, Icon, Caption, FieldLabel, SectionLabel, Divider, Card, Keycap, ActionButton, NavButton, SearchInput, SettingRow, CapabilityCard, ThemeChoice, QuakePreview } from "components.slint";
+import { Theme, Hint, Icon, Caption, FieldLabel, SectionLabel, Divider, Card, Keycap, ActionButton, NavButton, SearchInput, SettingRow, SettingsHeading, CapabilityCard, ThemeChoice, QuakePreview } from "components.slint";
 import { ProjectRow } from "project-types.slint";
-import { SkillsPage } from "skills.slint";
+import { SkillsPage, SkillsState } from "skills.slint";
 
 export { Palette } from "std-widgets.slint";
 export { Theme } from "components.slint";
@@ -223,10 +223,15 @@ export component AppWindow inherits Window {
         root.narrow-app-list = root.width < 880px;
         root.wide-skills-layout = root.width >= 1100px;
     }
-    private property <bool> show-appearance: root.settings-query == "" || root.text-matches(root.settings-query, @tr("ui.settings.search_appearance" => "Appearance theme light dark system"));
-    private property <bool> show-general: root.settings-query == "" || root.text-matches(root.settings-query, @tr("ui.settings.search_general" => "General language shortcut sign-in startup cache memory speed"));
-    private property <bool> show-tools: root.settings-query == "" || root.text-matches(root.settings-query, @tr("ui.settings.search_tools" => "Tools recent projects window switcher VS Code path"));
-    private property <bool> show-configuration: root.settings-query == "" || root.text-matches(root.settings-query, @tr("ui.settings.search_configuration" => "Configuration import export backup reload JSON INI"));
+    // Settings are grouped by component: 0 general, 1 recent projects,
+    // 2 window switcher, 3 skills, 4 configuration file.
+    in-out property <int> settings-category: 0;
+    private property <bool> settings-searching: root.settings-query != "";
+    private property <bool> show-general: root.settings-searching ? root.text-matches(root.settings-query, @tr("ui.settings.search.general" => "General language theme appearance light dark system sign-in startup login")) : root.settings-category == 0;
+    private property <bool> show-projects: root.settings-searching ? root.text-matches(root.settings-query, @tr("ui.settings.search.projects" => "Recent projects launcher shortcut hotkey VS Code path location cache memory seconds")) : root.settings-category == 1;
+    private property <bool> show-windows: root.settings-searching ? root.text-matches(root.settings-query, @tr("ui.settings.search.windows" => "Window switcher apps applications shortcut dock quake")) : root.settings-category == 2;
+    private property <bool> show-skills-settings: root.settings-searching ? root.text-matches(root.settings-query, @tr("ui.settings.search.skills" => "Skills agents daily update deployment symlink copy repositories")) : root.settings-category == 3;
+    private property <bool> show-configuration: root.settings-searching ? root.text-matches(root.settings-query, @tr("ui.settings.search_configuration" => "Configuration import export backup reload JSON INI")) : root.settings-category == 4;
     callback reset-settings;
     private property <bool> blocked: root.confirm-visible || root.import-visible || root.dialog-busy;
     private property <string> page-title: root.page == 0 ? (SharedMessages.recent-projects) : root.page == 1 ? (@tr("ui.navigation.windows" => "Window switcher")) : root.page == 2 ? (SharedMessages.settings) : root.page == 4 ? (SharedMessages.skills) : (@tr("ui.navigation.status" => "Status & about"));
@@ -247,7 +252,14 @@ export component AppWindow inherits Window {
     public function focus-shortcut-recorder() { keys.focus(); }
     public function focus-settings-problem(field: int) {
         root.settings-query = "";
+        // Both validated fields belong to the recent projects category.
+        root.settings-category = 1;
         root.settings-focus-request = field + 1;
+    }
+    function show-settings-category(category: int) {
+        root.settings-query = "";
+        root.settings-category = category;
+        settings-scroll.content-y = 0px;
     }
     public function focus-profile-problem(field: int) {
         if field >= 3 { root.form-advanced = true; }
@@ -372,7 +384,6 @@ export component AppWindow inherits Window {
                     SectionLabel { visible: !root.compact-navigation; text: @tr("ui.main.preferences" => "PREFERENCES"); height: 22px; }
                     NavButton { text: SharedMessages.settings; shortcut: "3"; compact: root.compact-navigation; icon: @image-url("icons/settings.svg"); selected: root.page == 2; dirty: root.settings-dirty; clicked => { root.navigate(2); } }
                     NavButton { text: @tr("ui.navigation.status" => "Status & about"); shortcut: "4"; compact: root.compact-navigation; icon: @image-url("icons/activity.svg"); selected: root.page == 3; clicked => { root.navigate(3); } }
-                    Caption { visible: !root.compact-navigation; text: @tr("ui.navigation.shortcut_hint" => "Ctrl / ⌘ + number"); font-size: 11px; }
                     Rectangle { height: 10px; }
                     Divider {}
                     HorizontalLayout {
@@ -457,8 +468,9 @@ export component AppWindow inherits Window {
                                                             Text { text: item.name; color: Theme.text; font-size: 14px; font-weight: index == root.selected-project ? 600 : 500; overflow: elide; min-width: 0px; }
                                                             Text { text: item.display-location; color: Theme.muted; font-size: 12px; overflow: elide; min-width: 0px; }
                                                         }
-                                                        Text { text: item.source; font-size: 11px; color: Theme.muted; width: 48px; vertical-alignment: center; }
-                                                        Icon { width: 15px; source: @image-url("icons/arrow-right.svg"); colorize: index == root.selected-project ? Theme.accent : Theme.disabled; }
+                                                        // Every row opens in the same editor; reveal it where it helps.
+                                                        Text { text: item.source; font-size: 11px; color: Theme.muted; width: 48px; vertical-alignment: center; opacity: index == root.selected-project || project-touch.has-hover ? 1 : 0; }
+                                                        Icon { width: 15px; source: @image-url("icons/arrow-right.svg"); colorize: index == root.selected-project ? Theme.accent : Theme.muted; opacity: index == root.selected-project || project-touch.has-hover ? 1 : 0; }
                                                     }
                                                     project-touch := TouchArea {
                                                         enabled: !root.project-opening && !root.project-loading;
@@ -770,140 +782,179 @@ export component AppWindow inherits Window {
                                 clear-label: @tr("ui.action.clear_search" => "Clear search");
                             }
                             if root.settings-error != "": Caption { text: root.settings-error; color: Theme.danger; }
-                            settings-scroll := ScrollView {
+                            HorizontalLayout {
+                                spacing: 16px;
                                 vertical-stretch: 1;
-                                horizontal-scrollbar-policy: always-off;
+                                // One category per component; a search spans all of them.
                                 VerticalLayout {
-                                    padding-right: 8px;
-                                    spacing: 13px;
-                                    if root.show-appearance: VerticalLayout {
-                                        spacing: 9px;
-                                        SectionLabel { text: @tr("ui.main.appearance" => "APPEARANCE"); height: 18px; }
-                                        Card {
-                                            VerticalLayout {
-                                                padding: 14px; spacing: 10px;
-                                                FieldLabel { text: @tr("ui.main.choose_your_theme" => "Choose your theme"); }
-                                                Caption { text: @tr("ui.settings.theme_hint" => "Preview instantly in the manager and project launcher. Save to keep your choice."); }
-                                                HorizontalLayout {
-                                                    spacing: 12px;
-                                                    ThemeChoice { text: SharedMessages.system; scheme: 0; selected: root.setting-theme == 0; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 0; root.settings-changed(); } }
-                                                    ThemeChoice { text: SharedMessages.light; scheme: 1; selected: root.setting-theme == 1; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 1; root.settings-changed(); } }
-                                                    ThemeChoice { text: SharedMessages.dark; scheme: 2; selected: root.setting-theme == 2; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 2; root.settings-changed(); } }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if root.show-general: VerticalLayout {
-                                        private property <int> requested-focus: root.settings-focus-request;
-                                        function focus-problem() {
-                                            if self.requested-focus > 0 {
-                                                settings-scroll.content-y = -self.y;
-                                                if self.requested-focus == 1 { settings-shortcut.focus(); }
-                                                else { settings-idle.focus(); }
-                                                root.settings-focus-request = 0;
-                                            }
-                                        }
-                                        changed requested-focus => { self.focus-problem(); }
-                                        init => { self.focus-problem(); }
-                                        spacing: 9px;
-                                        SectionLabel { text: @tr("ui.main.general" => "GENERAL"); height: 18px; }
-                                        Card {
-                                            VerticalLayout {
-                                                spacing: 0px;
-                                                SettingRow {
-                                                    title: @tr("ui.main.language" => "Language");
-                                                    description: @tr("ui.settings.language_hint" => "Preview immediately. Save to keep your choice.");
-                                                    // Autonyms keep both choices recognizable in either locale.
-                                                    ComboBox {
-                                                        model: ["简体中文", "English"];
-                                                        current-index <=> root.setting-language; accessible-label: @tr("ui.main.language" => "Language");
-                                                        enabled: root.loaded && !root.saving;
-                                                        selected => { root.settings-changed(); }
+                                    width: root.compact-navigation ? 148px : 172px;
+                                    spacing: 2px;
+                                    NavButton { text: @tr("ui.settings.category.general" => "General"); icon: @image-url("icons/settings.svg"); selected: !root.settings-searching && root.settings-category == 0; clicked => { root.show-settings-category(0); } }
+                                    NavButton { text: SharedMessages.recent-projects; icon: @image-url("icons/folder.svg"); selected: !root.settings-searching && root.settings-category == 1; clicked => { root.show-settings-category(1); } }
+                                    NavButton { text: @tr("ui.navigation.windows" => "Window switcher"); icon: @image-url("icons/windows.svg"); selected: !root.settings-searching && root.settings-category == 2; clicked => { root.show-settings-category(2); } }
+                                    NavButton { text: SharedMessages.skills; icon: @image-url("icons/code.svg"); selected: !root.settings-searching && root.settings-category == 3; clicked => { root.show-settings-category(3); } }
+                                    NavButton { text: @tr("ui.settings.category.configuration" => "Configuration file"); icon: @image-url("icons/download.svg"); selected: !root.settings-searching && root.settings-category == 4; clicked => { root.show-settings-category(4); } }
+                                    Rectangle { vertical-stretch: 1; }
+                                }
+                                settings-scroll := ScrollView {
+                                    horizontal-stretch: 1;
+                                    horizontal-scrollbar-policy: always-off;
+                                    VerticalLayout {
+                                        // Short categories stay at the top instead of stretching.
+                                        alignment: start;
+                                        padding-right: 8px;
+                                        spacing: 22px;
+                                        if root.show-general: VerticalLayout {
+                                            spacing: 10px;
+                                            SettingsHeading { title: @tr("ui.settings.category.general" => "General"); description: @tr("ui.settings.general_description" => "Language, appearance and startup."); }
+                                            Card {
+                                                VerticalLayout {
+                                                    spacing: 0px;
+                                                    SettingRow {
+                                                        title: @tr("ui.main.language" => "Language");
+                                                        description: @tr("ui.settings.language_hint" => "Preview immediately. Save to keep your choice.");
+                                                        // Autonyms keep both choices recognizable in either locale.
+                                                        ComboBox {
+                                                            model: ["简体中文", "English"];
+                                                            current-index <=> root.setting-language; accessible-label: @tr("ui.main.language" => "Language");
+                                                            enabled: root.loaded && !root.saving;
+                                                            selected => { root.settings-changed(); }
+                                                        }
+                                                    }
+                                                    Divider {}
+                                                    VerticalLayout {
+                                                        padding: 14px; spacing: 10px;
+                                                        FieldLabel { text: @tr("ui.main.choose_your_theme" => "Choose your theme"); }
+                                                        Caption { text: @tr("ui.settings.theme_hint" => "Preview instantly in the manager and project launcher. Save to keep your choice."); }
+                                                        HorizontalLayout {
+                                                            spacing: 12px;
+                                                            ThemeChoice { text: SharedMessages.system; scheme: 0; selected: root.setting-theme == 0; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 0; root.settings-changed(); } }
+                                                            ThemeChoice { text: SharedMessages.light; scheme: 1; selected: root.setting-theme == 1; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 1; root.settings-changed(); } }
+                                                            ThemeChoice { text: SharedMessages.dark; scheme: 2; selected: root.setting-theme == 2; enabled: root.loaded && !root.saving; clicked => { root.setting-theme = 2; root.settings-changed(); } }
+                                                        }
+                                                    }
+                                                    Divider {}
+                                                    SettingRow {
+                                                        title: @tr("ui.main.launch_at_sign_in" => "Launch at sign-in");
+                                                        description: @tr("ui.settings.autostart_hint" => "Keep your shortcuts ready when you sign in.");
+                                                        Switch { checked <=> root.setting-autostart; accessible-label: @tr("ui.main.launch_at_sign_in" => "Launch at sign-in"); enabled: root.loaded && !root.saving; toggled => { root.settings-changed(); } }
                                                     }
                                                 }
-                                                Divider {}
-                                                VerticalLayout {
-                                                    padding: 14px; spacing: 8px;
-                                                    FieldLabel { text: @tr("ui.settings.launcher_shortcut" => "Recent projects shortcut"); }
-                                                    settings-shortcut := ShortcutEditor {
-                                                        text <=> root.setting-hotkey;
-                                                        label: @tr("ui.settings.launcher_shortcut" => "Recent projects shortcut");
-                                                        recording: root.shortcut-recording == 2;
-                                                        starting: root.shortcut-pending == 2;
-                                                        enabled: root.loaded && !root.saving;
-                                                        edited => { root.settings-changed(); }
-                                                        record => { root.start-shortcut(root.shortcut-recording == 2 || root.shortcut-pending == 2 ? 0 : 2); }
-                                                    }
-                                                    if root.shortcut-pending == 2: Caption { text: @tr("ui.shortcut.preparing" => "Preparing recorder…"); color: Theme.secondary; }
-                                                    if root.shortcut-recording == 2: Caption { text: @tr("ui.shortcut.record_hint" => "Press a shortcut. Esc cancels; Backspace clears."); color: Theme.accent; }
-                                                    if root.setting-hotkey-error != "": Caption { text: root.setting-hotkey-error; color: Theme.danger; }
-                                                }
-                                                Divider {}
-                                                SettingRow {
-                                                    title: @tr("ui.main.launch_at_sign_in" => "Launch at sign-in");
-                                                    description: @tr("ui.settings.autostart_hint" => "Keep your shortcuts ready when you sign in.");
-                                                    Switch { checked <=> root.setting-autostart; accessible-label: @tr("ui.main.launch_at_sign_in" => "Launch at sign-in"); enabled: root.loaded && !root.saving; toggled => { root.settings-changed(); } }
-                                                }
-                                                Divider {}
-                                                SettingRow {
-                                                    title: @tr("ui.settings.cache_title" => "Keep the hidden launcher ready · seconds");
-                                                    description: @tr("ui.settings.cache_hint" => "0 uses less memory. A short delay reopens faster; closing the window releases it immediately.");
-                                                    settings-idle := LineEdit { height: 34px; width: 100px; text <=> root.setting-idle; accessible-label: @tr("ui.settings.cache_title" => "Keep the hidden launcher ready · seconds"); input-type: number; enabled: root.loaded && !root.saving; edited => { root.settings-changed(); } }
-                                                }
-                                                if root.setting-idle-error != "": Caption { text: root.setting-idle-error; color: Theme.danger; }
                                             }
                                         }
-                                    }
-                                    if root.show-tools: VerticalLayout {
-                                        spacing: 9px;
-                                        SectionLabel { text: @tr("ui.main.tools" => "TOOLS"); height: 18px; }
-                                        Card {
-                                            VerticalLayout {
-                                                spacing: 0px;
-                                                SettingRow {
-                                                    title: SharedMessages.recent-projects;
-                                                    description: @tr("ui.settings.projects_hint" => "Find folders and workspaces from VS Code history.");
-                                                    Switch { checked <=> root.setting-projects; accessible-label: @tr("ui.main.enable_recent_projects" => "Enable recent projects"); enabled: root.loaded && !root.saving; toggled => { root.settings-changed(); } }
+                                        if root.show-projects: VerticalLayout {
+                                            private property <int> requested-focus: root.settings-focus-request;
+                                            function focus-problem() {
+                                                if self.requested-focus > 0 {
+                                                    settings-scroll.content-y = -self.y;
+                                                    if self.requested-focus == 1 { settings-shortcut.focus(); }
+                                                    else { settings-idle.focus(); }
+                                                    root.settings-focus-request = 0;
                                                 }
-                                                Divider {}
-                                                SettingRow {
-                                                    title: @tr("ui.navigation.windows" => "Window switcher");
-                                                    description: @tr("ui.settings.windows_hint" => "Launch, focus and minimize apps with a shortcut.");
-                                                    Switch { checked <=> root.setting-windows; accessible-label: @tr("ui.main.enable_window_switcher" => "Enable window switcher"); enabled: root.loaded && !root.saving; toggled => { root.settings-changed(); } }
-                                                }
-                                                Divider {}
+                                            }
+                                            changed requested-focus => { self.focus-problem(); }
+                                            init => { self.focus-problem(); }
+                                            spacing: 10px;
+                                            SettingsHeading { title: SharedMessages.recent-projects; description: @tr("ui.settings.projects_hint" => "Find folders and workspaces from VS Code history."); }
+                                            Card {
                                                 VerticalLayout {
-                                                    padding: 14px; spacing: 8px;
-                                                    Text { text: @tr("ui.main.vs_code_location" => "VS Code location"); color: Theme.text; font-size: 13px; font-weight: 600; }
-                                                    Caption { text: @tr("ui.settings.code_path_hint" => "Leave empty to locate VS Code automatically."); }
+                                                    spacing: 0px;
+                                                    SettingRow {
+                                                        title: @tr("ui.main.enable_recent_projects" => "Enable recent projects");
+                                                        description: @tr("ui.settings.projects_switch_hint" => "Turning this off also releases the panel shortcut.");
+                                                        Switch { checked <=> root.setting-projects; accessible-label: @tr("ui.main.enable_recent_projects" => "Enable recent projects"); enabled: root.loaded && !root.saving; toggled => { root.settings-changed(); } }
+                                                    }
+                                                    Divider {}
+                                                    VerticalLayout {
+                                                        padding: 14px; spacing: 8px;
+                                                        FieldLabel { text: @tr("ui.settings.launcher_shortcut" => "Recent projects shortcut"); }
+                                                        settings-shortcut := ShortcutEditor {
+                                                            text <=> root.setting-hotkey;
+                                                            label: @tr("ui.settings.launcher_shortcut" => "Recent projects shortcut");
+                                                            recording: root.shortcut-recording == 2;
+                                                            starting: root.shortcut-pending == 2;
+                                                            enabled: root.loaded && !root.saving;
+                                                            edited => { root.settings-changed(); }
+                                                            record => { root.start-shortcut(root.shortcut-recording == 2 || root.shortcut-pending == 2 ? 0 : 2); }
+                                                        }
+                                                        if root.shortcut-pending == 2: Caption { text: @tr("ui.shortcut.preparing" => "Preparing recorder…"); color: Theme.secondary; }
+                                                        if root.shortcut-recording == 2: Caption { text: @tr("ui.shortcut.record_hint" => "Press a shortcut. Esc cancels; Backspace clears."); color: Theme.accent; }
+                                                        if root.setting-hotkey-error != "": Caption { text: root.setting-hotkey-error; color: Theme.danger; }
+                                                    }
+                                                    Divider {}
+                                                    VerticalLayout {
+                                                        padding: 14px; spacing: 8px;
+                                                        FieldLabel { text: @tr("ui.main.vs_code_location" => "VS Code location"); }
+                                                        Caption { text: @tr("ui.settings.code_path_hint" => "Leave empty to locate VS Code automatically."); }
+                                                        HorizontalLayout {
+                                                            spacing: 8px;
+                                                            LineEdit { height: 34px; text <=> root.setting-code-path; accessible-label: @tr("ui.main.vs_code_location" => "VS Code location"); placeholder-text: @tr("ui.main.automatically_detect" => "Automatically detect"); enabled: root.loaded && !root.saving; edited => { root.settings-changed(); } }
+                                                            ActionButton { text: @tr("ui.action.browse" => "Browse"); enabled: root.loaded && !root.saving; clicked => { root.browse-path(2); } }
+                                                        }
+                                                    }
+                                                    Divider {}
+                                                    SettingRow {
+                                                        title: @tr("ui.settings.cache_title" => "Keep the hidden launcher ready · seconds");
+                                                        description: @tr("ui.settings.cache_hint" => "0 uses less memory. A short delay reopens faster; closing the window releases it immediately.");
+                                                        settings-idle := LineEdit { height: 34px; width: 100px; text <=> root.setting-idle; accessible-label: @tr("ui.settings.cache_title" => "Keep the hidden launcher ready · seconds"); input-type: number; enabled: root.loaded && !root.saving; edited => { root.settings-changed(); } }
+                                                    }
+                                                    if root.setting-idle-error != "": VerticalLayout { padding-left: 14px; padding-right: 14px; padding-bottom: 12px; Caption { text: root.setting-idle-error; color: Theme.danger; } }
+                                                }
+                                            }
+                                        }
+                                        if root.show-windows: VerticalLayout {
+                                            spacing: 10px;
+                                            SettingsHeading { title: @tr("ui.navigation.windows" => "Window switcher"); description: @tr("ui.settings.windows_hint" => "Launch, focus and minimize apps with a shortcut."); }
+                                            Card {
+                                                VerticalLayout {
+                                                    spacing: 0px;
+                                                    SettingRow {
+                                                        title: @tr("ui.main.enable_window_switcher" => "Enable window switcher");
+                                                        description: @tr("ui.settings.windows_switch_hint" => "Turning this off releases every app shortcut and keeps their settings.");
+                                                        Switch { checked <=> root.setting-windows; accessible-label: @tr("ui.main.enable_window_switcher" => "Enable window switcher"); enabled: root.loaded && !root.saving; toggled => { root.settings-changed(); } }
+                                                    }
+                                                    Divider {}
+                                                    SettingRow {
+                                                        title: @tr("ui.settings.manage_apps_title" => "Apps and shortcuts");
+                                                        description: @tr("ui.settings.manage_apps_hint" => "Add apps and set their shortcuts, window behavior and docking on the Window switcher page.");
+                                                        ActionButton { text: @tr("ui.settings.manage_apps" => "Manage apps"); enabled: !root.saving; clicked => { root.navigate(1); } }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if root.show-skills-settings: VerticalLayout {
+                                            spacing: 10px;
+                                            SettingsHeading { title: SharedMessages.skills; description: @tr("ui.page.skills_description" => "Manage skills across your agents and keep them up to date."); }
+                                            Card {
+                                                VerticalLayout {
+                                                    spacing: 0px;
+                                                    SettingRow {
+                                                        title: @tr("ui.settings.skills_updates_title" => "Updates and deployment");
+                                                        description: @tr("ui.settings.skills_updates_hint" => "Daily updates and the default deployment mode are saved immediately on the Skills page, under Repositories.");
+                                                        ActionButton { text: @tr("ui.settings.open_skill_repositories" => "Open repositories"); enabled: !root.saving; clicked => { root.navigate(4); SkillsState.change-view(3); } }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if root.show-configuration: VerticalLayout {
+                                            spacing: 10px;
+                                            SettingsHeading { title: @tr("ui.settings.category.configuration" => "Configuration file"); description: @tr("ui.settings.import_export_hint" => "Import a WinGuake INI or Toolbox JSON with a preview. Export backs up the configuration currently in use."); }
+                                            Card {
+                                                VerticalLayout {
+                                                    padding: 14px; spacing: 10px;
                                                     HorizontalLayout {
                                                         spacing: 8px;
-                                                        LineEdit { height: 34px; text <=> root.setting-code-path; accessible-label: @tr("ui.main.vs_code_location" => "VS Code location"); placeholder-text: @tr("ui.main.automatically_detect" => "Automatically detect"); enabled: root.loaded && !root.saving; edited => { root.settings-changed(); } }
-                                                        ActionButton { text: @tr("ui.action.browse" => "Browse"); enabled: root.loaded && !root.saving; clicked => { root.browse-path(2); } }
+                                                        ActionButton { text: @tr("ui.main.import" => "Import…"); icon: @image-url("icons/download.svg"); with-icon: true; enabled: root.loaded && !root.saving; clicked => { root.import-config(); } }
+                                                        ActionButton { text: @tr("ui.main.export_json" => "Export JSON…"); icon: @image-url("icons/upload.svg"); with-icon: true; enabled: root.loaded && !root.saving; clicked => { root.export-config(); } }
+                                                        Rectangle { horizontal-stretch: 1; }
+                                                        ActionButton { text: @tr("ui.main.reload_saved" => "Reload saved"); subtle: true; enabled: !root.saving; clicked => { root.reload-config(); } }
                                                     }
                                                 }
                                             }
                                         }
+                                        if !root.show-general && !root.show-projects && !root.show-windows && !root.show-skills-settings && !root.show-configuration: Caption { text: @tr("ui.settings.no_matches" => "No matching settings. Try a shorter search."); }
+                                        Rectangle { min-height: 3px; vertical-stretch: 1; }
                                     }
-                                    if root.show-configuration: VerticalLayout {
-                                        spacing: 9px;
-                                        SectionLabel { text: @tr("ui.main.configuration" => "CONFIGURATION"); height: 18px; }
-                                        Card {
-                                            VerticalLayout {
-                                                padding: 14px; spacing: 10px;
-                                                Caption { text: @tr("ui.settings.import_export_hint" => "Import a WinGuake INI or Toolbox JSON with a preview. Export backs up the configuration currently in use."); }
-                                                HorizontalLayout {
-                                                    spacing: 8px;
-                                                    ActionButton { text: @tr("ui.main.import" => "Import…"); icon: @image-url("icons/download.svg"); with-icon: true; enabled: root.loaded && !root.saving; clicked => { root.import-config(); } }
-                                                    ActionButton { text: @tr("ui.main.export_json" => "Export JSON…"); icon: @image-url("icons/upload.svg"); with-icon: true; enabled: root.loaded && !root.saving; clicked => { root.export-config(); } }
-                                                    ActionButton { text: @tr("ui.main.reload_saved" => "Reload saved"); subtle: true; enabled: !root.saving; clicked => { root.reload-config(); } }
-                                                    Rectangle { horizontal-stretch: 1; }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if !root.show-appearance && !root.show-general && !root.show-tools && !root.show-configuration: Caption { text: @tr("ui.settings.no_matches" => "No matching settings. Try a shorter search."); }
-                                    Rectangle { min-height: 3px; vertical-stretch: 1; }
                                 }
                             }
                             Divider {}
@@ -1051,17 +1102,28 @@ export component AppWindow inherits Window {
             Card {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                width: min(480px, parent.width - 64px);
-                min-height: 210px;
-                border-radius: 14px;
-                VerticalLayout {
-                    padding: 26px; spacing: 15px;
+                width: min(460px, parent.width - 64px);
+                // Size to the message rather than filling the window.
+                height: min(confirm-layout.preferred-height, parent.height - 64px);
+                border-radius: 12px;
+                drop-shadow-blur: 24px;
+                drop-shadow-offset-y: 8px;
+                drop-shadow-color: Theme.dark ? #00000080 : #0f172a26;
+                confirm-layout := VerticalLayout {
+                    padding: 24px; spacing: 12px;
                     HorizontalLayout {
                         spacing: 12px;
-                        Icon { source: @image-url("icons/info.svg"); colorize: Theme.warning; width: 23px; }
-                        Text { text: root.confirm-title; color: Theme.text; font-size: 18px; font-weight: 600; horizontal-stretch: 1; wrap: word-wrap; }
+                        VerticalLayout {
+                            alignment: start; padding-top: 2px;
+                            Icon { source: root.confirm-destructive ? @image-url("icons/warning.svg") : @image-url("icons/info.svg"); colorize: root.confirm-destructive ? Theme.danger : Theme.accent; width: 20px; }
+                        }
+                        VerticalLayout {
+                            spacing: 8px; horizontal-stretch: 1;
+                            Text { text: root.confirm-title; color: Theme.text; font-size: 16px; font-weight: 600; wrap: word-wrap; }
+                            Caption { text: root.confirm-message; font-size: 13px; color: Theme.secondary; }
+                        }
                     }
-                    Caption { text: root.confirm-message; font-size: 13px; vertical-stretch: 1; }
+                    Rectangle { height: 6px; }
                     HorizontalLayout {
                         spacing: 9px;
                         Rectangle { horizontal-stretch: 1; }

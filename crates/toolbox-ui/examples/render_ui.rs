@@ -506,6 +506,14 @@ fn probe_controls(
     let mut verified = Vec::new();
     match scene {
         "settings" => {
+            ui.set_settings_category(1);
+            render_frame(adapter, pixels);
+            click("settings-general")?;
+            if ui.get_settings_category() != 0 {
+                return Err("smoke point settings-general did not open General".into());
+            }
+            verified.push("settings-general");
+            render_frame(adapter, pixels);
             let original = ui.get_setting_theme();
             for (name, value) in [("theme-dark", 2), ("theme-light", 1), ("theme-system", 0)] {
                 click(name)?;
@@ -696,6 +704,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 manager.set_form_advanced(scene == "apps-advanced");
             }
             "settings" => manager.set_page(2),
+            "settings-projects" => {
+                manager.set_page(2);
+                manager.set_settings_category(1);
+            }
             "status" => manager.set_page(3),
             "skills"
             | "skills-discover"

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: toolbox-ui VERSION\n"
-"POT-Creation-Date: 2026-11-08 02:41+0000\n"
+"POT-Creation-Date: 2026-11-08 03:04+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -157,17 +157,17 @@ msgctxt "ui.status.connecting"
 msgid "Connecting…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:491
+#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:503
 msgctxt "ui.projects.disabled"
 msgid "Recent projects is turned off"
 msgstr ""
 
-#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:491
+#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:503
 msgctxt "ui.projects.read_failed"
 msgid "Couldn't read recent projects"
 msgstr ""
 
-#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:491
+#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:503
 msgctxt "ui.projects.no_matches"
 msgid "No matching projects"
 msgstr ""
@@ -192,20 +192,20 @@ msgctxt "ui.launcher.empty_hint"
 msgid "Open a folder or workspace in VS Code, then refresh."
 msgstr ""
 
-#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:502
-#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:502
+#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:514
+#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:514
 msgctxt "ui.action.open_settings"
 msgid "Open settings"
 msgstr ""
 
-#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:415
-#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:415 crates/toolbox-ui/ui/main.slint:564
-#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:415 crates/toolbox-ui/ui/main.slint:564
+#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:426
+#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:426 crates/toolbox-ui/ui/main.slint:576
+#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:426 crates/toolbox-ui/ui/main.slint:576
 msgctxt "ui.action.clear_search"
 msgid "Clear search"
 msgstr ""
 
-#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:502
+#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:514
 msgctxt "ui.action.refresh_projects"
 msgid "Refresh projects"
 msgstr ""
@@ -230,27 +230,27 @@ msgctxt "ui.launcher.updating"
 msgid "Updating…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/launcher.slint:355 crates/toolbox-ui/ui/main.slint:529
+#: crates/toolbox-ui/ui/launcher.slint:357 crates/toolbox-ui/ui/main.slint:541
 msgctxt "ui.action.select"
 msgid "Select"
 msgstr ""
 
-#: crates/toolbox-ui/ui/launcher.slint:357 crates/toolbox-ui/ui/main.slint:531
+#: crates/toolbox-ui/ui/launcher.slint:360 crates/toolbox-ui/ui/main.slint:543
 msgctxt "ui.action.open"
 msgid "Open"
 msgstr ""
 
-#: crates/toolbox-ui/ui/launcher.slint:359
+#: crates/toolbox-ui/ui/launcher.slint:363
 msgctxt "ui.launcher.dismiss"
 msgid "Dismiss"
 msgstr ""
 
-#: crates/toolbox-ui/ui/launcher.slint:366
+#: crates/toolbox-ui/ui/launcher.slint:370
 msgctxt "ui.launcher.details"
 msgid "Project details · Alt+Enter"
 msgstr ""
 
-#: crates/toolbox-ui/ui/launcher.slint:379
+#: crates/toolbox-ui/ui/launcher.slint:383
 msgctxt "ui.launcher.refresh_projects_ctrl_r"
 msgid "Refresh projects · Ctrl+R"
 msgstr ""
@@ -265,517 +265,513 @@ msgctxt "ui.shortcut.record"
 msgid "Record"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:226
-msgctxt "ui.settings.search_appearance"
-msgid "Appearance theme light dark system"
+#: crates/toolbox-ui/ui/main.slint:230
+msgctxt "ui.settings.search.general"
+msgid ""
+"General language theme appearance light dark system sign-in startup login"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:227
-msgctxt "ui.settings.search_general"
-msgid "General language shortcut sign-in startup cache memory speed"
+#: crates/toolbox-ui/ui/main.slint:231
+msgctxt "ui.settings.search.projects"
+msgid ""
+"Recent projects launcher shortcut hotkey VS Code path location cache memory "
+"seconds"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:228
-msgctxt "ui.settings.search_tools"
-msgid "Tools recent projects window switcher VS Code path"
+#: crates/toolbox-ui/ui/main.slint:232
+msgctxt "ui.settings.search.windows"
+msgid "Window switcher apps applications shortcut dock quake"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:229
+#: crates/toolbox-ui/ui/main.slint:233
+msgctxt "ui.settings.search.skills"
+msgid "Skills agents daily update deployment symlink copy repositories"
+msgstr ""
+
+#: crates/toolbox-ui/ui/main.slint:234
 msgctxt "ui.settings.search_configuration"
 msgid "Configuration import export backup reload JSON INI"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:232 crates/toolbox-ui/ui/main.slint:369
-#: crates/toolbox-ui/ui/main.slint:232 crates/toolbox-ui/ui/main.slint:369
+#: crates/toolbox-ui/ui/main.slint:237 crates/toolbox-ui/ui/main.slint:381
+#: crates/toolbox-ui/ui/main.slint:237 crates/toolbox-ui/ui/main.slint:381 crates/toolbox-ui/ui/main.slint:907
 msgctxt "ui.navigation.windows"
 msgid "Window switcher"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:232 crates/toolbox-ui/ui/main.slint:374
+#: crates/toolbox-ui/ui/main.slint:237 crates/toolbox-ui/ui/main.slint:386
 msgctxt "ui.navigation.status"
 msgid "Status & about"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:233
+#: crates/toolbox-ui/ui/main.slint:238
 msgctxt "ui.page.projects_description"
 msgid "Pick up where you left off in VS Code."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:233
+#: crates/toolbox-ui/ui/main.slint:238
 msgctxt "ui.page.windows_description"
 msgid "Your everyday apps, one shortcut away."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:233
+#: crates/toolbox-ui/ui/main.slint:238
 msgctxt "ui.page.settings_description"
 msgid "Make the toolbox work your way."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:233
+#: crates/toolbox-ui/ui/main.slint:238 crates/toolbox-ui/ui/main.slint:927
 msgctxt "ui.page.skills_description"
 msgid "Manage skills across your agents and keep them up to date."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:233
+#: crates/toolbox-ui/ui/main.slint:238
 msgctxt "ui.page.status_description"
 msgid "Check what is available on this device."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:367
+#: crates/toolbox-ui/ui/main.slint:379
 msgctxt "ui.main.workspace"
 msgid "WORKSPACE"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:372
+#: crates/toolbox-ui/ui/main.slint:384
 msgctxt "ui.main.preferences"
 msgid "PREFERENCES"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:375
-msgctxt "ui.navigation.shortcut_hint"
-msgid "Ctrl / ⌘ + number"
-msgstr ""
-
-#: crates/toolbox-ui/ui/main.slint:381
+#: crates/toolbox-ui/ui/main.slint:392
 msgctxt "ui.main.on_your_device"
 msgid "On your device"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:401
+#: crates/toolbox-ui/ui/main.slint:412
 msgctxt "ui.main.close_ui_esc"
 msgid "Close UI · Esc"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:414
+#: crates/toolbox-ui/ui/main.slint:425
 msgctxt "ui.main.search_projects_by_name_or_path"
 msgid "Search projects by name or path…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:425
+#: crates/toolbox-ui/ui/main.slint:436
 msgctxt "ui.main.recently_opened"
 msgid "RECENTLY OPENED"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:425
+#: crates/toolbox-ui/ui/main.slint:436
 msgctxt "ui.main.search_results"
 msgid "SEARCH RESULTS"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:428 crates/toolbox-ui/ui/skills.slint:381
+#: crates/toolbox-ui/ui/main.slint:439 crates/toolbox-ui/ui/skills.slint:383
 msgctxt "ui.action.refresh"
 msgid "Refresh"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:491
+#: crates/toolbox-ui/ui/main.slint:503
 msgctxt "ui.main.connecting_to_your_toolbox"
 msgid "Connecting to your toolbox"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:491
+#: crates/toolbox-ui/ui/main.slint:503
 msgctxt "ui.main.loading_your_projects"
 msgid "Loading your projects"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:491
+#: crates/toolbox-ui/ui/main.slint:503
 msgctxt "ui.main.your_next_project_starts_here"
 msgid "Your next project starts here"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:495
+#: crates/toolbox-ui/ui/main.slint:507
 msgctxt "ui.projects.enable_hint"
 msgid "Enable recent projects in Settings to get started."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:495
+#: crates/toolbox-ui/ui/main.slint:507
 msgctxt "ui.projects.search_hint"
 msgid "Try a shorter name or part of a project path."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:495
+#: crates/toolbox-ui/ui/main.slint:507
 msgctxt "ui.projects.empty_hint"
 msgid "Open a folder or workspace in VS Code, then refresh this list."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:518
+#: crates/toolbox-ui/ui/main.slint:530
 msgctxt "ui.main.updating"
 msgid "Updating…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:518
+#: crates/toolbox-ui/ui/main.slint:530
 msgctxt "ui.main.vs_code_history_stored_locally"
 msgid "VS Code history · stored locally"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:536
+#: crates/toolbox-ui/ui/main.slint:548
 msgctxt "ui.main.opening"
 msgid "Opening…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:536
+#: crates/toolbox-ui/ui/main.slint:548
 msgctxt "ui.main.open_in_vs_code"
 msgid "Open in VS Code"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:550
+#: crates/toolbox-ui/ui/main.slint:562
 msgctxt "ui.profiles.disabled_hint"
 msgid "Window switching is turned off. Your app configurations are kept."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:559 crates/toolbox-ui/ui/main.slint:598
+#: crates/toolbox-ui/ui/main.slint:571 crates/toolbox-ui/ui/main.slint:610
 msgctxt "ui.main.add_application"
 msgid "Add application"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:563
+#: crates/toolbox-ui/ui/main.slint:575
 msgctxt "ui.profiles.search"
 msgid "Find an app…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:569 crates/toolbox-ui/ui/main.slint:575
+#: crates/toolbox-ui/ui/main.slint:581 crates/toolbox-ui/ui/main.slint:587
 msgctxt "ui.main.applications"
 msgid "APPLICATIONS"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:586
+#: crates/toolbox-ui/ui/main.slint:598
 msgctxt "ui.profiles.no_matches"
 msgid "No matching apps. Try a name or shortcut."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:586
+#: crates/toolbox-ui/ui/main.slint:598
 msgctxt "ui.profiles.empty_hint"
 msgid "No applications yet. Add one to create your first shortcut."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:596
+#: crates/toolbox-ui/ui/main.slint:608
 msgctxt "ui.profiles.select_title"
 msgid "Choose an application"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:597
+#: crates/toolbox-ui/ui/main.slint:609
 msgctxt "ui.profiles.select_hint"
 msgid ""
 "Select an app to edit its shortcut and window behavior, or add a new app."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:606
+#: crates/toolbox-ui/ui/main.slint:618
 msgctxt "ui.main.new_application"
 msgid "New application"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:607
+#: crates/toolbox-ui/ui/main.slint:619
 msgctxt "ui.main.unsaved"
 msgid "Unsaved"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:607
+#: crates/toolbox-ui/ui/main.slint:619
 msgctxt "ui.main.saved"
 msgid "Saved"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:609
+#: crates/toolbox-ui/ui/main.slint:621
 msgctxt "ui.profiles.test_saved"
 msgid "Test saved"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:612
+#: crates/toolbox-ui/ui/main.slint:624
 msgctxt "ui.profiles.test_hint"
 msgid "Runs the saved app configuration. Unsaved changes stay in the editor."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:612
+#: crates/toolbox-ui/ui/main.slint:624
 msgctxt "ui.profiles.test_unavailable"
 msgid "Save and enable this app for the current operating system to test it."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:624 crates/toolbox-ui/ui/main.slint:630
-#: crates/toolbox-ui/ui/main.slint:624 crates/toolbox-ui/ui/main.slint:630
+#: crates/toolbox-ui/ui/main.slint:636 crates/toolbox-ui/ui/main.slint:642
+#: crates/toolbox-ui/ui/main.slint:636 crates/toolbox-ui/ui/main.slint:642
 msgctxt "ui.profiles.program"
 msgid "Program"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:630 crates/toolbox-ui/ui/main.slint:737
+#: crates/toolbox-ui/ui/main.slint:642 crates/toolbox-ui/ui/main.slint:749
 msgctxt "ui.main.choose_a_program"
 msgid "Choose a program…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:631 crates/toolbox-ui/ui/main.slint:746
-#: crates/toolbox-ui/ui/main.slint:631 crates/toolbox-ui/ui/main.slint:746
+#: crates/toolbox-ui/ui/main.slint:643 crates/toolbox-ui/ui/main.slint:758
+#: crates/toolbox-ui/ui/main.slint:643 crates/toolbox-ui/ui/main.slint:758
 msgctxt "ui.action.browse"
 msgid "Browse"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:634 crates/toolbox-ui/ui/main.slint:635
+#: crates/toolbox-ui/ui/main.slint:646 crates/toolbox-ui/ui/main.slint:647
 msgctxt "ui.main.display_name"
 msgid "Display name"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:635
+#: crates/toolbox-ui/ui/main.slint:647
 msgctxt "ui.main.e_g_vs_code"
 msgid "e.g. VS Code"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:637 crates/toolbox-ui/ui/main.slint:640
+#: crates/toolbox-ui/ui/main.slint:649 crates/toolbox-ui/ui/main.slint:652
 msgctxt "ui.main.shortcut_optional"
 msgid "Shortcut · optional"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:647 crates/toolbox-ui/ui/main.slint:837
+#: crates/toolbox-ui/ui/main.slint:659 crates/toolbox-ui/ui/main.slint:880
 msgctxt "ui.shortcut.preparing"
 msgid "Preparing recorder…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:648 crates/toolbox-ui/ui/main.slint:838
+#: crates/toolbox-ui/ui/main.slint:660 crates/toolbox-ui/ui/main.slint:881
 msgctxt "ui.shortcut.record_hint"
 msgid "Press a shortcut. Esc cancels; Backspace clears."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:650
+#: crates/toolbox-ui/ui/main.slint:662
 msgctxt "ui.main.enable_this_application"
 msgid "Enable this application"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:652
+#: crates/toolbox-ui/ui/main.slint:664
 msgctxt "ui.profiles.window_behavior"
 msgid "Window behavior"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:653
+#: crates/toolbox-ui/ui/main.slint:665
 msgctxt "ui.quake.wezterm_enabled"
 msgid "Enable a dedicated WezTerm dropdown"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:653
+#: crates/toolbox-ui/ui/main.slint:665
 msgctxt "ui.quake.enabled"
 msgid "Dock one window to the screen edge"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:656
+#: crates/toolbox-ui/ui/main.slint:668
 msgctxt "ui.profiles.maximize_new"
 msgid "Maximize newly launched windows only"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:657
+#: crates/toolbox-ui/ui/main.slint:669
 msgctxt "ui.profiles.wrap_cycle"
 msgid "Wrap to the first window at the end"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:661
+#: crates/toolbox-ui/ui/main.slint:673
 msgctxt "ui.quake.wezterm_hint"
 msgid ""
 "Opens a dedicated window with your WezTerm shell, font and colors. Terminal "
 "tasks keep running while hidden."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:661
+#: crates/toolbox-ui/ui/main.slint:673
 msgctxt "ui.quake.toggle_hint"
 msgid ""
 "Summon the same window with your shortcut. Press again while it is active to "
 "hide it."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:665
+#: crates/toolbox-ui/ui/main.slint:677
 msgctxt "ui.main.top_half"
 msgid "Top half"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:666
+#: crates/toolbox-ui/ui/main.slint:678
 msgctxt "ui.main.right_side"
 msgid "Right side"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:667
+#: crates/toolbox-ui/ui/main.slint:679
 msgctxt "ui.main.fill_screen"
 msgid "Fill screen"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:673 crates/toolbox-ui/ui/main.slint:674
+#: crates/toolbox-ui/ui/main.slint:685 crates/toolbox-ui/ui/main.slint:686
 msgctxt "ui.main.screen_edge"
 msgid "Screen edge"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:678 crates/toolbox-ui/ui/main.slint:679
+#: crates/toolbox-ui/ui/main.slint:690 crates/toolbox-ui/ui/main.slint:691
 msgctxt "ui.main.alignment"
 msgid "Alignment"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:679
+#: crates/toolbox-ui/ui/main.slint:691
 msgctxt "ui.quake.horizontal_alignment.center"
 msgid "Center"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:679
+#: crates/toolbox-ui/ui/main.slint:691
 msgctxt "ui.quake.vertical_alignment.center"
 msgid "Center"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:686 crates/toolbox-ui/ui/main.slint:687
+#: crates/toolbox-ui/ui/main.slint:698 crates/toolbox-ui/ui/main.slint:699
 msgctxt "ui.quake.width_percent"
 msgid "Width · % of work area"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:691 crates/toolbox-ui/ui/main.slint:692
+#: crates/toolbox-ui/ui/main.slint:703 crates/toolbox-ui/ui/main.slint:704
 msgctxt "ui.quake.height_percent"
 msgid "Height · % of work area"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:695 crates/toolbox-ui/ui/main.slint:696
+#: crates/toolbox-ui/ui/main.slint:707 crates/toolbox-ui/ui/main.slint:708
 msgctxt "ui.main.show_on_display"
 msgid "Show on display"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:697
+#: crates/toolbox-ui/ui/main.slint:709
 msgctxt "ui.quake.always_on_top"
 msgid "Keep on top while shown"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:698
+#: crates/toolbox-ui/ui/main.slint:710
 msgctxt "ui.quake.hide_on_blur"
 msgid "Hide when focus leaves · Windows"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:699
+#: crates/toolbox-ui/ui/main.slint:711
 msgctxt "ui.quake.macos_hint"
 msgid ""
 "macOS supports placement through Accessibility. Keep-on-top and auto-hide "
 "are unavailable."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:699
+#: crates/toolbox-ui/ui/main.slint:711
 msgctxt "ui.quake.linux_hint"
 msgid ""
 "Requires an X11 / EWMH desktop. Auto-hide is currently available on Windows "
 "only."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:699
+#: crates/toolbox-ui/ui/main.slint:711
 msgctxt "ui.quake.placement_hint"
 msgid ""
 "Uses the display work area, leaving room for the taskbar. Esc stays "
 "available to your app."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:703
+#: crates/toolbox-ui/ui/main.slint:715
 msgctxt "ui.profiles.hide_advanced"
 msgid "Hide advanced options"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:703
+#: crates/toolbox-ui/ui/main.slint:715
 msgctxt "ui.profiles.show_advanced"
 msgid "Advanced options"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:709
+#: crates/toolbox-ui/ui/main.slint:721
 msgctxt "ui.profiles.advanced_hint"
 msgid ""
 "Adjust matching rules and launch alternatives when automatic suggestions do "
 "not fit your app."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:714 crates/toolbox-ui/ui/main.slint:715
+#: crates/toolbox-ui/ui/main.slint:726 crates/toolbox-ui/ui/main.slint:727
 msgctxt "ui.main.application_id"
 msgid "Application ID"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:719 crates/toolbox-ui/ui/main.slint:720
+#: crates/toolbox-ui/ui/main.slint:731 crates/toolbox-ui/ui/main.slint:732
 msgctxt "ui.main.platform"
 msgid "Platform"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:724 crates/toolbox-ui/ui/main.slint:725
+#: crates/toolbox-ui/ui/main.slint:736 crates/toolbox-ui/ui/main.slint:737
 msgctxt "ui.main.window_match"
 msgid "Window match"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:729 crates/toolbox-ui/ui/main.slint:733
+#: crates/toolbox-ui/ui/main.slint:741 crates/toolbox-ui/ui/main.slint:745
 msgctxt "ui.main.launch_options"
 msgid "LAUNCH OPTIONS"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:730
+#: crates/toolbox-ui/ui/main.slint:742
 msgctxt "ui.launch_options.order_hint"
 msgid "If the app is closed, try these locations in order."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:734
+#: crates/toolbox-ui/ui/main.slint:746
 msgctxt "ui.main.add_candidate"
 msgid "Add candidate"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:735
+#: crates/toolbox-ui/ui/main.slint:747
 msgctxt "ui.main.remove_candidate"
 msgid "Remove candidate"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:738 crates/toolbox-ui/ui/main.slint:739
+#: crates/toolbox-ui/ui/main.slint:750 crates/toolbox-ui/ui/main.slint:751
 msgctxt "ui.main.arguments_json_array"
 msgid "Arguments · JSON array"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:740
+#: crates/toolbox-ui/ui/main.slint:752
 msgctxt "ui.launch_options.arguments_hint"
 msgid "Use [] for no arguments; each argument is a quoted string."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:742 crates/toolbox-ui/ui/main.slint:745
+#: crates/toolbox-ui/ui/main.slint:754 crates/toolbox-ui/ui/main.slint:757
 msgctxt "ui.main.working_directory_optional"
 msgid "Working directory · optional"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:745
+#: crates/toolbox-ui/ui/main.slint:757
 msgctxt "ui.main.default_directory"
 msgid "Default directory"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:755
+#: crates/toolbox-ui/ui/main.slint:767
 msgctxt "ui.action.delete"
 msgid "Delete"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:757 crates/toolbox-ui/ui/main.slint:914
+#: crates/toolbox-ui/ui/main.slint:769 crates/toolbox-ui/ui/main.slint:965
 msgctxt "ui.action.discard"
 msgid "Discard"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:757
+#: crates/toolbox-ui/ui/main.slint:769
 msgctxt "ui.profiles.close_details"
 msgid "Close"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:758 crates/toolbox-ui/ui/main.slint:915
+#: crates/toolbox-ui/ui/main.slint:770 crates/toolbox-ui/ui/main.slint:966
 msgctxt "ui.status.saving"
 msgid "Saving…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:758
+#: crates/toolbox-ui/ui/main.slint:770
 msgctxt "ui.main.save_app"
 msgid "Save app"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:769
+#: crates/toolbox-ui/ui/main.slint:781
 msgctxt "ui.settings.search"
 msgid "Find a setting…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:781
-msgctxt "ui.main.appearance"
-msgid "APPEARANCE"
+#: crates/toolbox-ui/ui/main.slint:792 crates/toolbox-ui/ui/main.slint:809
+msgctxt "ui.settings.category.general"
+msgid "General"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:785
-msgctxt "ui.main.choose_your_theme"
-msgid "Choose your theme"
-msgstr ""
-
-#: crates/toolbox-ui/ui/main.slint:786
-msgctxt "ui.settings.theme_hint"
-msgid ""
-"Preview instantly in the manager and project launcher. Save to keep your "
-"choice."
+#: crates/toolbox-ui/ui/main.slint:796 crates/toolbox-ui/ui/main.slint:941
+msgctxt "ui.settings.category.configuration"
+msgid "Configuration file"
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:809
-msgctxt "ui.main.general"
-msgid "GENERAL"
+msgctxt "ui.settings.general_description"
+msgid "Language, appearance and startup."
 msgstr ""
 
 #: crates/toolbox-ui/ui/main.slint:814 crates/toolbox-ui/ui/main.slint:819
@@ -788,700 +784,746 @@ msgctxt "ui.settings.language_hint"
 msgid "Preview immediately. Save to keep your choice."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:827 crates/toolbox-ui/ui/main.slint:830
-msgctxt "ui.settings.launcher_shortcut"
-msgid "Recent projects shortcut"
+#: crates/toolbox-ui/ui/main.slint:827
+msgctxt "ui.main.choose_your_theme"
+msgid "Choose your theme"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:843 crates/toolbox-ui/ui/main.slint:845
+#: crates/toolbox-ui/ui/main.slint:828
+msgctxt "ui.settings.theme_hint"
+msgid ""
+"Preview instantly in the manager and project launcher. Save to keep your "
+"choice."
+msgstr ""
+
+#: crates/toolbox-ui/ui/main.slint:838 crates/toolbox-ui/ui/main.slint:840
 msgctxt "ui.main.launch_at_sign_in"
 msgid "Launch at sign-in"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:844
+#: crates/toolbox-ui/ui/main.slint:839
 msgctxt "ui.settings.autostart_hint"
 msgid "Keep your shortcuts ready when you sign in."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:849 crates/toolbox-ui/ui/main.slint:851
+#: crates/toolbox-ui/ui/main.slint:858
+msgctxt "ui.settings.projects_hint"
+msgid "Find folders and workspaces from VS Code history."
+msgstr ""
+
+#: crates/toolbox-ui/ui/main.slint:863 crates/toolbox-ui/ui/main.slint:865
+msgctxt "ui.main.enable_recent_projects"
+msgid "Enable recent projects"
+msgstr ""
+
+#: crates/toolbox-ui/ui/main.slint:864
+msgctxt "ui.settings.projects_switch_hint"
+msgid "Turning this off also releases the panel shortcut."
+msgstr ""
+
+#: crates/toolbox-ui/ui/main.slint:870 crates/toolbox-ui/ui/main.slint:873
+msgctxt "ui.settings.launcher_shortcut"
+msgid "Recent projects shortcut"
+msgstr ""
+
+#: crates/toolbox-ui/ui/main.slint:887 crates/toolbox-ui/ui/main.slint:891
+msgctxt "ui.main.vs_code_location"
+msgid "VS Code location"
+msgstr ""
+
+#: crates/toolbox-ui/ui/main.slint:888
+msgctxt "ui.settings.code_path_hint"
+msgid "Leave empty to locate VS Code automatically."
+msgstr ""
+
+#: crates/toolbox-ui/ui/main.slint:891
+msgctxt "ui.main.automatically_detect"
+msgid "Automatically detect"
+msgstr ""
+
+#: crates/toolbox-ui/ui/main.slint:897 crates/toolbox-ui/ui/main.slint:899
 msgctxt "ui.settings.cache_title"
 msgid "Keep the hidden launcher ready · seconds"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:850
+#: crates/toolbox-ui/ui/main.slint:898
 msgctxt "ui.settings.cache_hint"
 msgid ""
 "0 uses less memory. A short delay reopens faster; closing the window "
 "releases it immediately."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:859
-msgctxt "ui.main.tools"
-msgid "TOOLS"
-msgstr ""
-
-#: crates/toolbox-ui/ui/main.slint:865
-msgctxt "ui.settings.projects_hint"
-msgid "Find folders and workspaces from VS Code history."
-msgstr ""
-
-#: crates/toolbox-ui/ui/main.slint:866
-msgctxt "ui.main.enable_recent_projects"
-msgid "Enable recent projects"
-msgstr ""
-
-#: crates/toolbox-ui/ui/main.slint:871
+#: crates/toolbox-ui/ui/main.slint:907
 msgctxt "ui.settings.windows_hint"
 msgid "Launch, focus and minimize apps with a shortcut."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:872
+#: crates/toolbox-ui/ui/main.slint:912 crates/toolbox-ui/ui/main.slint:914
 msgctxt "ui.main.enable_window_switcher"
 msgid "Enable window switcher"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:877 crates/toolbox-ui/ui/main.slint:881
-msgctxt "ui.main.vs_code_location"
-msgid "VS Code location"
+#: crates/toolbox-ui/ui/main.slint:913
+msgctxt "ui.settings.windows_switch_hint"
+msgid "Turning this off releases every app shortcut and keeps their settings."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:878
-msgctxt "ui.settings.code_path_hint"
-msgid "Leave empty to locate VS Code automatically."
+#: crates/toolbox-ui/ui/main.slint:918
+msgctxt "ui.settings.manage_apps_title"
+msgid "Apps and shortcuts"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:881
-msgctxt "ui.main.automatically_detect"
-msgid "Automatically detect"
+#: crates/toolbox-ui/ui/main.slint:919
+msgctxt "ui.settings.manage_apps_hint"
+msgid ""
+"Add apps and set their shortcuts, window behavior and docking on the Window "
+"switcher page."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:890
-msgctxt "ui.main.configuration"
-msgid "CONFIGURATION"
+#: crates/toolbox-ui/ui/main.slint:920
+msgctxt "ui.settings.manage_apps"
+msgid "Manage apps"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:894
+#: crates/toolbox-ui/ui/main.slint:932
+msgctxt "ui.settings.skills_updates_title"
+msgid "Updates and deployment"
+msgstr ""
+
+#: crates/toolbox-ui/ui/main.slint:933
+msgctxt "ui.settings.skills_updates_hint"
+msgid ""
+"Daily updates and the default deployment mode are saved immediately on the "
+"Skills page, under Repositories."
+msgstr ""
+
+#: crates/toolbox-ui/ui/main.slint:934
+msgctxt "ui.settings.open_skill_repositories"
+msgid "Open repositories"
+msgstr ""
+
+#: crates/toolbox-ui/ui/main.slint:941
 msgctxt "ui.settings.import_export_hint"
 msgid ""
 "Import a WinGuake INI or Toolbox JSON with a preview. Export backs up the "
 "configuration currently in use."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:897
+#: crates/toolbox-ui/ui/main.slint:947
 msgctxt "ui.main.import"
 msgid "Import…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:898
+#: crates/toolbox-ui/ui/main.slint:948
 msgctxt "ui.main.export_json"
 msgid "Export JSON…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:899
+#: crates/toolbox-ui/ui/main.slint:950
 msgctxt "ui.main.reload_saved"
 msgid "Reload saved"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:905
+#: crates/toolbox-ui/ui/main.slint:955
 msgctxt "ui.settings.no_matches"
 msgid "No matching settings. Try a shorter search."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:913
+#: crates/toolbox-ui/ui/main.slint:964
 msgctxt "ui.main.you_have_unsaved_changes"
 msgid "You have unsaved changes"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:913
+#: crates/toolbox-ui/ui/main.slint:964
 msgctxt "ui.main.all_changes_saved"
 msgid "All changes saved"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:915
+#: crates/toolbox-ui/ui/main.slint:966
 msgctxt "ui.main.save_settings"
 msgid "Save settings"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:931
+#: crates/toolbox-ui/ui/main.slint:982
 msgctxt "ui.main.device_capabilities"
 msgid "DEVICE CAPABILITIES"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:934
+#: crates/toolbox-ui/ui/main.slint:985
 msgctxt "ui.main.checking"
 msgid "Checking…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:934
+#: crates/toolbox-ui/ui/main.slint:985
 msgctxt "ui.main.check_again"
 msgid "Check again"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:938
+#: crates/toolbox-ui/ui/main.slint:989
 msgctxt "ui.main.window_control"
 msgid "Window control"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:938 crates/toolbox-ui/ui/main.slint:939
-#: crates/toolbox-ui/ui/main.slint:938 crates/toolbox-ui/ui/main.slint:939
+#: crates/toolbox-ui/ui/main.slint:989 crates/toolbox-ui/ui/main.slint:990
+#: crates/toolbox-ui/ui/main.slint:989 crates/toolbox-ui/ui/main.slint:990
 msgctxt "ui.status.unchecked"
 msgid "Unchecked"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:939
+#: crates/toolbox-ui/ui/main.slint:990
 msgctxt "ui.main.global_shortcuts"
 msgid "Global shortcuts"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:940
+#: crates/toolbox-ui/ui/main.slint:991
 msgctxt "ui.main.system_tray"
 msgid "System tray"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:950
+#: crates/toolbox-ui/ui/main.slint:1001
 msgctxt "ui.main.last_action"
 msgid "LAST ACTION"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:951
+#: crates/toolbox-ui/ui/main.slint:1002
 msgctxt "ui.main.no_actions_recorded_yet"
 msgid "No actions recorded yet."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:958
+#: crates/toolbox-ui/ui/main.slint:1009
 msgctxt "ui.main.needs_your_attention"
 msgid "Needs your attention"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:966
+#: crates/toolbox-ui/ui/main.slint:1017
 msgctxt "ui.main.last_interface_error"
 msgid "Last interface error"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:971
+#: crates/toolbox-ui/ui/main.slint:1022
 msgctxt "ui.main.hide_technical_details"
 msgid "Hide technical details"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:971
+#: crates/toolbox-ui/ui/main.slint:1022
 msgctxt "ui.main.show_technical_details"
 msgid "Show technical details"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:990
+#: crates/toolbox-ui/ui/main.slint:1041
 msgctxt "ui.about.description"
 msgid "An independent, local-first personal toolbox."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:993
+#: crates/toolbox-ui/ui/main.slint:1044
 msgctxt "ui.main.project_licenses"
 msgid "Project & licenses"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:994
+#: crates/toolbox-ui/ui/main.slint:1045
 msgctxt "ui.main.slint_website"
 msgid "Slint website"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:1013 crates/toolbox-ui/ui/skills.slint:509
-#: crates/toolbox-ui/ui/main.slint:1013 crates/toolbox-ui/ui/skills.slint:509
+#: crates/toolbox-ui/ui/main.slint:1064 crates/toolbox-ui/ui/skills.slint:511
+#: crates/toolbox-ui/ui/main.slint:1064 crates/toolbox-ui/ui/skills.slint:511
 msgctxt "ui.action.details"
 msgid "Details"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:1031
+#: crates/toolbox-ui/ui/main.slint:1082
 msgctxt "ui.main.review_your_import"
 msgid "Review your import"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:1032
+#: crates/toolbox-ui/ui/main.slint:1083
 msgctxt "ui.import.review_hint"
 msgid "Review the applications below before applying changes."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:1035
+#: crates/toolbox-ui/ui/main.slint:1086
 msgctxt "ui.import.merge_hint"
 msgid ""
 "Merge replaces matching app IDs. Replace removes the existing app list; JSON "
 "also replaces settings. No application is launched."
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:1039
+#: crates/toolbox-ui/ui/main.slint:1090
 msgctxt "ui.action.cancel"
 msgid "Cancel"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:1041
+#: crates/toolbox-ui/ui/main.slint:1092
 msgctxt "ui.main.replace_all"
 msgid "Replace all"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:1041
+#: crates/toolbox-ui/ui/main.slint:1092
 msgctxt "ui.main.replace_app_list"
 msgid "Replace app list"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:1042
+#: crates/toolbox-ui/ui/main.slint:1093
 msgctxt "ui.main.merge_apps"
 msgid "Merge apps"
 msgstr ""
 
-#: crates/toolbox-ui/ui/main.slint:1080
+#: crates/toolbox-ui/ui/main.slint:1142
 msgctxt "ui.dialog.file_chooser_hint"
 msgid "Continue in the file chooser"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:216 crates/toolbox-ui/ui/skills.slint:222
+#: crates/toolbox-ui/ui/skills.slint:218 crates/toolbox-ui/ui/skills.slint:224
 msgctxt "ui.skills.default_deploy_mode"
 msgid "Default deployment mode"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:219
+#: crates/toolbox-ui/ui/skills.slint:221
 msgctxt "ui.skills.deploy_symlink"
 msgid "Symbolic link"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:219
+#: crates/toolbox-ui/ui/skills.slint:221
 msgctxt "ui.skills.deploy_copy"
 msgid "Copy"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:226
+#: crates/toolbox-ui/ui/skills.slint:228
 msgctxt "ui.skills.deploy_mode_hint"
 msgid ""
 "Changes save immediately. Only new deployments use this mode. To change an "
 "existing deployment, turn that skill's app switch off and on."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:227
+#: crates/toolbox-ui/ui/skills.slint:229
 msgctxt "ui.skills.deploy_symlink_hint"
 msgid ""
 "Application folders link to the managed copy. Windows needs Developer Mode "
 "or symbolic-link permission; choose Copy if unavailable."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:227
+#: crates/toolbox-ui/ui/skills.slint:229
 msgctxt "ui.skills.deploy_copy_hint"
 msgid ""
 "Application folders receive independent copies. Symbolic-link permission is "
 "not needed; local modifications remain protected."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:228
+#: crates/toolbox-ui/ui/skills.slint:230
 msgctxt "ui.skills.deploy_scope_hint"
 msgid ""
 "Applies to repository skills and imports copied into Toolbox. Linked local "
 "imports always use symbolic links to their original source."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:341
+#: crates/toolbox-ui/ui/skills.slint:343
 msgctxt "ui.skills.views"
 msgid "Skill views"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:342
+#: crates/toolbox-ui/ui/skills.slint:344
 msgctxt "ui.skills.installed"
 msgid "Installed"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:343
+#: crates/toolbox-ui/ui/skills.slint:345
 msgctxt "ui.skills.discover"
 msgid "Discover"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:344
+#: crates/toolbox-ui/ui/skills.slint:346
 msgctxt "ui.skills.local"
 msgid "On this device"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:345 crates/toolbox-ui/ui/skills.slint:706
+#: crates/toolbox-ui/ui/skills.slint:347 crates/toolbox-ui/ui/skills.slint:708
 msgctxt "ui.skills.repositories"
 msgid "Repositories"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:354 crates/toolbox-ui/ui/skills.slint:355
+#: crates/toolbox-ui/ui/skills.slint:356 crates/toolbox-ui/ui/skills.slint:357
 msgctxt "ui.skills.daily_update"
 msgid "Daily update"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:356 crates/toolbox-ui/ui/skills.slint:708
+#: crates/toolbox-ui/ui/skills.slint:358 crates/toolbox-ui/ui/skills.slint:710
 msgctxt "ui.skills.update_all"
 msgid "Update all"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:374
+#: crates/toolbox-ui/ui/skills.slint:376
 msgctxt "ui.skills.search_skills_or_repositories"
 msgid "Search skills or repositories…"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:375
+#: crates/toolbox-ui/ui/skills.slint:377
 msgctxt "ui.skills.clear_search"
 msgid "Clear skill search"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:381 crates/toolbox-ui/ui/skills.slint:525
+#: crates/toolbox-ui/ui/skills.slint:383 crates/toolbox-ui/ui/skills.slint:527
 msgctxt "ui.skills.reload_repositories"
 msgid "Reload repositories"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:381 crates/toolbox-ui/ui/skills.slint:526
+#: crates/toolbox-ui/ui/skills.slint:383 crates/toolbox-ui/ui/skills.slint:528
 msgctxt "ui.skills.scan_this_device"
 msgid "Scan this device"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:389
+#: crates/toolbox-ui/ui/skills.slint:391
 msgctxt "ui.skills.local_intro"
 msgid "Import an existing skill, then choose how to manage and deploy it."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:390
+#: crates/toolbox-ui/ui/skills.slint:392
 msgctxt "ui.skills.import_folder"
 msgid "Import folder"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:394
+#: crates/toolbox-ui/ui/skills.slint:396
 msgctxt "ui.skills.select_visible"
 msgid "Select visible"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:398
+#: crates/toolbox-ui/ui/skills.slint:400
 msgctxt "ui.skills.status"
 msgid "Status"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:399
+#: crates/toolbox-ui/ui/skills.slint:401
 msgctxt "ui.skills.status_filter.all_deployments"
 msgid "All deployments"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:399
+#: crates/toolbox-ui/ui/skills.slint:401
 msgctxt "ui.skills.status_filter.deployed"
 msgid "Deployed"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:399
+#: crates/toolbox-ui/ui/skills.slint:401
 msgctxt "ui.skills.status_filter.not_deployed"
 msgid "Not deployed"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:399
+#: crates/toolbox-ui/ui/skills.slint:401
 msgctxt "ui.skills.status_filter.attention"
 msgid "Needs attention"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:403
+#: crates/toolbox-ui/ui/skills.slint:405
 msgctxt "ui.skills.source"
 msgid "Source"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:412
+#: crates/toolbox-ui/ui/skills.slint:414
 msgctxt "ui.skills.clear_selection"
 msgid "Clear selection"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:416
+#: crates/toolbox-ui/ui/skills.slint:418
 msgctxt "ui.skills.batch_icons_hint"
 msgid "Click an app to enable or disable it for every selected skill."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:437
+#: crates/toolbox-ui/ui/skills.slint:439
 msgctxt "ui.skills.skill_column"
 msgid "Skill"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:458
+#: crates/toolbox-ui/ui/skills.slint:460
 msgctxt "ui.skills.skill_list"
 msgid "Skills. Use arrow keys to navigate and Enter for details."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:478
+#: crates/toolbox-ui/ui/skills.slint:480
 msgctxt "ui.skills.select_named"
 msgid "Select {0}"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:485
+#: crates/toolbox-ui/ui/skills.slint:487
 msgctxt "ui.skills.attention_details"
 msgid "Needs attention. Open details for the reason and recovery actions."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:489
+#: crates/toolbox-ui/ui/skills.slint:491
 msgctxt "ui.skills.not_deployed"
 msgid "Not deployed"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:489
+#: crates/toolbox-ui/ui/skills.slint:491
 msgctxt "ui.skills.deployment_count"
 msgid "Apps: {0}"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:500 crates/toolbox-ui/ui/skills.slint:726
+#: crates/toolbox-ui/ui/skills.slint:502 crates/toolbox-ui/ui/skills.slint:728
 msgctxt "ui.skills.more_actions_for"
 msgid "Actions for {0}"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:522
+#: crates/toolbox-ui/ui/skills.slint:524
 msgctxt "ui.skills.clear_filters"
 msgid "Clear filters"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:523
+#: crates/toolbox-ui/ui/skills.slint:525
 msgctxt "ui.skills.find_skills"
 msgid "Discover skills"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:524
+#: crates/toolbox-ui/ui/skills.slint:526
 msgctxt "ui.skills.add_source"
 msgid "Add a repository"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:543 crates/toolbox-ui/ui/skills.slint:544
+#: crates/toolbox-ui/ui/skills.slint:545 crates/toolbox-ui/ui/skills.slint:546
 msgctxt "ui.skills.github_skill_repository"
 msgid "GitHub skill repository"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:547
+#: crates/toolbox-ui/ui/skills.slint:549
 msgctxt "ui.skills.branch_blank_default"
 msgid "Branch (blank = default)"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:548
+#: crates/toolbox-ui/ui/skills.slint:550
 msgctxt "ui.skills.add_and_discover"
 msgid "Add and discover"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:550
+#: crates/toolbox-ui/ui/skills.slint:552
 msgctxt "ui.skills.repository_flow_hint"
 msgid "Git is required. After adding the source, its skills open in Discover."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:556
+#: crates/toolbox-ui/ui/skills.slint:558
 msgctxt "ui.skills.no_repository_hint"
 msgid "Add a repository above to discover its skills."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:564
+#: crates/toolbox-ui/ui/skills.slint:566
 msgctxt "ui.skills.browse_source"
 msgid "Browse skills"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:565 crates/toolbox-ui/ui/skills.slint:610
+#: crates/toolbox-ui/ui/skills.slint:567 crates/toolbox-ui/ui/skills.slint:612
 msgctxt "ui.skills.open_source"
 msgid "Open source"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:567
+#: crates/toolbox-ui/ui/skills.slint:569
 msgctxt "ui.action.remove"
 msgid "Remove"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:569
+#: crates/toolbox-ui/ui/skills.slint:571
 msgctxt "ui.skills.source_in_use"
 msgid ""
 "This source is used by installed skills. Uninstall those skills before "
 "removing it."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:582
+#: crates/toolbox-ui/ui/skills.slint:584
 msgctxt "ui.skills.deployment_settings"
 msgid "Deployment settings"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:583 crates/toolbox-ui/ui/skills.slint:691
+#: crates/toolbox-ui/ui/skills.slint:585 crates/toolbox-ui/ui/skills.slint:693
 msgctxt "ui.skills.activity"
 msgid "Activity"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:594
+#: crates/toolbox-ui/ui/skills.slint:596
 msgctxt "ui.skills.back_to_list"
 msgid "Back to list"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:596
+#: crates/toolbox-ui/ui/skills.slint:598
 msgctxt "ui.skills.deployment_saved_immediately"
 msgid "Deployment changes apply immediately"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:596
+#: crates/toolbox-ui/ui/skills.slint:598
 msgctxt "ui.skills.already_installed"
 msgid "Already installed"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:596
+#: crates/toolbox-ui/ui/skills.slint:598
 msgctxt "ui.skills.review_before_install"
 msgid "Review before installing"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:611
+#: crates/toolbox-ui/ui/skills.slint:613
 msgctxt "ui.skills.open_managed_folder"
 msgid "Open managed folder"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:616
+#: crates/toolbox-ui/ui/skills.slint:618
 msgctxt "ui.skills.managed_folder"
 msgid "Managed folder"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:616
+#: crates/toolbox-ui/ui/skills.slint:618
 msgctxt "ui.skills.source_folder"
 msgid "Source folder"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:617
+#: crates/toolbox-ui/ui/skills.slint:619
 msgctxt "ui.skills.skill_folder_path"
 msgid "Skill folder path"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:623
+#: crates/toolbox-ui/ui/skills.slint:625
 msgctxt "ui.skills.needs_attention"
 msgid "Needs attention"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:625
+#: crates/toolbox-ui/ui/skills.slint:627
 msgctxt "ui.skills.conflict_recovery"
 msgid ""
 "Check the reported cause before retrying. Local modifications and unrelated "
 "folders are not overwritten automatically."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:630 crates/toolbox-ui/ui/skills.slint:636
+#: crates/toolbox-ui/ui/skills.slint:632 crates/toolbox-ui/ui/skills.slint:638
 msgctxt "ui.skills.import_method"
 msgid "Source handling"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:633
+#: crates/toolbox-ui/ui/skills.slint:635
 msgctxt "ui.skills.copy_method"
 msgid "Copy into Toolbox"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:633
+#: crates/toolbox-ui/ui/skills.slint:635
 msgctxt "ui.skills.link_method"
 msgid "Link to the source folder"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:639
+#: crates/toolbox-ui/ui/skills.slint:641
 msgctxt "ui.skills.link_method_hint"
 msgid ""
 "Source changes stay live. Windows needs Developer Mode or symbolic-link "
 "permission. Removing a managed link keeps its source folder."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:639
+#: crates/toolbox-ui/ui/skills.slint:641
 msgctxt "ui.skills.copy_method_hint"
 msgid ""
 "Toolbox keeps an independent copy and preserves the original folder. Choose "
 "how applications receive that managed copy under Default deployment mode."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:641
+#: crates/toolbox-ui/ui/skills.slint:643
 msgctxt "ui.skills.linked_detail_hint"
 msgid ""
 "This is a linked skill. Its source stays live and is excluded from "
 "repository updates."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:642
+#: crates/toolbox-ui/ui/skills.slint:644
 msgctxt "ui.skills.local_update_hint"
 msgid "Local imports have no remote update source."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:643
+#: crates/toolbox-ui/ui/skills.slint:645
 msgctxt "ui.skills.directory_already_managed"
 msgid ""
 "A skill with this directory name is already managed. Open the installed item "
 "to review its source and deployments."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:647
+#: crates/toolbox-ui/ui/skills.slint:649
 msgctxt "ui.skills.deployment_targets"
 msgid "Application deployments"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:648
+#: crates/toolbox-ui/ui/skills.slint:650
 msgctxt "ui.skills.link_source_deployment_hint"
 msgid ""
 "Applications always link to this original source, regardless of the default "
 "deployment mode. Windows needs Developer Mode or symbolic-link permission."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:650
+#: crates/toolbox-ui/ui/skills.slint:652
 msgctxt "ui.skills.deployment_scope_hint"
 msgid ""
 "These switches manage Toolbox deployments. Applications may also read skills "
 "from shared or project directories."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:650
+#: crates/toolbox-ui/ui/skills.slint:652
 msgctxt "ui.skills.install_targets_hint"
 msgid ""
 "Choose applications to deploy to. Leaving all unchecked adds the skill to "
 "Toolbox only."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:656
+#: crates/toolbox-ui/ui/skills.slint:658
 msgctxt "ui.skills.application_directory"
 msgid "{0} deployment directory"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:660
+#: crates/toolbox-ui/ui/skills.slint:662
 msgctxt "ui.skills.import_directory_hint"
 msgid ""
 "Source and destination folders are checked before importing. Local "
 "modifications and unrelated folders remain protected."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:669
+#: crates/toolbox-ui/ui/skills.slint:671
 msgctxt "ui.action.uninstall"
 msgid "Uninstall"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:670 crates/toolbox-ui/ui/skills.slint:732
+#: crates/toolbox-ui/ui/skills.slint:672 crates/toolbox-ui/ui/skills.slint:734
 msgctxt "ui.action.update"
 msgid "Update"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:672
+#: crates/toolbox-ui/ui/skills.slint:674
 msgctxt "ui.skills.view_installed"
 msgid "View installed skill"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:677
+#: crates/toolbox-ui/ui/skills.slint:679
 msgctxt "ui.skills.import_as_link"
 msgid "Import as link"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:677
+#: crates/toolbox-ui/ui/skills.slint:679
 msgctxt "ui.skills.import_as_copy"
 msgid "Import as copy"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:677
+#: crates/toolbox-ui/ui/skills.slint:679
 msgctxt "ui.skills.install_selected"
 msgid "Install selected"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:690
+#: crates/toolbox-ui/ui/skills.slint:692
 msgctxt "ui.skills.back"
 msgid "Back"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:699
+#: crates/toolbox-ui/ui/skills.slint:701
 msgctxt "ui.skills.background_hint"
 msgid ""
 "Work continues while the toolbox is running in the tray. You can return to "
 "the list."
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:702
+#: crates/toolbox-ui/ui/skills.slint:704
 msgctxt "ui.skills.operation_details"
 msgid "Operation results and individual skill errors"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:705
+#: crates/toolbox-ui/ui/skills.slint:707
 msgctxt "ui.skills.show_affected"
 msgid "Show affected skills"
 msgstr ""
 
-#: crates/toolbox-ui/ui/skills.slint:733
+#: crates/toolbox-ui/ui/skills.slint:735
 msgctxt "ui.action.confirm_uninstall"
 msgid "Uninstall..."
 msgstr ""

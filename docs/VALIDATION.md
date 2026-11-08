@@ -722,3 +722,16 @@ Quake 截图更新了共享的“已启用／未启用”文案。截图使用�
 - 界面与 `--version` 改为显示构建时的 `git describe`。本机构建显示 `v0.2.0-26-gaf25bd0`（未提交时带 `-dirty`），与命令行 `git describe --tags --match 'v[0-9]*' --dirty` 一致；无 tag 时回退为 `v<Cargo 版本>`。
 - Skills 批量栏恢复应用图标操作，与列表应用列对齐：全部部署显示勾选标识，部分部署显示“−”标识，悬停提示部署数量与点击效果。UI 测试覆盖部分与全部部署两种状态。
 - 中文软件渲染核对了批量栏（浅色，1120×780，Microsoft YaHei UI）。`ui.pot` 用 slint-tr-extractor 1.18.1 重新生成，与 `compare-ui` 一致；本机缺少 GNU gettext，`msgfmt` 校验以 CI 为准。
+
+## 2026-11-08：UI/UX 打磨第一轮与设置分类
+
+按全部页面的中英文、浅深色、默认与最小尺寸软件渲染逐页检查后修正：
+
+- 确认框原先撑满窗口高度，现按内容自适应并居中；破坏性操作使用红色警告图标。
+- 项目面板底部按键提示与文字垂直对齐。
+- 侧栏去掉乱序数字与缺字的“Ctrl / ⌘ + 数字切换”说明，快捷键改在悬停提示中显示（Windows/Linux 为 `Ctrl+N`，macOS 为 `⌘N`）。
+- 最近项目列表仅在选中或悬停行显示“VS Code →”，减少重复信息。
+- Skills 窄窗口保留紧凑应用图标，列标题完整显示 OpenCode。
+- 设置页按功能分为通用、最近项目、窗口切换、技能管理、配置文件五类，左侧切换，搜索跨类匹配；保存失败自动切到出错字段所在分类。
+
+`smoke_appearance.py` 的设置页坐标随布局更新，新增 `settings-general` 点并在选择主题和语言前点击。`render_ui.py --verify-appearance-controls`（英文、1120×780、平台默认字体）通过全部 12 个坐标点；Linux 原生 smoke 以 CI 结果为准。README 六张截图以 Noto Sans SC 重新渲染。

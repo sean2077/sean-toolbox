@@ -44,11 +44,13 @@ LAUNCHER_SIZE = (760, 432)
 # points against the production Slint components before the native smoke runs.
 APPEARANCE_POINTS = {
     "profile-first": (285, 228),
-    "theme-system": (380, 275),
-    "theme-light": (654, 275),
-    "theme-dark": (930, 275),
-    "settings-language": (1000, 383),
-    "settings-discard": (919, 705),
+    # Settings open on the General category; y fits English and Chinese.
+    "settings-general": (316, 148),
+    "theme-system": (536, 345),
+    "theme-light": (754, 345),
+    "theme-dark": (971, 345),
+    "settings-language": (994, 208),
+    "settings-discard": (939, 705),
     "profile-shortcut": (780, 325),
     "profile-record": (1035, 325),
     "profile-record-fill": (1066, 329),
@@ -225,6 +227,7 @@ class AppearanceDesktop(Desktop):
         self.key("ctrl+f")
         self.key("ctrl+a")
         self.key("BackSpace")
+        self.click_control("settings-general")
         self.click_control(f"theme-{scheme}")
         if scheme != "system":
             self.wait_theme(scheme == "dark")
@@ -602,6 +605,7 @@ class AppearanceDesktop(Desktop):
         self.scroll_editor(3)
         self.snapshot("en-light-quake-editor")
         self.key("ctrl+3")
+        self.click_control("settings-general")
         self.click_control("settings-language")
         self.key("Up")
         self.key("Return")

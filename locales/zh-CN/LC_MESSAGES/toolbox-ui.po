@@ -264,21 +264,6 @@ msgctxt "ui.shortcut.record"
 msgid "Record"
 msgstr "录入"
 
-#: crates/toolbox-ui/ui/main.slint:226
-msgctxt "ui.settings.search_appearance"
-msgid "Appearance theme light dark system"
-msgstr "外观 主题 浅色 深色 跟随系统"
-
-#: crates/toolbox-ui/ui/main.slint:227
-msgctxt "ui.settings.search_general"
-msgid "General language shortcut sign-in startup cache memory speed"
-msgstr "通用 语言 快捷键 登录 开机 启动 缓存 内存 速度"
-
-#: crates/toolbox-ui/ui/main.slint:228
-msgctxt "ui.settings.search_tools"
-msgid "Tools recent projects window switcher VS Code path"
-msgstr "工具 最近项目 窗口切换 VS Code 路径"
-
 #: crates/toolbox-ui/ui/main.slint:229
 msgctxt "ui.settings.search_configuration"
 msgid "Configuration import export backup reload JSON INI"
@@ -328,11 +313,6 @@ msgstr "工作空间"
 msgctxt "ui.main.preferences"
 msgid "PREFERENCES"
 msgstr "工具箱"
-
-#: crates/toolbox-ui/ui/main.slint:375
-msgctxt "ui.navigation.shortcut_hint"
-msgid "Ctrl / ⌘ + number"
-msgstr "Ctrl / ⌘ + 数字切换"
 
 #: crates/toolbox-ui/ui/main.slint:381
 msgctxt "ui.main.on_your_device"
@@ -739,11 +719,6 @@ msgctxt "ui.settings.search"
 msgid "Find a setting…"
 msgstr "查找设置…"
 
-#: crates/toolbox-ui/ui/main.slint:781
-msgctxt "ui.main.appearance"
-msgid "APPEARANCE"
-msgstr "外观"
-
 #: crates/toolbox-ui/ui/main.slint:785
 msgctxt "ui.main.choose_your_theme"
 msgid "Choose your theme"
@@ -753,11 +728,6 @@ msgstr "选择界面主题"
 msgctxt "ui.settings.theme_hint"
 msgid "Preview instantly in the manager and project launcher. Save to keep your choice."
 msgstr "管理窗口与最近项目面板同步预览，保存后保留。"
-
-#: crates/toolbox-ui/ui/main.slint:809
-msgctxt "ui.main.general"
-msgid "GENERAL"
-msgstr "通用"
 
 #: crates/toolbox-ui/ui/main.slint:814 crates/toolbox-ui/ui/main.slint:819
 msgctxt "ui.main.language"
@@ -794,11 +764,6 @@ msgctxt "ui.settings.cache_hint"
 msgid "0 uses less memory. A short delay reopens faster; closing the window releases it immediately."
 msgstr "0 可节省内存，短暂保留可加快再次唤起；主动关闭时立即释放。"
 
-#: crates/toolbox-ui/ui/main.slint:859
-msgctxt "ui.main.tools"
-msgid "TOOLS"
-msgstr "功能模块"
-
 #: crates/toolbox-ui/ui/main.slint:865
 msgctxt "ui.settings.projects_hint"
 msgid "Find folders and workspaces from VS Code history."
@@ -833,11 +798,6 @@ msgstr "留空时自动查找；也可以指定可执行文件。"
 msgctxt "ui.main.automatically_detect"
 msgid "Automatically detect"
 msgstr "自动查找"
-
-#: crates/toolbox-ui/ui/main.slint:890
-msgctxt "ui.main.configuration"
-msgid "CONFIGURATION"
-msgstr "配置管理"
 
 #: crates/toolbox-ui/ui/main.slint:894
 msgctxt "ui.settings.import_export_hint"
@@ -2120,6 +2080,81 @@ msgctxt "rust.skills_batch_click_disable"
 msgid "Click to disable for all selected skills."
 msgstr "点击为所选技能全部停用。"
 
+#: crates/toolbox-ui/ui/main.slint:230
+msgctxt "ui.settings.search.general"
+msgid "General language theme appearance light dark system sign-in startup login"
+msgstr "通用 语言 中文 英文 主题 外观 浅色 深色 跟随系统 登录 开机 启动 General language theme"
+
+#: crates/toolbox-ui/ui/main.slint:231
+msgctxt "ui.settings.search.projects"
+msgid "Recent projects launcher shortcut hotkey VS Code path location cache memory seconds"
+msgstr "最近项目 面板 快捷键 热键 VS Code 路径 位置 缓存 内存 秒 Recent projects shortcut"
+
+#: crates/toolbox-ui/ui/main.slint:232
+msgctxt "ui.settings.search.windows"
+msgid "Window switcher apps applications shortcut dock quake"
+msgstr "窗口切换 应用 快捷键 停靠 下拉 Quake Window switcher apps"
+
+#: crates/toolbox-ui/ui/main.slint:233
+msgctxt "ui.settings.search.skills"
+msgid "Skills agents daily update deployment symlink copy repositories"
+msgstr "技能管理 Skills 智能体 每日 自动更新 部署 符号链接 复制 仓库"
+
+#: crates/toolbox-ui/ui/main.slint:792 crates/toolbox-ui/ui/main.slint:809
+msgctxt "ui.settings.category.general"
+msgid "General"
+msgstr "通用"
+
+#: crates/toolbox-ui/ui/main.slint:796 crates/toolbox-ui/ui/main.slint:941
+msgctxt "ui.settings.category.configuration"
+msgid "Configuration file"
+msgstr "配置文件"
+
+#: crates/toolbox-ui/ui/main.slint:809
+msgctxt "ui.settings.general_description"
+msgid "Language, appearance and startup."
+msgstr "语言、外观与启动方式。"
+
+#: crates/toolbox-ui/ui/main.slint:864
+msgctxt "ui.settings.projects_switch_hint"
+msgid "Turning this off also releases the panel shortcut."
+msgstr "关闭后同时释放面板快捷键。"
+
+#: crates/toolbox-ui/ui/main.slint:913
+msgctxt "ui.settings.windows_switch_hint"
+msgid "Turning this off releases every app shortcut and keeps their settings."
+msgstr "关闭后释放所有应用快捷键，应用配置保留。"
+
+#: crates/toolbox-ui/ui/main.slint:918
+msgctxt "ui.settings.manage_apps_title"
+msgid "Apps and shortcuts"
+msgstr "应用与快捷键"
+
+#: crates/toolbox-ui/ui/main.slint:919
+msgctxt "ui.settings.manage_apps_hint"
+msgid "Add apps and set their shortcuts, window behavior and docking on the Window switcher page."
+msgstr "在“窗口切换”页添加应用，设置快捷键、窗口行为与停靠方式。"
+
+#: crates/toolbox-ui/ui/main.slint:920
+msgctxt "ui.settings.manage_apps"
+msgid "Manage apps"
+msgstr "管理应用"
+
+#: crates/toolbox-ui/ui/main.slint:932
+msgctxt "ui.settings.skills_updates_title"
+msgid "Updates and deployment"
+msgstr "更新与部署"
+
+#: crates/toolbox-ui/ui/main.slint:933
+msgctxt "ui.settings.skills_updates_hint"
+msgid "Daily updates and the default deployment mode are saved immediately on the Skills page, under Repositories."
+msgstr "每日自动更新与默认部署方式在技能管理的“仓库”页设置，修改后立即保存。"
+
+#: crates/toolbox-ui/ui/main.slint:934
+msgctxt "ui.settings.open_skill_repositories"
+msgid "Open repositories"
+msgstr "打开仓库设置"
+
 #~ msgctxt "ui.navigation.projects"
 #~ msgid "Recent projects"
 #~ msgstr "最近项目"
@@ -2493,3 +2528,35 @@ msgstr "点击为所选技能全部停用。"
 #~ msgctxt "ui.skills.batch_disable"
 #~ msgid "Disable selected"
 #~ msgstr "停用所选"
+
+#~ msgctxt "ui.navigation.shortcut_hint"
+#~ msgid "Ctrl / ⌘ + number"
+#~ msgstr "Ctrl / ⌘ + 数字切换"
+
+#~ msgctxt "ui.settings.search_appearance"
+#~ msgid "Appearance theme light dark system"
+#~ msgstr "外观 主题 浅色 深色 跟随系统"
+
+#~ msgctxt "ui.settings.search_general"
+#~ msgid "General language shortcut sign-in startup cache memory speed"
+#~ msgstr "通用 语言 快捷键 登录 开机 启动 缓存 内存 速度"
+
+#~ msgctxt "ui.settings.search_tools"
+#~ msgid "Tools recent projects window switcher VS Code path"
+#~ msgstr "工具 最近项目 窗口切换 VS Code 路径"
+
+#~ msgctxt "ui.main.appearance"
+#~ msgid "APPEARANCE"
+#~ msgstr "外观"
+
+#~ msgctxt "ui.main.general"
+#~ msgid "GENERAL"
+#~ msgstr "通用"
+
+#~ msgctxt "ui.main.tools"
+#~ msgid "TOOLS"
+#~ msgstr "功能模块"
+
+#~ msgctxt "ui.main.configuration"
+#~ msgid "CONFIGURATION"
+#~ msgstr "配置管理"

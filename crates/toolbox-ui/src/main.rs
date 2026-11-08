@@ -2567,6 +2567,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     // `git describe` of the build, or `v<package version>` without tags.
     ui.set_version_label(env!("SEAN_TOOLBOX_VERSION").into());
+    if cfg!(target_os = "macos") {
+        ui.global::<Theme>().set_command_key("⌘".into());
+    }
     let (send, receive) = mpsc::channel();
     let query_generation = Arc::new(AtomicU64::new(0));
     let controller = Rc::new(Controller {
@@ -3471,6 +3474,8 @@ mod tests {
             controller.settings_changed();
             controller.save_settings();
             assert!(ui.get_settings_query().is_empty());
+            // The shortcut lives in the recent projects category.
+            assert_eq!(ui.get_settings_category(), 1);
             assert!(!ui.get_setting_hotkey_error().is_empty());
             assert!(receive.try_recv().is_err());
             ui.window()
@@ -4861,7 +4866,7 @@ mod tests {
             assert_eq!(added.get(), 1, "the first mouse click must activate Add");
             click(336.0, 228.0);
             assert_eq!(edited.get(), 0, "the first mouse click must activate Edit");
-            click(100.0, 613.0);
+            click(100.0, 635.0);
             assert_eq!(navigated.get(), 2, "navigation must accept its first click");
 
             ui.set_saving(true);
