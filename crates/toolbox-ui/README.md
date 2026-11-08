@@ -44,6 +44,7 @@ requests. Results return through `slint::invoke_from_event_loop`.
 - Program selection suggests the name and matcher for a new profile. Basic
   fields stay visible; IDs, matching rules and launch alternatives are advanced
   options. Field-specific validation opens the relevant section when needed.
+  Launcher shortcut and cache time errors also update on every settings edit.
 - Shortcut recording accepts normal UI key events and the host's registered
   shortcuts. A token-scoped three-second host lease intercepts the latter while
   the recorder polls. Native registrations stay intact; closing, focus loss or
@@ -53,8 +54,9 @@ requests. Results return through `slint::invoke_from_event_loop`.
 - Static text uses Slint's bundled gettext translations. Rust-generated status
   and confirmation messages retain their identity and arguments, so language
   previews also refresh existing text, project summaries, imports and Skills
-  details. Local worker errors are translated on arrival using the current
-  locale; backend diagnostics and user-provided metadata remain verbatim.
+  details. Local worker errors and configuration checks run by the UI are
+  translated using the current locale; backend diagnostics and user-provided
+  metadata remain verbatim.
 - Diagnostics refresh on request, showing capabilities, activity and errors.
   A failed refresh clears the previous capability snapshot.
 - Skills exposes installed skills, repository discovery, local imports,
@@ -62,7 +64,10 @@ requests. Results return through `slint::invoke_from_event_loop`.
   only performs IPC and folder selection. Full-width rows open details on
   demand. Bulk actions show hidden selections and explicitly enable or disable
   the selected app. Both folder and scan imports review the source, copy/link
-  mode and deployment apps before submission. A separate global deploy-mode
+  mode and deployment apps before submission. A picked folder whose name
+  matches a managed skill offers that installed item instead of an import.
+  The source filter follows its repository by ID and falls back to All once
+  that repository is removed. A separate global deploy-mode
   selector chooses symlinks (default) or copies for new managed-skill app
   deployments; existing deployments keep their mode. Daily and manual updates
   share the host's serialized worker and persisted status. Operation status

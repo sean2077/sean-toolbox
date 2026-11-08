@@ -607,3 +607,47 @@ msgstr ""
 msgctxt "rust.shortcut_capture_failed"
 msgid "Recording stopped: {error}. Your shortcut is unchanged."
 msgstr ""
+
+msgctxt "rust.config_error_unsupported_version"
+msgid "This configuration version is not supported."
+msgstr ""
+
+msgctxt "rust.config_error_language"
+msgid "Choose Chinese or English as the interface language."
+msgstr ""
+
+msgctxt "rust.config_error_too_many_profiles"
+msgid "At most 100 applications are supported."
+msgstr ""
+
+msgctxt "rust.config_error_profile_shortcut"
+msgid "{id}: Invalid shortcut. Use modifiers with A–Z, 0–9, Space, Tab, Enter or Escape, or press F1–F24."
+msgstr ""
+
+msgctxt "rust.config_error_quake_dimensions"
+msgid "{id}: Docked window width and height must be 10–100%."
+msgstr ""
+
+msgctxt "rust.config_error_profile_id"
+msgid "Invalid or duplicate application ID: {id}. Use a unique ID with 1–64 letters, digits, - or _."
+msgstr ""
+
+msgctxt "rust.config_error_name_or_matcher"
+msgid "{id}: Enter a name and a window match."
+msgstr ""
+
+msgctxt "rust.config_error_duplicate_shortcut"
+msgid "{shortcut} is already used by another application. Choose another shortcut."
+msgstr ""
+
+msgctxt "rust.config_error_launch_candidates"
+msgid "{id}: Each application needs 1–8 launch candidates."
+msgstr ""
+
+msgctxt "rust.config_error_launch_command"
+msgid "{id}: Check the program path, arguments and working directory."
+msgstr ""
+
+msgctxt "rust.config_error_vscode_path"
+msgid "The VS Code path is invalid."
+msgstr ""

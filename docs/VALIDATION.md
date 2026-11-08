@@ -695,3 +695,24 @@ Quake 截图更新了共享的“已启用／未启用”文案。截图使用�
 `toolbox-windows` 的 `native_quake_hides_reuses_and_recovers_without_activation` 在本机置顶确认失败；
 同一机器上的 `main`（`132d045`）复现相同失败，PR 未改动该 crate，同一 PR 的 Windows CI 通过，判断为本机桌面环境限制。
 未执行原生桌面人工验收。
+
+## 2026-11-08：审阅建议跟进
+
+完成 PR #5 审阅中列出的三项后续改进，均附回归测试：
+
+- Skills 来源筛选按仓库 ID 记忆。移除排在前面的仓库时仍筛选原仓库；该仓库被移除后回到“全部”，不再静默改为其他仓库。
+- 通过文件夹选择器导入时，与本机扫描一样按文件夹名（不区分大小写）核对已管理技能，同名时提供“查看已安装技能”，不提交导入。
+- 界面在本地执行的配置校验（应用保存、设置保存、配置导入）改为按当前语言显示原因。`toolbox-core` 新增 `ConfigError`，`Config::validate` 仍返回原英文诊断，宿主、IPC 与日志文本不变；宿主返回的诊断继续原样显示。新增 11 条 Rust 消息及中文译文。
+
+环境为 Windows 11 x86_64，Rust 1.99.1 MSVC 工具链。
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace --no-fail-fast` | 除已知的 `toolbox-windows` 本机置顶用例外全部通过；该用例在 `main` 上同样失败，见上一节 |
+| `cargo test --locked -p toolbox-ui -p toolbox-core -p toolbox-i18n` | 通过；UI 102 项，core 27 项，翻译目录完整性测试通过 |
+| 回归敏感性 | 临时撤销来源筛选与文件夹核对修复时，对应新用例确定失败 |
+
+本机未安装 GNU gettext，`python scripts/translations.py check` 的 `msgfmt` 步骤以 CI 结果为准；
+新增条目只在 `rust.pot` 与中文 PO 中手工添加，`ui.pot` 未变。
