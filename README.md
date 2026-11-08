@@ -10,13 +10,15 @@ Sean Toolbox 使用 Rust + Slint，支持 Windows、macOS 和 Linux，优先面�
 
 ![最近项目面板](docs/images/project-launcher-dark.png)
 
-按快捷键打开项目面板，输入名称或路径即可搜索。应用快捷键、停靠方式和通用设置在管理窗口中调整。
+按快捷键打开项目面板，输入名称或路径即可搜索，`Alt+Enter` 查看完整路径。管理窗口将常用操作与高级配置分开，支持应用搜索、快捷键录制和窄窗口布局。
 
 | 浅色主题 | 深色主题 |
 | --- | --- |
 | ![浅色设置](docs/images/settings-light.png) | ![深色设置](docs/images/settings-dark.png) |
 
 更多截图：[项目管理](docs/images/projects.png) · [Quake 停靠](docs/images/quake-editor.png) · [Skills 管理（示例数据）](docs/images/skills-manager.png)。
+
+截图使用当前源码和示例数据生成；尚未发布的界面变化不包含在下方的 0.2.0 发行包中。
 
 ## 功能
 

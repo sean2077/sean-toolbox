@@ -37,6 +37,25 @@ LAUNCHER_TITLES = {
     "en": "Sean Toolbox · Recent Projects",
     "zh-CN": "Sean Toolbox · 最近项目",
 }
+MANAGER_SIZE = (1120, 780)
+MINIMUM_MANAGER_SIZE = (800, 580)
+LAUNCHER_SIZE = (760, 432)
+# Logical control centers at MANAGER_SIZE. render_ui.py can exercise these same
+# points against the production Slint components before the native smoke runs.
+APPEARANCE_POINTS = {
+    "profile-first": (285, 228),
+    "theme-system": (380, 275),
+    "theme-light": (654, 275),
+    "theme-dark": (930, 275),
+    "settings-language": (1000, 383),
+    "settings-discard": (919, 705),
+    "profile-shortcut": (780, 325),
+    "profile-record": (1035, 325),
+    "profile-record-fill": (1066, 329),
+    "quake-toggle": (479, 419),
+    "quake-preview-fill": (770, 485),
+    "quake-right-preset": (753, 587),
+}
 
 
 class X11FocusEvent(ctypes.Structure):
@@ -157,12 +176,17 @@ class AppearanceDesktop(Desktop):
     def click(self, x: float, y: float, window: int | None = None) -> None:
         self.command("xdotool", "mousemove", "--window", str(window or self.manager), str(self.point(x)), str(self.point(y)), "click", "1")
 
+    def click_control(self, name: str) -> None:
+        self.click(*APPEARANCE_POINTS[name])
+
     def scroll_editor(self, count: int, button: int = 5) -> None:
+        # Stay over the scrollbar, clear of editable numeric controls.
+        x = self.manager_size()[0] / self.scale - 43
         self.command("xdotool", "mousemove", "--window", str(self.manager),
-                     str(self.point(1068)), str(self.point(400)), "click", "--repeat", str(count), "--delay", "40", str(button))
+                     str(self.point(x)), str(self.point(400)), "click", "--repeat", str(count), "--delay", "40", str(button))
 
     def edit_first_profile(self) -> None:
-        self.click(285, 274)
+        self.click_control("profile-first")
         # Mounted pages keep scroll positions. Reset through the real scrollbar
         # before interacting with fields; scrolling over a SpinBox edits it.
         self.scroll_editor(20, 4)
@@ -198,7 +222,10 @@ class AppearanceDesktop(Desktop):
     def choose_theme(self, scheme: str) -> None:
         self.activate(self.manager)
         self.key("ctrl+3")
-        self.click({"system": 380, "light": 654, "dark": 930}[scheme], 275)
+        self.key("ctrl+f")
+        self.key("ctrl+a")
+        self.key("BackSpace")
+        self.click_control(f"theme-{scheme}")
         if scheme != "system":
             self.wait_theme(scheme == "dark")
 
@@ -223,14 +250,14 @@ class AppearanceDesktop(Desktop):
         self.ui_pid, self.manager, endpoint = self.show_ui()
         # The manager must open at its Slint preferred size, not the minimum.
         # Fixed coordinates below (theme preview) depend on this default size.
-        expected = (self.point(1120), self.point(780))
+        expected = tuple(self.point(value) for value in MANAGER_SIZE)
         wait_for("manager's preferred size", lambda: self.manager_size() == expected)
         self.activate(self.manager)
         self.key("ctrl+3")
         return self.ui_pid, endpoint
 
     def wait_popup_geometry(self, window: int) -> None:
-        expected = (self.point(760), self.point(408))
+        expected = tuple(self.point(value) for value in LAUNCHER_SIZE)
         screen = tuple(map(int, self.command("xdotool", "getdisplaygeometry").stdout.split()))
         require(all(actual >= wanted for actual, wanted in zip(screen, expected)),
                 f"Private screen {screen} is too small for the expected panel {expected}")
@@ -498,16 +525,64 @@ class AppearanceDesktop(Desktop):
         require(any(value >> 24 > 200 and (value >> 8 & 255) > 180 and (value >> 16 & 255) < 160 and (value & 255) > 130 for value in pixels), "Native icon is missing the new mint-colored prompt")
         return values
 
+    def recorder_ready(self) -> bool:
+        require(self.probe is not None, "Native probe is not initialized")
+        x, y = APPEARANCE_POINTS["profile-record-fill"]
+        red, _, blue = self.probe.pixel(self.manager, self.point(x), self.point(y))
+        # The recorder becomes primary only after the host acknowledges Begin.
+        return blue - red > 60
+
+    def check_shortcut_recorder(self) -> None:
+        self.key("ctrl+2")
+        self.edit_first_profile()
+        require(self.saved()["windows"]["profiles"][0]["hotkey"] == "F8", "Recorder fixture must begin with registered F8")
+        require(not self.windows(), "Recorder fixture unexpectedly has an application window")
+        self.click_control("profile-shortcut")
+        self.key("ctrl+a")
+        self.command("xdotool", "type", "--clearmodifiers", "F9")
+        # F9 is only a draft. The still-registered F8 must reach the recorder
+        # through the host lease instead of launching this profile.
+        self.click_control("profile-record")
+        wait_for("recorder receives host Begin acknowledgement", self.recorder_ready)
+        self.command("xdotool", "keydown", "F8")
+        try:
+            # Cover the passive X11 grab across a recorder poll, including the
+            # transient activation events emitted while the physical key is held.
+            deadline = time.monotonic() + 0.35
+            while time.monotonic() < deadline:
+                require(not self.windows(), "Holding recorded F8 launched the application")
+                require(self.probe is not None and self.probe.input_focus() == self.manager,
+                        "Holding recorded F8 changed the native input focus")
+                time.sleep(0.04)
+        finally:
+            self.command("xdotool", "keyup", "F8")
+        wait_for("registered F8 captured and recording stopped", lambda: not self.recorder_ready())
+        self.key("ctrl+s")
+        wait_for("captured F8 replaces the F9 draft", lambda: self.saved()["windows"]["profiles"][0]["hotkey"] == "F8")
+        deadline = time.monotonic() + 0.5
+        while time.monotonic() < deadline:
+            require(not self.windows(), "Recording registered F8 launched the application")
+            require(self.active() == self.manager, "Recording registered F8 stole manager focus")
+            time.sleep(0.04)
+        self.click_control("profile-record")
+        wait_for("recorder ready for cancellation", self.recorder_ready)
+        self.key("Escape")
+        wait_for("Escape cancels recording", lambda: not self.recorder_ready())
+        require(self.manager in self.visible("^Sean Toolbox$"), "Escape closed the manager while recording")
+        require(self.ui_children() == [self.ui_pid], "Recorder cancellation replaced the UI process")
+        require(self.saved()["windows"]["profiles"][0]["hotkey"] == "F8", "Cancelling recording changed the saved shortcut")
+        print("PASS registered F8 routes to the recorder without launching; Escape cancels and preserves the manager", flush=True)
+
     def check_quake_editor(self) -> None:
         self.key("ctrl+2")
         self.edit_first_profile()
-        self.scroll_editor(5)
-        self.click(485, 236)
+        self.click_control("quake-toggle")
         require(self.probe is not None, "Native probe is not initialized")
+        preview_x, preview_y = APPEARANCE_POINTS["quake-preview-fill"]
         wait_for("enabled Quake preview is drawn", lambda: (
-            (color := self.probe.pixel(self.manager, self.point(770), self.point(250)))[2] - color[0] > 10
+            (color := self.probe.pixel(self.manager, self.point(preview_x), self.point(preview_y)))[2] - color[0] > 10
         ))
-        self.click(760, 351)
+        self.click_control("quake-right-preset")
         self.key("ctrl+s")
         expected = {"enabled": True, "edge": "right", "alignment": "center", "width_percent": 40, "height_percent": 100}
         wait_for("Quake controls persist the right-side preset", lambda: expected.items() <= self.saved()["windows"]["profiles"][0]["quake"].items())
@@ -526,8 +601,8 @@ class AppearanceDesktop(Desktop):
         self.edit_first_profile()
         self.scroll_editor(3)
         self.snapshot("en-light-quake-editor")
-        self.click(90, 620)
-        self.click(1000, 428)
+        self.key("ctrl+3")
+        self.click_control("settings-language")
         self.key("Up")
         self.key("Return")
         self.key("ctrl+s")
@@ -543,15 +618,15 @@ class AppearanceDesktop(Desktop):
         popup = self.popup(True)
         self.snapshot("cn-dark-launcher", popup)
         self.dismiss_popup(popup)
-        self.click(90, 210)
+        self.key("ctrl+2")
         self.edit_first_profile()
         self.scroll_editor(3)
         self.snapshot("cn-dark-quake-editor")
-        self.command("xdotool", "windowsize", "--sync", str(self.manager), str(self.point(900)), str(self.point(650)))
+        self.command("xdotool", "windowsize", "--sync", str(self.manager), *(str(self.point(value)) for value in MINIMUM_MANAGER_SIZE))
         geometry = dict(line.split("=", 1) for line in self.command("xdotool", "getwindowgeometry", "--shell", str(self.manager)).stdout.splitlines())
-        require(int(geometry["WIDTH"]) == self.point(900) and int(geometry["HEIGHT"]) == self.point(650), "Manager cannot reach the supported minimum size")
+        require((int(geometry["WIDTH"]), int(geometry["HEIGHT"])) == tuple(self.point(value) for value in MINIMUM_MANAGER_SIZE), "Manager cannot reach the supported minimum size")
         self.snapshot("cn-dark-quake-minimum")
-        self.command("xdotool", "windowsize", "--sync", str(self.manager), str(self.point(1120)), str(self.point(780)))
+        self.command("xdotool", "windowsize", "--sync", str(self.manager), *(str(self.point(value)) for value in MANAGER_SIZE))
         print("PASS Chinese light/dark controls and native default/minimum window sizes", flush=True)
 
     def run_appearance(self) -> None:
@@ -585,7 +660,7 @@ class AppearanceDesktop(Desktop):
 
             self.save_theme("light")
             self.key("ctrl+2")
-            self.click(285, 274)
+            self.edit_first_profile()
             self.key("ctrl+a")
             self.command("xdotool", "type", "--clearmodifiers", "--delay", "2", "Terminal")
             self.key("ctrl+3")
@@ -593,7 +668,7 @@ class AppearanceDesktop(Desktop):
             require(self.saved()["general"]["theme"] == "light", "Preview persisted without Save")
             popup = self.popup(True)
             self.dismiss_popup(popup)
-            self.click(945, 700)
+            self.click_control("settings-discard")
             wait_for("discard confirmation", lambda: max(self.theme_color()) < 30)
             self.key("Tab")
             self.key("Return")
@@ -604,6 +679,7 @@ class AppearanceDesktop(Desktop):
             wait_for("application draft survived theme discard", lambda: self.saved()["windows"]["profiles"][0]["name"] == "Terminal")
             self.snapshot("en-light-draft-retained")
             print("PASS theme preview is unsaved; Discard restores the saved theme and retains the application draft", flush=True)
+            self.check_shortcut_recorder()
             self.check_quake_editor()
             self.check_close_lifecycle(previous, endpoint)
         finally:

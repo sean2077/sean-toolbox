@@ -3,6 +3,7 @@ use crate::focus_watch::{FocusQueue, FocusWatch};
 use crate::{
     autostart,
     hotkeys::{Binding, Hotkeys},
+    shortcut_capture::ShortcutCapture,
     skills_worker::SkillsWorker,
     ui_process::UiProcess,
 };
@@ -16,7 +17,7 @@ use std::{
         mpsc,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use toolbox_core::{
     AppProfile, Config, HostCommand, HostStatus, PROTOCOL_VERSION, Platform, Request, Response,
@@ -168,6 +169,7 @@ struct App {
     initial: Option<UiPage>,
     executable: PathBuf,
     pressed: HashSet<u32>,
+    shortcut_capture: ShortcutCapture,
 }
 
 impl App {
@@ -277,6 +279,7 @@ impl App {
             initial,
             executable,
             pressed: HashSet::new(),
+            shortcut_capture: ShortcutCapture::default(),
         })
     }
 
@@ -443,6 +446,7 @@ impl App {
             status: Some(self.status.clone()),
             revision: self.revision,
             skills: None,
+            shortcut_capture: None,
         }
     }
 
@@ -464,6 +468,14 @@ impl App {
                     ..Response::success("Skills 操作已接受 / Skills operation accepted")
                 },
                 Err(error) => Response::error(error),
+            },
+            HostCommand::ShortcutCapture { token, action } => Response {
+                shortcut_capture: Some(self.shortcut_capture.request(
+                    token,
+                    action,
+                    Instant::now(),
+                )),
+                ..Response::success("Shortcut capture")
             },
             HostCommand::Status => {
                 if self
@@ -595,7 +607,22 @@ impl ApplicationHandler<Event> for App {
                 if !self.pressed.insert(event.id) {
                     return;
                 }
-                match self.hotkeys.as_ref().and_then(|h| h.binding(event.id)) {
+                let binding = self.hotkeys.as_ref().and_then(|h| h.binding(event.id));
+                let shortcut = match binding.as_ref() {
+                    Some(Binding::Launcher) => Some(self.config.projects.hotkey.as_str()),
+                    Some(Binding::Profile(id)) => self
+                        .config
+                        .windows
+                        .profiles
+                        .iter()
+                        .find(|profile| &profile.id == id)
+                        .map(|profile| profile.hotkey.as_str()),
+                    None => None,
+                };
+                if self.shortcut_capture.intercept(shortcut, Instant::now()) {
+                    return;
+                }
+                match binding {
                     Some(Binding::Launcher) => {
                         if let Err(e) = self.show(UiPage::Projects) {
                             self.status.last_action = e;

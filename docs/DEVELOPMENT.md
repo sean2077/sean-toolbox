@@ -57,6 +57,38 @@ python scripts/smoke_appearance.py --binary target/release/sean-toolbox
 
 默认 `cargo test` 会跳过标为 ignored 的 X11 用例，由上述窗口测试脚本单独运行。测试中的 VS Code SQLite 数据和 CLI fixture 用于检查历史解析、打开目标及参数；桌面焦点、权限提示和多显示器交互在相应系统上单独验收。按日期记录的结果与资源采样见 [验证记录](VALIDATION.md)。
 
+### 无桌面的组件布局预览
+
+[`scripts/render_ui.py`](../scripts/render_ui.py) 编译并调用
+[`render_ui` 示例](../crates/toolbox-ui/examples/render_ui.rs)，通过 Slint 软件渲染器直接绘制
+生产组件。数据为显式示例，不读取用户配置或本机 Skills，不启动宿主、IPC 或外部应用。
+Python 入口仅使用标准库，把渲染结果保存为 PNG，并记录源提交、语言、主题、逻辑尺寸、缩放和
+Slint 声明的尺寸约束。默认拒绝超出组件最小/最大尺寸的截图，并核对实际窗口与像素缓冲区尺寸。
+
+```sh
+python scripts/render_ui.py --output target/ui-previews
+python scripts/render_ui.py --scenes skills settings launcher --languages en zh-CN --themes light dark --sizes 800x580 --scales 1.5 2 --offline
+python scripts/render_ui.py --scenes apps settings --languages en --sizes 1120x780 --verify-appearance-controls --offline
+```
+
+默认覆盖管理窗口各页、项目面板及导入/确认弹窗，中英文、浅深色、1120×780 与 800×580。
+Skills 场景包括详情、问题恢复、本机导入、链接来源、带隐藏选择的批量操作和操作状态，
+其中示例部署数量与应用勾选保持一致。`apps-advanced` 与 `quake` 展示已展开或滚动到对应内容的状态。
+项目面板预览最大为 760×432，`launcher-details` 展开完整路径。可用 `--scenes`、`--languages`、`--themes`、`--sizes` 和
+`--scales` 缩小检查范围。系统缺少中文字形时，使用 `--font-family` 选择已安装的 CJK 字体，
+或结合 `--font-file` 仅为本次预览注册一个本地字体；工具不会下载或修改系统字体。
+对比旧版未支持的尺寸时才使用 `--allow-unsupported-size`；清单会明确记录该尺寸是否超出组件约束，
+这类对照图不能作为该尺寸适配通过的证据。
+
+`--verify-appearance-controls` 读取 `smoke_appearance.py` 的同一套逻辑坐标，向真实 Slint
+组件发送指针事件，核对主题、放弃设置、应用选择及停靠预设等关键目标。清单记录通过的控件，
+用于尽早发现布局变更让原生脚本点错位置；它不调用宿主，也不替代原生持久化和焦点验收。
+该检查使用英文、1120×780 和平台默认字体，与 Linux 原生脚本一致；`--font-family` 会改变文字度量，
+因此自选字体的布局预览应与原生坐标检查分别运行。
+
+这些预览用于发现文字裁切、层级和布局问题，不证明原生焦点、屏幕阅读器、文件选择器、
+真实显示器缩放或宿主交互已经通过验收；对应平台仍使用前述集成测试及实机检查。
+
 开发时可用绝对路径环境变量 `SEAN_TOOLBOX_CONFIG` 指定独立配置。宿主单实例按当前用户隔离，桌面集成测试使用临时用户目录和独立显示服务。
 
 ## 模块结构
@@ -102,7 +134,7 @@ python scripts/translations.py check
 
 新增 Rust 消息时，在 `rust.pot` 定义完整句子，再更新中文 PO。通过 `messages::config_exported(path)` 等生成函数取得 `Message`，在呈现时调用 `.render(locale)`；不要在业务逻辑中传入成对的中英文字符串。Rust 模板只接受 `{name}` 命名参数与 `{{` / `}}` 字面括号；四个及以上参数的消息生成具名参数结构体（例如 `DiagnosticsSummaryArgs`），调用方按字段名构造，重命名占位符不会静默换参；更小的消息保持按名字排序的位置参数。含 `msgid_plural` 的消息把 `count: usize` 固定为首参数，其余参数仍按名字排序；英文区分 1 与其他数量，中文使用单一复数形式。
 
-Rust 与 Slint 都需要显示的无参数标签（例如 Enabled、Quake 边缘、主题名）定义在 `.slint` 的 `ui.common.*` 上下文中，由提取器写入 `ui.pot`，构建时为 Rust 生成 `messages::common_*` 构造函数。这样同一概念只有一条 PO 条目，两个界面不会各自漂移；共享条目不得含占位符或复数。
+Rust 与 Slint 都需要显示的无参数标签（例如 Enabled、Quake 边缘、主题名）统一定义在 [`common-messages.slint`](../crates/toolbox-ui/ui/common-messages.slint) 的 `ui.common.*` 上下文中。Slint 通过 `SharedMessages` 属性读取，由提取器写入 `ui.pot`，构建时为 Rust 生成 `messages::common_*` 构造函数。独立于具体控件的定义可保留 Rust 格式化模型使用的文案，避免布局调整时误删生成 API。同一概念只有一条 PO 条目；共享条目不得含占位符或复数。
 
 Slint 使用 `{0}`、`{1}` 等参数和原生复数语法。整句话属于同一模板，翻译可以调整参数顺序；用户路径、Skill 描述、仓库地址等值不参与模板解析。英文源文是默认回退；受支持的中文条目必须完整，缺翻译会使构建失败。增加新语言还需扩展 `Locale`、配置校验与对应复数规则。
 

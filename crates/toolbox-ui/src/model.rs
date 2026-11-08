@@ -1,12 +1,164 @@
 //! UI-owned input handling. Parsing is deliberately separate from execution.
 use crate::i18n::UiText;
 use toolbox_core::{
-    AppProfile, Config, LaunchCommand, Platform, QuakeAlignment, QuakeEdge, QuakeMonitor,
-    ThemePreference, UiPage,
+    AppProfile, Config, HotkeySpec, LaunchCommand, Platform, QuakeAlignment, QuakeEdge,
+    QuakeMonitor, ThemePreference, UiPage,
 };
 use toolbox_i18n::{Locale, messages};
 
 pub const MAX_IMPORT_BYTES: usize = 1024 * 1024;
+
+/// Shorten only the presentation path. Identity and launch targets stay untouched.
+pub fn project_display_path(location: &str) -> String {
+    let chars = location.chars().collect::<Vec<_>>();
+    if chars.len() <= 52 {
+        return location.to_owned();
+    }
+    let prefix = chars[..18].iter().collect::<String>();
+    let suffix = chars[chars.len() - 30..].iter().collect::<String>();
+    format!("{prefix}…{suffix}")
+}
+
+pub fn text_matches(query: &str, text: &str) -> bool {
+    let text = text.to_lowercase();
+    query
+        .split_whitespace()
+        .all(|word| text.contains(&word.to_lowercase()))
+}
+
+/// Suggestions must never overwrite an existing name or matching rule.
+/// Splitting both separators also supports editing another platform's profile.
+pub fn program_suggestion(path: &str, platform: Platform) -> (String, Option<String>) {
+    let file = path
+        .trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default();
+    let stem = file
+        .strip_suffix(".exe")
+        .or_else(|| file.strip_suffix(".EXE"))
+        .or_else(|| file.strip_suffix(".app"))
+        .unwrap_or(file);
+    let name = match stem.to_ascii_lowercase().as_str() {
+        "code" => "Visual Studio Code".to_owned(),
+        "wezterm-gui" | "wezterm" => "WezTerm".to_owned(),
+        "chrome" => "Google Chrome".to_owned(),
+        _ => stem.to_owned(),
+    };
+    // A macOS bundle ID cannot be inferred safely from the bundle's filename.
+    let matcher = match platform {
+        Platform::Windows | Platform::Linux => Some(file.to_owned()),
+        Platform::Macos => None,
+    };
+    (name, matcher)
+}
+
+/// Convert Slint's logical key event to the existing configuration syntax.
+/// Slint swaps Control/Meta on macOS for cross-platform UI shortcuts; global
+/// registrations use the physical Control/Command meaning instead.
+pub fn recorded_shortcut(
+    text: &str,
+    control: bool,
+    alt: bool,
+    shift: bool,
+    meta: bool,
+    platform: Platform,
+) -> Result<Option<String>, UiText> {
+    use slint::platform::Key;
+    let mut chars = text.chars();
+    let Some(character) = chars.next() else {
+        return Ok(None);
+    };
+    if chars.next().is_some() {
+        return Err(messages::shortcut_supported_keys().into());
+    }
+    if [
+        Key::Control,
+        Key::ControlR,
+        Key::Shift,
+        Key::ShiftR,
+        Key::Alt,
+        Key::AltGr,
+        Key::Meta,
+        Key::MetaR,
+    ]
+    .into_iter()
+    .any(|key| character == char::from(key))
+    {
+        return Ok(None);
+    }
+    let key = if character.is_ascii_alphanumeric() {
+        character.to_ascii_uppercase().to_string()
+    } else if character == char::from(Key::Space) {
+        "SPACE".to_owned()
+    } else if character == char::from(Key::Tab) || character == char::from(Key::Backtab) {
+        "TAB".to_owned()
+    } else if character == char::from(Key::Return) {
+        "ENTER".to_owned()
+    } else if character == char::from(Key::Escape) {
+        "ESCAPE".to_owned()
+    } else if (char::from(Key::F1)..=char::from(Key::F24)).contains(&character) {
+        format!("F{}", character as u32 - char::from(Key::F1) as u32 + 1)
+    } else {
+        return Err(messages::shortcut_supported_keys().into());
+    };
+    let (ctrl, super_key) = if platform == Platform::Macos {
+        (meta, control)
+    } else {
+        (control, meta)
+    };
+    let key = HotkeySpec {
+        ctrl,
+        alt,
+        shift,
+        super_key,
+        key,
+    }
+    .canonical();
+    HotkeySpec::parse(&key)
+        .map(|_| Some(key))
+        .map_err(|_| messages::shortcut_supported_keys().into())
+}
+
+/// Validate syntax for every profile; only active, current-platform bindings
+/// can conflict with the host's registrations. Never probe other applications.
+pub fn shortcut_problem(
+    value: &str,
+    config: &Config,
+    editing: Option<usize>,
+    active: bool,
+    launcher: bool,
+) -> Option<toolbox_i18n::Message> {
+    if value.trim().is_empty() && !launcher {
+        return None;
+    }
+    let Ok(key) = HotkeySpec::parse(value) else {
+        return Some(messages::shortcut_supported_keys());
+    };
+    if !active {
+        return None;
+    }
+    let canonical = key.canonical();
+    if !launcher
+        && HotkeySpec::parse(&config.projects.hotkey)
+            .is_ok_and(|other| other.canonical() == canonical)
+    {
+        return Some(messages::shortcut_conflict_launcher());
+    }
+    if config.windows.enabled {
+        for (index, profile) in config.windows.profiles.iter().enumerate() {
+            if Some(index) != editing
+                && profile.enabled
+                && profile.platform == Platform::current()
+                && HotkeySpec::parse(&profile.hotkey)
+                    .is_ok_and(|other| other.canonical() == canonical)
+            {
+                return Some(messages::shortcut_conflict_app(&profile.name));
+            }
+        }
+    }
+    None
+}
 
 #[derive(Clone, Debug)]
 pub struct ImportedConfig {
@@ -300,6 +452,141 @@ pub fn page_from_index(index: i32) -> UiPage {
 mod tests {
     use super::*;
     use toolbox_core::{GeneralConfig, ProjectsConfig, UiConfig, WindowsConfig};
+
+    #[test]
+    fn display_paths_keep_identity_and_unicode_suffixes_readable() {
+        for short in [
+            r"C:\work\sean-toolbox",
+            "/home/sean/项目",
+            "vscode-remote://ssh-remote+dev/repo",
+        ] {
+            assert_eq!(project_display_path(short), short);
+        }
+        let long = format!("C:\\项目\\{}\\src\\main.rs", "汉".repeat(70));
+        let shown = project_display_path(&long);
+        assert_eq!(shown.chars().count(), 49);
+        assert!(shown.starts_with("C:\\项目\\"));
+        assert!(shown.ends_with("\\src\\main.rs"));
+        assert!(shown.contains('…'));
+        assert!(long.chars().count() > 52);
+        let remote =
+            "vscode-remote://ssh-remote+production/home/sean/work/very-long-project-location/src";
+        assert!(project_display_path(remote).ends_with("-project-location/src"));
+    }
+
+    #[test]
+    fn application_search_matches_all_words_without_case_or_whitespace_surprises() {
+        assert!(text_matches(
+            "  CODE  f4 ",
+            "Visual Studio Code Code.exe F4"
+        ));
+        assert!(text_matches("工具 中文", "中文工具箱"));
+        assert!(text_matches("", "WezTerm"));
+        assert!(!text_matches("Code F3", "Visual Studio Code F4"));
+    }
+
+    #[test]
+    fn program_suggestions_use_filenames_but_do_not_invent_bundle_ids() {
+        assert_eq!(
+            program_suggestion(
+                r"C:\Program Files\WezTerm\wezterm-gui.exe",
+                Platform::Windows
+            ),
+            ("WezTerm".into(), Some("wezterm-gui.exe".into()))
+        );
+        assert_eq!(
+            program_suggestion("/usr/bin/code", Platform::Linux),
+            ("Visual Studio Code".into(), Some("code".into()))
+        );
+        assert_eq!(
+            program_suggestion("/Applications/Visual Studio Code.app", Platform::Macos),
+            ("Visual Studio Code".into(), None)
+        );
+    }
+
+    #[test]
+    fn shortcut_recording_preserves_native_modifier_meaning() {
+        use slint::platform::Key;
+        assert_eq!(
+            recorded_shortcut("t", true, true, false, false, Platform::Windows).unwrap(),
+            Some("Ctrl+Alt+T".into())
+        );
+        assert_eq!(
+            recorded_shortcut("k", true, false, false, false, Platform::Macos).unwrap(),
+            Some("Super+K".into())
+        );
+        assert_eq!(
+            recorded_shortcut("k", false, false, false, true, Platform::Macos).unwrap(),
+            Some("Ctrl+K".into())
+        );
+        assert_eq!(
+            recorded_shortcut(
+                &char::from(Key::F24).to_string(),
+                false,
+                false,
+                false,
+                false,
+                Platform::Windows
+            )
+            .unwrap(),
+            Some("F24".into())
+        );
+        assert_eq!(
+            recorded_shortcut(
+                &char::from(Key::Control).to_string(),
+                true,
+                false,
+                false,
+                false,
+                Platform::Windows
+            )
+            .unwrap(),
+            None
+        );
+        assert!(recorded_shortcut("a", false, false, false, false, Platform::Windows).is_err());
+        assert!(recorded_shortcut("中", true, false, false, false, Platform::Windows).is_err());
+    }
+
+    #[test]
+    fn shortcut_feedback_checks_only_bindings_that_will_be_registered() {
+        let config = Config::default();
+        assert!(shortcut_problem("control+alt+space", &config, None, true, false).is_some());
+        assert!(
+            shortcut_problem(
+                &config.windows.profiles[0].hotkey,
+                &config,
+                Some(0),
+                true,
+                false
+            )
+            .is_none()
+        );
+        let conflict = shortcut_problem(
+            &config.windows.profiles[1].hotkey,
+            &config,
+            Some(0),
+            true,
+            false,
+        )
+        .unwrap();
+        assert!(
+            conflict
+                .render(Locale::En)
+                .contains(&config.windows.profiles[1].name)
+        );
+        assert!(
+            shortcut_problem(
+                &config.windows.profiles[1].hotkey,
+                &config,
+                Some(0),
+                false,
+                false
+            )
+            .is_none()
+        );
+        assert!(shortcut_problem("", &config, Some(0), true, false).is_none());
+        assert!(shortcut_problem("", &config, None, true, true).is_some());
+    }
 
     #[test]
     fn new_profile_ids_respect_case_insensitive_imported_ids() {

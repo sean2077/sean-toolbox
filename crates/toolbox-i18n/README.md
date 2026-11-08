@@ -24,9 +24,12 @@ assert_eq!(message.render(Locale::ZhCn), "显示 2 项 · 共 3 个最近项目"
 ```
 
 Rust also receives constructors for parameterless UI messages with an
-`ui.common.*` context. Slint owns those entries; Rust calls generated
+`ui.common.*` context. `toolbox-ui/ui/common-messages.slint` owns those entries;
+Slint bindings read `SharedMessages` and Rust calls generated
 `messages::common_*` constructors, so labels such as "Enabled" or "Top" have
-exactly one PO entry and cannot drift between surfaces.
+exactly one PO entry and cannot drift between surfaces. Keeping these definitions
+separate from a particular control preserves Rust-formatted model labels when
+the layout changes.
 
 Keep messages and their arguments until presentation, rather than storing their
 rendered text. Rendering takes an explicit locale and does not mutate global

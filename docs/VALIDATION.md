@@ -549,6 +549,61 @@ UI 行为测试使用真实 Slint 组件与软件渲染测试平台，不访问�
 
 本地未执行完整界面人工验收、真实仓库下载和 macOS/Linux 实机运行；这些结果以 PR 对应提交的 CI 为准。
 
+## 2026-11-07：桌面 UI/UX 全面优化
+
+本轮按确认的桌面效率工具方向优化，开始于 `68c441c`，交付前同步至最新主分支
+`f2d84fbd51c1240a1cadacfbff8a5777366e76a4`，保留上游配置分组 v2 和默认符号链接部署。
+环境为 Linux x86_64 容器，Rust/Cargo 1.99.1、Slint 1.18.1，使用锁定依赖与离线缓存。
+没有变更工具链、依赖版本或发布版本；测试与截图使用临时或明确标注的示例数据。
+
+### 交互和布局
+
+- 管理窗口统一浅深色层级、控件尺寸、焦点与操作反馈。默认 1120×780，最小 800×580，
+  窄窗口使用图标导航；共享页面视口允许内容滚动，保存与撤销操作保持可见，没有限制最大化尺寸。
+- 最近项目面板使用 760×432 默认尺寸、36 像素结果行、远程标记与可读路径；
+  `Alt+Enter` 展开可选中的完整路径，`Esc` 先收起详情，再收起面板。
+- 应用支持搜索、基础/高级字段分组、局部校验和保存后继续编辑。测试使用已保存配置，
+  不丢弃其他草稿；设置保留主题/语言预览、显式保存与撤销。
+- 快捷键录制先等待宿主确认，再接受已注册或普通按键。宿主使用带 token 的三秒短租约，
+  不移除原生注册；界面按请求发出时间执行更早的两秒期限，即使 IPC 仍在等待也会结束录制。
+  取消、切页、关闭及真实失焦会结束捕获，过期或旧 token 回复不会重新开启录制。
+- Skills 使用全宽列表与按需详情，支持明确的批量启用/停用、隐藏选择数量、导入复核、
+  来源和路径详情、具体错误及当前操作状态。默认部署方式与源目录复制/链接分别说明，
+  切换全局方式不会自动转换现有部署，也不会覆盖导入中的源路径和应用选择。
+
+### 最终门禁
+
+| 检查 | 本轮结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --offline --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --offline --workspace --no-fail-fast` | 254 通过、3 失败、1 ignored；命令退出 101，失败均为下述既有 IPC 环境限制 |
+| UI 行为测试 | 96 项通过，包括真实 Slint 键盘/指针事件、录制期限、草稿保留、筛选索引、Skills 复核与部署模式 |
+| `python3 scripts/translations.py check` | 通过；161 条 Rust 消息、285 条界面文案完整，官方提取器与 gettext 校验通过 |
+| `python3 -m unittest discover -s scripts -p 'test_*.py' -v` | 27 项通过 |
+| 生产 Slint 软件渲染 | 152 张截图成功；20 种页面/状态，中英文、浅深主题，默认与最小窗口尺寸；实际尺寸、像素缓冲区和布局约束一致 |
+| 原生脚本共享控件坐标探针 | 12 个组合通过；英文、默认字体、浅深主题、100%/150%/200%，真实指针/文字输入覆盖应用选择、录制入口、Quake 预设、主题及撤销等 11 类目标 |
+| `git diff --check` 与 Python 语法检查 | 通过 |
+
+3 项失败为 `toolbox-ipc` 的 `owner_only_socket_round_trips_and_is_removed_on_drop`、
+`stale_owner_socket_is_recovered_but_active_socket_is_rejected` 和
+`unix_transport_rejects_relative_and_oversized_messages`。本环境创建 Unix socket 返回
+`EPERM / Operation not permitted`；在改动前的 `68c441c` 基线上复现相同 3 项失败，
+该基线有 205 项通过、1 项 ignored。未修改 IPC 实现、跳过用例或弱化断言。
+
+### 截图与平台边界
+
+README 的六张截图已更新为上述最终组件渲染，使用示例数据与任务内注册的 Noto Sans CJK SC，
+不代表 0.2.0 已发布资产。检查重点包含默认和窄窗口的固定操作栏、Skills 导入/部署设置、
+完整路径详情和长文本。软件渲染与指针探针不启动宿主，不访问用户配置，也不能证明原生焦点、
+全局快捷键、文件选择器或真实多显示器缩放已通过。
+
+`scripts/smoke_appearance.py` 同步了新尺寸、控制位置与配置分组，保留既有原生生命周期、
+主题持久化、最大化和焦点断言；新增真实 F8 长按录制、不启动应用、取消后保留管理窗及恢复
+原快捷键路由的检查。本环境因 Unix socket 限制无法启动 Xvfb，未完成该原生验收。
+Windows/macOS 实机交互尚未在本轮验证；四平台构建、完整 IPC 与 Linux 原生窗口/宿主/UI smoke
+以此 PR 对应提交的 GitHub Actions 结果为准。
+
 ## 2026-11-07：翻译目录去重、共享消息与生成 API 加固
 
 基于合并 PR #2/#3 后的 `main`，继续处理复核建议，并同步最新的 Skills 部署与配置分组改动：
@@ -570,3 +625,73 @@ UI 行为测试使用真实 Slint 组件与软件渲染测试平台，不访问�
 | `python -m py_compile scripts/translations.py` | 通过 |
 | 跨目录重复检查 | 共享英文标签的跨目录重复为 0；`ui.common.*` 共 20 条 |
 | 生成 API 回归 | 10 项目录测试通过，含共享消息生成、拒绝占位符/复数、具名参数结构体编译执行 |
+
+## 2026-11-08：UI/UX PR 的跨平台修复与主分支整合
+
+继续处理 [PR #5](https://github.com/sean2077/sean-toolbox/pull/5)，保留已确认的 UI/UX 方向，
+同步主分支 `132d0458225e4c47d6b5f163abd6a33090835ba5` 的翻译去重、共享消息和具名参数 API。
+下表对应代码版本 `ca34dea03843579110944cd3d1d8e00f11f06492`；之后仅更新本记录与 Quake 截图。
+环境为 Ubuntu 24.04 容器、Rust/Cargo 1.99.1、Slint 1.18.1，使用锁定依赖及任务目录中的开发库。
+
+### CI 失败与修复
+
+[首轮 Actions](https://github.com/sean2077/sean-toolbox/actions/runs/42381533397) 的两种 macOS 架构通过；
+Windows 与 Linux 在测试阶段失败，Linux 原生 smoke 尚未执行。
+
+- Windows 的 3 个新 Skills UI 用例把完整路径硬编码为 POSIX 分隔符。生产代码使用 `Path::join()`，
+  本次将用例改为完整 `Path` 比较，保留来源、部署目标、应用提示及具体错误关联的断言。
+- Linux 的 `stale_staging_directories_are_cleaned_on_open_without_touching_unknown_entries`
+  在关闭服务后立即重开时遇到残留文件锁。本次以 RAII 守卫显式解锁；守卫只在成功取得锁后创建，
+  并覆盖读取状态失败的提前返回，服务资源清理后才释放锁。
+- 新增确定性的 Unix 重复描述符回归：保留旧锁文件的重复描述符时，服务关闭后仍可立即重开；
+  服务存活时继续拒绝第二个实例，关闭旧描述符不会释放新实例的锁。此模型复现了共享描述符延长锁
+  生命周期的边界，但首轮 CI 日志不足以确定当时持有描述符的具体子进程。
+- 将 20 个共享界面标签集中在 `common-messages.slint`，同步生产界面及渲染 fixture 的调用，
+  保留新的 Skills 布局、快捷键捕获协议、应用编辑行为和 800×580 最小尺寸。
+
+### 提交前验证
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --offline --workspace --all-targets -- -D warnings` | 通过，包括渲染 example |
+| `cargo test --locked --offline --workspace --no-fail-fast` | 262 通过、3 失败、1 ignored；命令退出 101，失败均为下述 IPC 环境限制 |
+| UI / Skills / 国际化测试 | 分别为 98 / 41 / 16 项通过；首轮 CI 失败的相关用例均通过 |
+| 文件锁回归敏感性 | 临时恢复旧的仅关闭句柄行为时，新用例确定失败；还原显式解锁后通过，源文件已完整恢复 |
+| `python3 scripts/translations.py check` | 通过；139 条 Rust + 285 条界面文案，共 424 条活动中文译文，包含 20 个共享标签 |
+| `python3 -m unittest discover -s scripts -p 'test_*.py' -v` | 27 项通过 |
+| 整合后的 Slint 软件渲染 | 52 张预览成功，覆盖项目、应用、设置、Quake、Skills 列表/详情、启动器；中英文、浅深主题及默认/最小尺寸 |
+| 原生 smoke 共用控件探针 | 12 组通过，覆盖 100%/150%/200% 缩放、浅深主题的 11 类关键目标 |
+| `git diff --check` | 通过 |
+
+3 项 IPC 失败仍为 `owner_only_socket_round_trips_and_is_removed_on_drop`、
+`stale_owner_socket_is_recovered_but_active_socket_is_rejected` 和
+`unix_transport_rejects_relative_and_oversized_messages`，均在创建 Unix socket 时返回 `EPERM`。
+与前述同环境基线一致；未跳过用例或修改 IPC 实现。
+
+已目视复核重点默认/最小窗口、共享文案和固定操作栏。README 的 5 张截图与新渲染逐字节相同；
+Quake 截图更新了共享的“已启用／未启用”文案。截图使用示例数据，不表示已发布版本或原生桌面验收。
+本地无法创建 Xvfb 所需 socket；这组修复的四平台构建、完整 IPC 与 Linux 原生 smoke 结果，
+以同一 PR 的最新 Actions 检查项为准。Windows/macOS 的人工字体、缩放、文件选择器与多显示器检查
+仍需在对应桌面环境执行。
+
+## 2026-11-08：UI/UX PR 审阅修复
+
+审阅 `58e6cce` 后修正三处交互问题，均附回归测试：
+
+- 通用设置的最近项目快捷键和缓存时间在每次编辑后重新校验，冲突与格式错误在字段旁即时出现并随修正消失，不再等到保存或切换语言。
+- 最近项目面板在搜索无结果、详情被隐藏时，`Esc` 直接收起面板，不再先消耗一次按键收起不可见的详情。
+- Skills 详情页中的操作让技能离开当前筛选（例如“需要处理”筛选下修复错误）时，详情保持在该技能上；技能被移除后才关闭。
+
+环境为 Windows 11 x86_64，Rust 1.99.1 MSVC 工具链（本机默认 GNU 工具链缺少 `dlltool`，按开发指南改用 MSVC）。
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked -p toolbox-ui` | 100 项通过，含新增 2 项和扩展的启动器 `Esc` 用例；临时撤销 Skills 修复时新用例确定失败 |
+| `cargo test --locked --workspace`（修复前的 PR 头） | 除下述 1 项外全部通过 |
+
+`toolbox-windows` 的 `native_quake_hides_reuses_and_recovers_without_activation` 在本机置顶确认失败；
+同一机器上的 `main`（`132d045`）复现相同失败，PR 未改动该 crate，同一 PR 的 Windows CI 通过，判断为本机桌面环境限制。
+未执行原生桌面人工验收。

@@ -21,6 +21,12 @@ pub enum HostCommand {
     GetConfig,
     GetSkills,
     Skills(SkillsCommand),
+    /// Temporarily route this toolbox's registered shortcuts to its recorder.
+    /// A matching poll renews the short lease; no persistent setting changes.
+    ShortcutCapture {
+        token: u64,
+        action: ShortcutCaptureAction,
+    },
     SaveConfig {
         config: Config,
         expected_revision: u64,
@@ -30,6 +36,20 @@ pub enum HostCommand {
     },
     Status,
     Quit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShortcutCaptureAction {
+    Begin,
+    Poll,
+    End,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShortcutCaptureState {
+    pub active: bool,
+    pub shortcut: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Request {
@@ -63,6 +83,8 @@ pub struct Response {
     pub revision: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub skills: Option<SkillsSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shortcut_capture: Option<ShortcutCaptureState>,
 }
 impl Response {
     pub fn success(message: impl Into<String>) -> Self {
@@ -118,12 +140,40 @@ mod tests {
         .unwrap();
         assert_eq!(response.revision, 42);
         assert!(response.skills.is_none());
+        assert!(response.shortcut_capture.is_none());
         assert!(
             serde_json::to_value(response)
                 .unwrap()
                 .get("skills")
                 .is_none()
         );
+    }
+
+    #[test]
+    fn shortcut_capture_has_an_explicit_additive_wire_contract() {
+        let request = Request::new(HostCommand::ShortcutCapture {
+            token: 42,
+            action: ShortcutCaptureAction::Begin,
+        });
+        assert_eq!(
+            serde_json::to_value(request).unwrap(),
+            serde_json::json!({
+                "version": 1,
+                "command": {"type": "shortcut_capture", "data": {
+                    "token": 42, "action": "begin"
+                }}
+            })
+        );
+        let response = Response {
+            shortcut_capture: Some(ShortcutCaptureState {
+                active: true,
+                shortcut: Some("Ctrl+Alt+Space".into()),
+            }),
+            ..Response::success("captured")
+        };
+        let round_trip: Response =
+            serde_json::from_str(&serde_json::to_string(&response).unwrap()).unwrap();
+        assert_eq!(round_trip.shortcut_capture, response.shortcut_capture);
     }
 
     #[test]

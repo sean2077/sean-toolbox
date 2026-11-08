@@ -5,29 +5,29 @@ export global Theme {
     // The resolved widget background also handles ColorScheme.unknown (system).
     private property <color> widget-background: Palette.background;
     out property <bool> dark: widget-background.to-oklch().lightness < 0.5;
-    out property <color> canvas: dark ? #111720 : #f7f8fa;
-    out property <color> sidebar: dark ? #151d29 : #f0f2f5;
-    out property <color> surface: dark ? #1b2432 : #ffffff;
-    out property <color> raised: dark ? #222e40 : #f0f3f8;
-    out property <color> panel: dark ? #172130 : #fafbfe;
-    out property <color> text: dark ? #e8eef7 : #202b3d;
-    out property <color> secondary: dark ? #b6c3d7 : #536176;
-    out property <color> muted: dark ? #93a3ba : #626f82;
-    out property <color> disabled: dark ? #56657a : #b5bdc9;
-    out property <color> border: dark ? #2b394d : #e2e7ee;
-    out property <color> strong-border: dark ? #40536e : #cfd7e4;
-    out property <color> focus: dark ? #91b4ff : #7a9dee;
-    out property <color> accent: dark ? #91b4ff : #3264d6;
-    out property <color> accent-soft: dark ? #233859 : #eaf0fd;
-    out property <color> accent-border: dark ? #496796 : #cfdbf6;
-    out property <color> button: dark ? #3764c6 : #3264d6;
-    out property <color> button-hover: dark ? #416fd4 : #2859c5;
-    out property <color> button-pressed: dark ? #2e54a8 : #214da9;
+    out property <color> canvas: dark ? #17191f : #f6f7f9;
+    out property <color> sidebar: dark ? #121419 : #eef0f4;
+    out property <color> surface: dark ? #1e2129 : #ffffff;
+    out property <color> raised: dark ? #282d38 : #edf0f5;
+    out property <color> panel: dark ? #1a1d24 : #f9fafc;
+    out property <color> text: dark ? #edf0f7 : #202735;
+    out property <color> secondary: dark ? #bac3d2 : #4f5b6e;
+    out property <color> muted: dark ? #a1adbf : #606e82;
+    out property <color> disabled: dark ? #697487 : #a7afbd;
+    out property <color> border: dark ? #323947 : #dfe4ec;
+    out property <color> strong-border: dark ? #4c586e : #bcc6d6;
+    out property <color> focus: dark ? #99b8ff : #3567d4;
+    out property <color> accent: dark ? #99b8ff : #315fcb;
+    out property <color> accent-soft: dark ? #28354f : #eaf0fc;
+    out property <color> accent-border: dark ? #526f9f : #b9cbed;
+    out property <color> button: dark ? #3761b9 : #315fcb;
+    out property <color> button-hover: dark ? #426fcd : #2754bd;
+    out property <color> button-pressed: dark ? #2e529f : #21489f;
     out property <color> on-accent: #ffffff;
     out property <color> on-accent-muted: #e7efff;
-    out property <color> hover: dark ? #263347 : #eef1f6;
-    out property <color> pressed: dark ? #2d3d55 : #e7ebf1;
-    out property <color> selection: dark ? #34538a : #dce7ff;
+    out property <color> hover: dark ? #2a303b : #eef1f6;
+    out property <color> pressed: dark ? #343d4c : #e2e8f1;
+    out property <color> selection: dark ? #3b537d : #dce7ff;
     out property <color> success: dark ? #7dd6b0 : #23815c;
     out property <color> danger: dark ? #ff9b99 : #bd3d3d;
     out property <color> danger-soft: dark ? #39262b : #fff5f3;
@@ -36,8 +36,20 @@ export global Theme {
     out property <color> warning-soft: dark ? #332d23 : #fffbf2;
     out property <color> warning-border: dark ? #665238 : #eee0bf;
     out property <color> scrim: dark ? #00000088 : #17243b65;
-    out property <color> busy-scrim: dark ? #111720dd : #f7f8facc;
-    out property <color> tooltip: dark ? #34445d : #263349;
+    out property <color> busy-scrim: dark ? #17191fdd : #f6f7f9dd;
+    out property <color> tooltip: dark ? #384358 : #293449;
+}
+
+// Plain-text hints preserve paths and user-provided labels verbatim.
+export component Hint inherits Rectangle {
+    in property <string> text;
+    max-width: 600px;
+    border-radius: 6px;
+    background: Theme.tooltip;
+    VerticalLayout {
+        padding: 10px;
+        Text { text: root.text; color: Theme.on-accent; font-size: 12px; wrap: word-wrap; }
+    }
 }
 
 export component Icon inherits Rectangle {
@@ -66,15 +78,15 @@ export component Caption inherits Text {
 
 export component FieldLabel inherits Text {
     color: Theme.secondary;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
 }
 
 export component SectionLabel inherits Text {
     color: Theme.muted;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.5px;
+    letter-spacing: 0px;
     vertical-alignment: center;
 }
 
@@ -85,7 +97,7 @@ export component Divider inherits Rectangle {
 
 export component Card inherits Rectangle {
     background: Theme.surface;
-    border-radius: 10px;
+    border-radius: 8px;
     border-width: 1px;
     border-color: Theme.border;
 }
@@ -93,8 +105,8 @@ export component Card inherits Rectangle {
 export component Keycap inherits Rectangle {
     in property <string> text;
     in property <bool> accent: false;
-    height: 24px;
-    min-width: key.preferred-width + 14px;
+    height: 22px;
+    min-width: key.preferred-width + 12px;
     horizontal-stretch: 0;
     border-radius: 5px;
     border-width: 1px;
@@ -103,7 +115,7 @@ export component Keycap inherits Rectangle {
     key := Text {
         text: root.text;
         color: root.accent ? Theme.accent : Theme.secondary;
-        font-size: 11px;
+        font-size: 12px;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
@@ -120,10 +132,10 @@ export component ActionButton inherits Rectangle {
     in property <bool> enabled: true;
     out property <bool> has-focus: focus-scope.has-focus;
     callback clicked;
-    height: 36px;
-    min-width: root.icon-only ? 36px : label.preferred-width + (root.with-icon ? 48px : 28px);
+    height: 34px;
+    min-width: root.icon-only ? 32px : label.preferred-width + (root.with-icon ? 46px : 26px);
     horizontal-stretch: 0;
-    border-radius: 7px;
+    border-radius: 6px;
     opacity: root.enabled ? 1 : 0.45;
     border-width: focus-scope.has-focus ? 2px : root.subtle || root.primary ? 0px : 1px;
     border-color: focus-scope.has-focus ? Theme.focus : Theme.border;
@@ -147,7 +159,7 @@ export component ActionButton inherits Rectangle {
         label := Text {
             visible: !root.icon-only;
             text: root.icon-only ? "" : root.text;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 600;
             color: root.primary ? Theme.on-accent : root.danger ? Theme.danger : Theme.secondary;
             vertical-alignment: center;
@@ -163,43 +175,58 @@ export component ActionButton inherits Rectangle {
         enabled: root.enabled;
         focus-on-click: false;
         key-pressed(event) => {
-            if event.text == Key.Return || event.text == Key.Space { root.clicked(); return accept; }
+            if event.text == Key.Return || event.text == Key.Space {
+                if !event.repeat { root.clicked(); }
+                return accept;
+            }
             reject
         }
     }
+    if root.icon-only: Tooltip { Hint { text: root.text; } }
 }
 
 export component NavButton inherits Rectangle {
     in property <string> text;
+    in property <string> shortcut;
+    in property <bool> compact: false;
     in property <image> icon;
     in property <bool> selected;
     in property <bool> dirty: false;
     callback clicked;
-    height: 44px;
-    border-radius: 8px;
-    background: root.selected ? Theme.surface : touch.has-hover ? Theme.pressed : transparent;
-    border-width: focus-scope.has-focus ? 2px : root.selected ? 1px : 0px;
-    border-color: focus-scope.has-focus ? Theme.focus : Theme.border;
-    accessible-role: button;
+    height: 40px;
+    border-radius: 6px;
+    background: root.selected ? Theme.accent-soft : touch.has-hover ? Theme.hover : transparent;
+    border-width: focus-scope.has-focus ? 2px : 0px;
+    border-color: Theme.focus;
+    accessible-role: tab;
     accessible-label: root.text;
+    accessible-description: root.shortcut == "" ? "" : "Ctrl / ⌘ + " + root.shortcut;
+    accessible-item-selectable: true;
+    accessible-item-selected: root.selected;
     accessible-action-default => { root.clicked(); }
     forward-focus: focus-scope;
     HorizontalLayout {
-        padding-left: 13px;
-        padding-right: 12px;
-        spacing: 11px;
+        padding-left: root.compact ? 12px : 10px;
+        padding-right: root.compact ? 12px : 8px;
+        spacing: 8px;
         Icon { source: root.icon; colorize: root.selected ? Theme.accent : Theme.muted; width: 18px; }
-        Text { text: root.text; font-size: 13px; font-weight: root.selected ? 600 : 400; color: root.selected ? Theme.text : Theme.secondary; horizontal-stretch: 1; vertical-alignment: center; }
-        if root.dirty: VerticalLayout { width: 6px; alignment: center; Rectangle { height: 6px; border-radius: 3px; background: Theme.warning; } }
+        if !root.compact: Text { text: root.text; font-size: 13px; font-weight: root.selected ? 600 : 400; color: root.selected ? Theme.text : Theme.secondary; horizontal-stretch: 1; min-width: 0px; overflow: elide; vertical-alignment: center; }
+        if !root.compact && root.shortcut != "": Text { text: root.shortcut; font-size: 12px; color: Theme.muted; vertical-alignment: center; }
     }
-    touch := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    if root.selected: Rectangle { x: 0px; y: 12px; width: 3px; height: 16px; border-radius: 1.5px; background: Theme.accent; }
+    if root.dirty: Rectangle { x: parent.width - 6px; y: 5px; width: 5px; height: 5px; border-radius: 3px; background: Theme.warning; }
+    touch := TouchArea { mouse-cursor: pointer; clicked => { focus-scope.focus(); root.clicked(); } }
     focus-scope := FocusScope {
         focus-on-click: false;
         key-pressed(event) => {
-            if event.text == Key.Return || event.text == Key.Space { root.clicked(); return accept; }
+            if event.text == Key.Return || event.text == Key.Space {
+                if !event.repeat { root.clicked(); }
+                return accept;
+            }
             reject
         }
     }
+    Tooltip { Hint { text: root.text + (root.shortcut == "" ? "" : " · Ctrl / ⌘ + " + root.shortcut); } }
 }
 
 export component SearchInput inherits Rectangle {
@@ -209,28 +236,28 @@ export component SearchInput inherits Rectangle {
     in property <bool> enabled: true;
     out property <bool> has-focus: input.has-focus;
     callback edited(string);
-    height: 54px;
-    border-radius: 9px;
+    height: 40px;
+    border-radius: 6px;
     border-width: input.has-focus ? 2px : 1px;
     border-color: input.has-focus ? Theme.focus : Theme.border;
     background: Theme.surface;
     forward-focus: input;
-    Icon { source: @image-url("icons/search.svg"); x: 17px; y: 17px; colorize: input.has-focus ? Theme.accent : Theme.muted;  height: 20px; }
+    Icon { source: @image-url("icons/search.svg"); x: 12px; y: (parent.height - self.height) / 2; width: 18px; height: 18px; min-height: 18px; colorize: input.has-focus ? Theme.accent : Theme.muted; }
     Text {
-        x: 48px; y: 0px; height: parent.height; width: parent.width - 104px;
+        x: 40px; y: 0px; height: parent.height; width: parent.width - 82px;
         visible: root.text == "";
         text: root.placeholder-text;
-        font-size: 15px;
+        font-size: 14px;
         color: Theme.muted;
         vertical-alignment: center;
         overflow: elide;
     }
     input := TextInput {
-        x: 48px; y: 1px; width: parent.width - 104px; height: parent.height - 2px;
+        x: 40px; y: 1px; width: parent.width - 82px; height: parent.height - 2px;
         text <=> root.text;
         enabled: root.enabled;
         single-line: true;
-        font-size: 15px;
+        font-size: 14px;
         color: Theme.text;
         selection-background-color: Theme.selection;
         selection-foreground-color: Theme.text;
@@ -239,11 +266,12 @@ export component SearchInput inherits Rectangle {
         edited => { root.edited(self.text); }
     }
     if root.text != "": ActionButton {
-        x: parent.width - 44px; y: 9px;
-        width: 36px;
+        x: parent.width - 36px; y: (parent.height - self.height) / 2;
+        width: 32px; height: 32px;
         text: root.clear-label;
         with-icon: true; icon-only: true; subtle: true;
         icon: @image-url("icons/close.svg");
+        enabled: root.enabled;
         clicked => { root.text = ""; root.edited(""); input.focus(); }
     }
 }
@@ -251,16 +279,16 @@ export component SearchInput inherits Rectangle {
 export component SettingRow inherits Rectangle {
     in property <string> title;
     in property <string> description;
-    in property <length> control-width: 200px;
-    min-height: 80px;
+    in property <length> control-width: 180px;
+    min-height: 64px;
     HorizontalLayout {
-        padding: 18px;
-        spacing: 22px;
+        padding: 14px;
+        spacing: 16px;
         VerticalLayout {
             alignment: center;
-            spacing: 5px;
+            spacing: 4px;
             horizontal-stretch: 1;
-            Text { text: root.title; font-size: 13px; font-weight: 600; color: Theme.text; wrap: word-wrap; }
+            Text { text: root.title; font-size: 14px; font-weight: 600; color: Theme.text; wrap: word-wrap; }
             Caption { text: root.description; }
         }
         VerticalLayout {
@@ -281,45 +309,46 @@ export component ThemeChoice inherits Rectangle {
     in property <bool> selected;
     in property <bool> enabled: true;
     callback clicked;
-    height: 114px;
-    min-width: 140px;
-    border-radius: 8px;
+    height: 78px;
+    min-width: 120px;
+    border-radius: 6px;
     border-width: root.selected || keys.has-focus ? 2px : 1px;
     border-color: root.selected || keys.has-focus ? Theme.focus : Theme.border;
     background: touch.has-hover ? Theme.hover : Theme.canvas;
     opacity: root.enabled ? 1 : 0.5;
-    accessible-role: button;
+    accessible-role: radio-button;
     accessible-label: root.text;
     accessible-enabled: root.enabled;
+    accessible-checked: root.selected;
+    accessible-checkable: true;
     accessible-action-default => { if root.enabled { root.clicked(); } }
     forward-focus: keys;
     VerticalLayout {
-        padding: 10px;
-        spacing: 8px;
+        padding: 8px;
+        spacing: 5px;
         Rectangle {
-            height: 57px;
+            height: 33px;
             border-radius: 4px;
             border-width: 1px;
-            border-color: root.scheme == 2 ? #40536e : #d9e0e9;
-            background: root.scheme == 2 ? #1b2432 : #ffffff;
+            border-color: root.scheme == 2 ? #4c586e : #d9e0e9;
+            background: root.scheme == 2 ? #1e2129 : #ffffff;
             clip: true;
-            Rectangle { width: 28%; height: 100%; background: root.scheme == 2 ? #151d29 : #eef1f6; }
-            Rectangle { x: 8px; y: 11px; width: 13%; height: 4px; border-radius: 2px; background: #7092d3; }
-            Rectangle { x: 8px; y: 22px; width: 10%; height: 3px; border-radius: 1px; background: root.scheme == 2 ? #40536e : #c7d0df; }
-            Rectangle { x: 8px; y: 32px; width: 13%; height: 3px; border-radius: 1px; background: root.scheme == 2 ? #40536e : #c7d0df; }
-            Rectangle { x: parent.width * 0.35; y: 12px; width: 36%; height: 5px; border-radius: 2px; background: root.scheme == 2 ? #b6c3d7 : #536176; }
-            Rectangle { x: parent.width * 0.35; y: 26px; width: 55%; height: 18px; border-radius: 3px; background: root.scheme == 2 ? #233859 : #eaf0fd; }
+            Rectangle { width: 28%; height: 100%; background: root.scheme == 2 ? #121419 : #eef0f4; }
+            Rectangle { x: 6px; y: 8px; width: 13%; height: 3px; border-radius: 1px; background: #7092d3; }
+            Rectangle { x: 6px; y: 17px; width: 10%; height: 3px; border-radius: 1px; background: root.scheme == 2 ? #4c586e : #c7d0df; }
+            Rectangle { x: parent.width * 0.35; y: 8px; width: 36%; height: 4px; border-radius: 2px; background: root.scheme == 2 ? #bac3d2 : #4f5b6e; }
+            Rectangle { x: parent.width * 0.35; y: 18px; width: 55%; height: 9px; border-radius: 2px; background: root.scheme == 2 ? #28354f : #eaf0fd; }
             if root.scheme == 0: Rectangle {
                 x: parent.width / 2; width: parent.width / 2; height: parent.height;
-                background: #1b2432;
-                Rectangle { x: 0px; y: 12px; width: 42%; height: 5px; border-radius: 2px; background: #b6c3d7; }
-                Rectangle { x: 0px; y: 26px; width: 80%; height: 18px; border-radius: 3px; background: #233859; }
+                background: #1e2129;
+                Rectangle { x: 0px; y: 8px; width: 42%; height: 4px; border-radius: 2px; background: #bac3d2; }
+                Rectangle { x: 0px; y: 18px; width: 80%; height: 9px; border-radius: 2px; background: #28354f; }
             }
         }
         HorizontalLayout {
             height: 21px;
             spacing: 6px;
-            Text { text: root.text; color: root.selected ? Theme.accent : Theme.secondary; font-size: 12px; font-weight: root.selected ? 600 : 400; vertical-alignment: center; horizontal-stretch: 1; }
+            Text { text: root.text; color: root.selected ? Theme.accent : Theme.secondary; font-size: 13px; font-weight: root.selected ? 600 : 400; vertical-alignment: center; horizontal-stretch: 1; }
             Icon { visible: root.selected; width: 14px; source: @image-url("icons/check.svg"); colorize: Theme.accent; }
         }
     }
@@ -376,9 +405,9 @@ export component CapabilityCard inherits Card {
     in property <image> icon;
     in property <bool> ready;
     in property <bool> available;
-    height: 112px;
+    height: 88px;
     HorizontalLayout {
-        padding: 18px; spacing: 12px;
+        padding: 14px; spacing: 10px;
         VerticalLayout {
             width: 36px; alignment: center;
             Rectangle {

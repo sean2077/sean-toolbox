@@ -1113,19 +1113,42 @@ fn state_lock_corruption_and_cancellation_preserve_user_files() {
     );
     assert_eq!(fixture.service().snapshot().repositories.len(), 1);
     fixture.service.take();
-    fs::write(fixture.root.join("state.json"), "broken JSON").unwrap();
+    let state_path = fixture.root.join("state.json");
+    let saved = fs::read(&state_path).unwrap();
+    fs::write(&state_path, "broken JSON").unwrap();
+    let failed = SkillsService::open(
+        fixture.root.clone(),
+        fixture.home.clone(),
+        Arc::new(AtomicBool::new(false)),
+    );
     assert!(
-        SkillsService::open(
-            fixture.root.clone(),
-            fixture.home.clone(),
-            Arc::new(AtomicBool::new(false))
-        )
-        .is_err()
+        matches!(failed, Err(error) if error.starts_with("Invalid skills state (file preserved):"))
     );
-    assert_eq!(
-        fs::read_to_string(fixture.root.join("state.json")).unwrap(),
-        "broken JSON"
-    );
+    assert_eq!(fs::read_to_string(&state_path).unwrap(), "broken JSON");
+    fs::write(&state_path, saved).unwrap();
+    fixture.reopen();
+    assert_eq!(fixture.service().snapshot().repositories.len(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn closing_the_service_releases_its_lock_while_a_duplicate_descriptor_stays_open() {
+    let mut fixture = Fixture::new();
+    let root = fixture.root.clone();
+    let home = fixture.home.clone();
+    let contender =
+        || SkillsService::open(root.clone(), home.clone(), Arc::new(AtomicBool::new(false)));
+    // dup and fork share the same open file description. Keeping this clone
+    // alive reproduces inherited-descriptor lifetime without a scheduling race.
+    let duplicate = fixture.service()._lock.0.try_clone().unwrap();
+    assert!(matches!(contender(), Err(error) if error == "Another skills manager is running"));
+
+    fixture.reopen();
+    assert!(matches!(contender(), Err(error) if error == "Another skills manager is running"));
+
+    // Closing a descriptor from the previous owner must not unlock the new one.
+    drop(duplicate);
+    assert!(matches!(contender(), Err(error) if error == "Another skills manager is running"));
 }
 
 #[test]

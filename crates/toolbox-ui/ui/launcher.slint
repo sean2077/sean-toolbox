@@ -1,5 +1,6 @@
-import { ScrollView } from "std-widgets.slint";
-import { Theme, Icon } from "components.slint";
+import { SharedMessages } from "common-messages.slint";
+import { ScrollView, TextEdit } from "std-widgets.slint";
+import { Theme, Icon, ActionButton, Keycap } from "components.slint";
 import { ProjectRow } from "project-types.slint";
 
 // Render paths as plain text; punctuation in a URI must not become Markdown.
@@ -19,8 +20,8 @@ component PanelAction inherits Rectangle {
     in property <image> icon;
     in property <bool> enabled: true;
     callback clicked;
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     border-radius: 5px;
     background: touch.has-hover ? Theme.hover : transparent;
     border-width: keys.has-focus ? 1px : 0px;
@@ -31,17 +32,20 @@ component PanelAction inherits Rectangle {
     accessible-enabled: root.enabled;
     accessible-action-default => { if root.enabled { root.clicked(); } }
     forward-focus: keys;
-    Icon { x: 7px; y: 7px; width: 14px; height: 14px; min-height: 14px; source: root.icon; colorize: Theme.muted; }
+    Icon { x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2; width: 16px; height: 16px; min-height: 16px; source: root.icon; colorize: Theme.secondary; }
     touch := TouchArea {
         enabled: root.enabled;
         mouse-cursor: pointer;
-        clicked => { root.clicked(); }
+        clicked => { keys.focus(); root.clicked(); }
     }
     keys := FocusScope {
         enabled: root.enabled;
         focus-on-click: false;
         key-pressed(event) => {
-            if event.text == Key.Return || event.text == Key.Space { root.clicked(); return accept; }
+            if event.text == Key.Return || event.text == Key.Space {
+                if !event.repeat { root.clicked(); }
+                return accept;
+            }
             reject
         }
     }
@@ -53,7 +57,7 @@ export component LauncherWindow inherits Window {
     title: @tr("ui.launcher.title" => "Sean Toolbox · Recent Projects");
     icon: @image-url("../../../packaging/sean-toolbox.svg");
     in property <length> panel-width: 760px;
-    in property <length> panel-height: 408px;
+    in property <length> panel-height: 432px;
     preferred-width: root.panel-width;
     preferred-height: root.panel-height;
     min-width: 480px;
@@ -78,6 +82,7 @@ export component LauncherWindow inherits Window {
     in-out property <int> project-total: 0;
     in-out property <string> status-message;
     in-out property <bool> status-error: false;
+    in-out property <bool> details-expanded: false;
     callback query-changed(string);
     callback move-project(int);
     callback select-project(int);
@@ -85,25 +90,48 @@ export component LauncherWindow inherits Window {
     callback refresh-projects;
     callback dismiss;
     callback open-settings;
+    private property <length> row-height: 36px;
+    private property <bool> can-open: root.loaded && root.projects-enabled && !root.project-loading && !root.project-opening;
+    private property <string> selected-name: root.selected-project >= 0 && root.selected-project < root.projects.length ? root.projects[root.selected-project].name : "";
+    private property <string> selected-path: root.selected-project >= 0 && root.selected-project < root.projects.length ? root.projects[root.selected-project].location : "";
 
-    public function focus-search() { search.focus(); }
+    public function focus-search() { root.details-expanded = false; search.focus(); }
     public function reveal-selection() {
         if root.selected-project < 0 { return; }
-        if root.selected-project * 26px + results.content-y < 0px {
-            results.content-y = -root.selected-project * 26px;
+        if root.selected-project * root.row-height + results.content-y < 0px {
+            results.content-y = -root.selected-project * root.row-height;
         }
-        if (root.selected-project + 1) * 26px + results.content-y > results.visible-height {
-            results.content-y = results.visible-height - (root.selected-project + 1) * 26px;
+        if (root.selected-project + 1) * root.row-height + results.content-y > results.visible-height {
+            results.content-y = results.visible-height - (root.selected-project + 1) * root.row-height;
         }
     }
 
     forward-focus: keys;
     keys := FocusScope {
         capture-key-pressed(event) => {
-            if event.text == Key.Escape { root.dismiss(); return accept; }
-            if event.text == Key.DownArrow { root.move-project(1); return accept; }
-            if event.text == Key.UpArrow { root.move-project(-1); return accept; }
-            if event.text == Key.Return && search.has-focus { root.open-project(root.selected-project); return accept; }
+            if event.text == Key.Escape {
+                // Details hidden by an empty result set must not swallow Esc.
+                if root.details-expanded && root.selected-path != "" { root.details-expanded = false; search.focus(); }
+                else { root.details-expanded = false; root.dismiss(); }
+                return accept;
+            }
+            if event.text == Key.Return && event.modifiers.alt {
+                if root.selected-project >= 0 && !event.repeat {
+                    root.details-expanded = !root.details-expanded;
+                    search.focus();
+                }
+                return accept;
+            }
+            if search.has-focus {
+                if event.text == Key.DownArrow { root.move-project(1); return accept; }
+                if event.text == Key.UpArrow { root.move-project(-1); return accept; }
+                if event.text == Key.PageDown { root.move-project(8); return accept; }
+                if event.text == Key.PageUp { root.move-project(-8); return accept; }
+                if event.text == Key.Return {
+                    if root.can-open && !event.repeat { root.open-project(root.selected-project); }
+                    return accept;
+                }
+            }
             if event.modifiers.control || event.modifiers.meta {
                 if event.text == "k" || event.text == "f" { search.focus(); search.select-all(); return accept; }
                 if event.text == "r" { root.refresh-projects(); return accept; }
@@ -118,15 +146,13 @@ export component LauncherWindow inherits Window {
                 padding: 1px;
                 spacing: 0px;
                 Rectangle {
-                    height: 54px;
+                    height: 58px;
                     background: Theme.panel;
                     HorizontalLayout {
                         padding-left: 16px;
                         padding-right: 12px;
                         spacing: 10px;
-                        Icon { source: @image-url("icons/code.svg"); width: 17px; colorize: Theme.accent; }
-                        Text { text: "VS Code"; color: Theme.secondary; font-size: 12px; font-weight: 600; vertical-alignment: center; }
-                        Text { text: "›"; color: Theme.muted; font-size: 22px; vertical-alignment: center; }
+                        Icon { source: @image-url("icons/search.svg"); width: 19px; colorize: Theme.accent; }
                         Rectangle {
                             horizontal-stretch: 1;
                             Text {
@@ -137,7 +163,7 @@ export component LauncherWindow inherits Window {
                                 visible: root.query == "";
                                 text: @tr("ui.launcher.search_recent_projects" => "Search recent projects…");
                                 color: Theme.muted;
-                                font-size: 14px;
+                                font-size: 16px;
                                 vertical-alignment: center;
                                 horizontal-alignment: left;
                                 overflow: elide;
@@ -147,7 +173,7 @@ export component LauncherWindow inherits Window {
                                 enabled: !root.loaded || root.projects-enabled;
                                 single-line: true;
                                 color: Theme.text;
-                                font-size: 14px;
+                                font-size: 16px;
                                 vertical-alignment: center;
                                 selection-background-color: Theme.selection;
                                 selection-foreground-color: Theme.text;
@@ -160,12 +186,12 @@ export component LauncherWindow inherits Window {
                             width: 56px;
                             horizontal-alignment: right;
                             vertical-alignment: center;
-                            font-size: 11px;
+                            font-size: 12px;
                             color: Theme.muted;
                             accessible-label: @tr("ui.launcher.selected_result_and_match_count" => "Selected result and match count");
                         }
                         VerticalLayout {
-                            width: 28px;
+                            width: 32px;
                             alignment: center;
                             PanelAction {
                                 label: @tr("ui.launcher.settings_ctrl" => "Settings · Ctrl+,");
@@ -176,8 +202,16 @@ export component LauncherWindow inherits Window {
                     }
                 }
                 Rectangle { height: 1px; background: Theme.border; }
+                HorizontalLayout {
+                    height: 30px;
+                    padding-left: 15px; padding-right: 15px; spacing: 8px;
+                    Text { text: root.query == "" ? @tr("ui.launcher.recent_heading" => "Recent projects") : @tr("ui.launcher.results_heading" => "Search results"); color: Theme.muted; font-size: 12px; vertical-alignment: center; horizontal-stretch: 1; }
+                    Text { text: "VS Code"; color: Theme.muted; font-size: 12px; vertical-alignment: center; }
+                }
                 Rectangle {
                     vertical-stretch: 1;
+                    accessible-role: list;
+                    accessible-label: SharedMessages.recent-projects;
                     results := ScrollView {
                         visible: root.projects.length > 0;
                         horizontal-scrollbar-policy: always-off;
@@ -185,43 +219,46 @@ export component LauncherWindow inherits Window {
                         VerticalLayout {
                             spacing: 0px;
                             for item[index] in root.projects: Rectangle {
-                                height: 26px;
-                                background: index == root.selected-project ? Theme.button : row-touch.has-hover ? Theme.hover : Theme.surface;
-                                accessible-role: button;
+                                height: root.row-height;
+                                background: index == root.selected-project ? Theme.accent-soft : row-touch.has-hover ? Theme.hover : Theme.surface;
+                                accessible-role: list-item;
                                 accessible-label: item.name + " " + item.location;
-                                accessible-action-default => { root.open-project(index); }
+                                accessible-enabled: root.can-open;
+                                accessible-item-selectable: true;
+                                accessible-item-selected: index == root.selected-project;
+                                accessible-item-index: index;
+                                accessible-item-count: root.projects.length;
+                                accessible-action-default => { if root.can-open { root.open-project(index); } }
+                                if index == root.selected-project: Rectangle {
+                                    x: 0px; y: 8px; width: 3px; height: 20px; border-radius: 1.5px; background: Theme.accent;
+                                }
                                 HorizontalLayout {
-                                    padding-left: 14px;
+                                    padding-left: 15px;
                                     padding-right: 14px;
-                                    spacing: 12px;
-                                    Text {
-                                        text: "[VSCode]";
-                                        width: 60px;
-                                        font-size: 11px;
-                                        color: index == root.selected-project ? Theme.on-accent-muted : Theme.accent;
-                                        vertical-alignment: center;
-                                    }
+                                    spacing: 10px;
+                                    Icon { source: item.remote ? @image-url("icons/external.svg") : @image-url("icons/folder.svg"); width: 16px; colorize: index == root.selected-project ? Theme.accent : Theme.muted; }
                                     Text {
                                         text: item.name;
-                                        width: root.width < 600px ? 142px : 205px;
-                                        font-size: 12px;
-                                        font-weight: 500;
-                                        color: index == root.selected-project ? Theme.on-accent : Theme.text;
+                                        width: root.width * 0.34;
+                                        font-size: 14px;
+                                        font-weight: index == root.selected-project ? 600 : 400;
+                                        color: Theme.text;
                                         overflow: elide;
                                         vertical-alignment: center;
                                     }
                                     Text {
-                                        text: item.location;
+                                        text: item.display-location == "" ? item.location : item.display-location;
                                         horizontal-stretch: 1;
                                         min-width: 0px;
                                         font-size: 12px;
-                                        color: index == root.selected-project ? Theme.on-accent-muted : Theme.muted;
+                                        color: Theme.secondary;
                                         overflow: elide;
                                         vertical-alignment: center;
                                     }
+                                    if root.width >= 620px && item.remote: Text { text: @tr("ui.launcher.remote" => "Remote"); font-size: 12px; color: Theme.accent; vertical-alignment: center; }
                                 }
                                 row-touch := TouchArea {
-                                    enabled: root.loaded && !root.project-loading && !root.project-opening;
+                                    enabled: root.can-open;
                                     mouse-cursor: pointer;
                                     clicked => { root.select-project(index); search.focus(); }
                                     double-clicked => { root.open-project(index); }
@@ -238,7 +275,7 @@ export component LauncherWindow inherits Window {
                         padding: 24px;
                         spacing: 10px;
                         Text {
-                            text: !root.loaded ? (@tr("ui.status.connecting" => "Connecting…")) : root.project-loading ? (@tr("ui.common.reading_recent_projects" => "Reading recent projects…")) : !root.projects-enabled ? (@tr("ui.projects.disabled" => "Recent projects is turned off")) : root.project-error ? (@tr("ui.projects.read_failed" => "Couldn't read recent projects")) : root.query != "" ? (@tr("ui.projects.no_matches" => "No matching projects")) : (@tr("ui.projects.empty" => "No recent projects yet"));
+                            text: !root.loaded ? (@tr("ui.status.connecting" => "Connecting…")) : root.project-loading ? (SharedMessages.reading-recent-projects) : !root.projects-enabled ? (@tr("ui.projects.disabled" => "Recent projects is turned off")) : root.project-error ? (@tr("ui.projects.read_failed" => "Couldn't read recent projects")) : root.query != "" ? (@tr("ui.projects.no_matches" => "No matching projects")) : (@tr("ui.projects.empty" => "No recent projects yet"));
                             color: Theme.secondary;
                             font-size: 14px;
                             font-weight: 600;
@@ -251,28 +288,92 @@ export component LauncherWindow inherits Window {
                             horizontal-alignment: center;
                             wrap: word-wrap;
                         }
+                        if root.loaded && !root.project-loading: HorizontalLayout {
+                            alignment: center;
+                            ActionButton {
+                                text: !root.projects-enabled ? @tr("ui.action.open_settings" => "Open settings") : root.query != "" ? @tr("ui.action.clear_search" => "Clear search") : @tr("ui.action.refresh_projects" => "Refresh projects");
+                                clicked => {
+                                    if !root.projects-enabled { root.open-settings(); }
+                                    else if root.query != "" { root.query = ""; root.query-changed(""); search.focus(); }
+                                    else { root.refresh-projects(); search.focus(); }
+                                }
+                            }
+                        }
                     }
+                }
+                if root.details-expanded && root.selected-path != "": Rectangle {
+                    background: Theme.panel;
+                    height: 100px;
+                    VerticalLayout {
+                        padding: 10px;
+                        spacing: 6px;
+                        HorizontalLayout {
+                            height: 24px;
+                            Text { text: root.selected-name; color: Theme.text; font-size: 14px; font-weight: 600; overflow: elide; min-width: 0px; horizontal-stretch: 1; vertical-alignment: center; }
+                            PanelAction {
+                                label: @tr("ui.launcher.hide_details" => "Hide project details");
+                                icon: @image-url("icons/close.svg");
+                                height: 24px;
+                                clicked => { root.details-expanded = false; search.focus(); }
+                            }
+                        }
+                        TextEdit {
+                            text: root.selected-path;
+                            read-only: true;
+                            vertical-stretch: 1;
+                            accessible-label: @tr("ui.launcher.full_path" => "Full project path");
+                        }
+                    }
+                }
+                if root.status-error && root.projects.length > 0: Rectangle {
+                    background: Theme.danger-soft;
+                    min-height: 46px;
+                    max-height: 88px;
+                    HorizontalLayout {
+                        padding: 10px; spacing: 8px;
+                        Icon { source: @image-url("icons/warning.svg"); width: 16px; colorize: Theme.danger; }
+                        Text { text: root.status-message; font-size: 12px; color: Theme.danger; wrap: word-wrap; overflow: elide; horizontal-stretch: 1; vertical-alignment: center; }
+                    }
+                    Tooltip { HoverHint { text: root.status-message; } }
                 }
                 Rectangle { height: 1px; background: Theme.border; }
                 Rectangle {
-                    height: 38px;
+                    height: 40px;
                     background: Theme.panel;
                     HorizontalLayout {
                         padding-left: 14px;
                         padding-right: 10px;
                         spacing: 10px;
-                        Text {
-                            text: root.project-opening ? (@tr("ui.launcher.opening_in_vs_code" => "Opening in VS Code…")) : root.project-loading ? (@tr("ui.launcher.updating" => "Updating…")) : root.status-error ? root.status-message : (@tr("ui.launcher.keyboard_hint" => "↑ ↓  Select     Enter  Open     Esc  Dismiss"));
-                            horizontal-stretch: 1;
-                            min-width: 0px;
-                            color: root.status-error ? Theme.danger : Theme.muted;
-                            font-size: 11px;
-                            vertical-alignment: center;
-                            overflow: elide;
-                            Tooltip { HoverHint { text: root.status-error ? root.status-message : (@tr("ui.launcher.interaction_hint" => "Type to search · Double-click to open · Full path on hover")); } }
+                        if root.project-opening || root.project-loading: Text {
+                            text: root.project-opening ? @tr("ui.launcher.opening_in_vs_code" => "Opening in VS Code…") : @tr("ui.launcher.updating" => "Updating…");
+                            color: Theme.secondary; font-size: 12px; horizontal-stretch: 1; vertical-alignment: center;
+                        }
+                        if !root.project-opening && !root.project-loading: HorizontalLayout {
+                            spacing: 7px;
+                            alignment: start;
+                            Keycap { text: "↑ ↓"; }
+                            Text { text: @tr("ui.action.select" => "Select"); font-size: 12px; color: Theme.muted; vertical-alignment: center; }
+                            Keycap { text: "Enter"; }
+                            Text { text: @tr("ui.action.open" => "Open"); font-size: 12px; color: Theme.muted; vertical-alignment: center; }
+                            Keycap { text: "Esc"; }
+                            Text { text: @tr("ui.launcher.dismiss" => "Dismiss"); font-size: 12px; color: Theme.muted; vertical-alignment: center; }
+                            Rectangle { horizontal-stretch: 1; }
                         }
                         VerticalLayout {
-                            width: 28px;
+                            width: 32px;
+                            alignment: center;
+                            PanelAction {
+                                label: @tr("ui.launcher.details" => "Project details · Alt+Enter");
+                                icon: @image-url("icons/info.svg");
+                                enabled: root.selected-project >= 0;
+                                clicked => {
+                                    root.details-expanded = !root.details-expanded;
+                                    search.focus();
+                                }
+                            }
+                        }
+                        VerticalLayout {
+                            width: 32px;
                             alignment: center;
                             PanelAction {
                                 label: @tr("ui.launcher.refresh_projects_ctrl_r" => "Refresh projects · Ctrl+R");
