@@ -19,6 +19,8 @@ cargo build --locked -p toolbox-host -p toolbox-ui
 ./target/debug/sean-toolbox
 ```
 
+界面侧栏、关于页和 `sean-toolbox --version` 显示构建时的 `git describe --tags --dirty`，例如 `v0.2.0-26-gaf25bd0`；正好位于发布 tag 时显示 `v0.2.0`。没有 Git 信息或可达 tag 时（源码包、CI 的浅克隆构建）回退为 `v<Cargo 版本>`，因此发布资产仍显示准确版本。构建脚本在提交、切换分支、tag 或暂存区变化后重新计算；仅修改未暂存文件时，`-dirty` 标记在下次 Git 刷新暂存区后更新。
+
 发布构建使用：
 
 ```sh

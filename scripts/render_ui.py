@@ -21,7 +21,7 @@ import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 SCENES = (
-    "projects", "apps", "apps-advanced", "quake", "settings", "status", "skills",
+    "projects", "apps", "apps-advanced", "quake", "settings", "settings-projects", "status", "skills",
     "skills-discover", "skills-local", "skills-repositories", "launcher", "launcher-details",
     "skills-details", "skills-problem", "skills-linked", "skills-import", "skills-selected", "skills-activity",
     "import", "confirm",

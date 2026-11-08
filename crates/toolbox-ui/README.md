@@ -49,6 +49,9 @@ requests. Results return through `slint::invoke_from_event_loop`.
   shortcuts. A token-scoped three-second host lease intercepts the latter while
   the recorder polls. Native registrations stay intact; closing, focus loss or
   cancellation ends capture, and a missing UI expires without a resident timer.
+- Settings are grouped by component (general, recent projects, window
+  switcher, skills, configuration file); a search spans every category and a
+  failed save opens the category of the invalid field.
 - Settings previews apply language and theme immediately. Discarding settings
   restores their saved values and preserves any application draft.
 - Static text uses Slint's bundled gettext translations. Rust-generated status
@@ -62,8 +65,9 @@ requests. Results return through `slint::invoke_from_event_loop`.
 - Skills exposes installed skills, repository discovery, local imports,
   repository settings and current operation status. Commands run in the host; the UI worker
   only performs IPC and folder selection. Full-width rows open details on
-  demand. Bulk actions show hidden selections and explicitly enable or disable
-  the selected app. Both folder and scan imports review the source, copy/link
+  demand. Bulk actions show hidden selections and use the same app icons as
+  rows: checked means every selected skill uses the app (click disables all),
+  a partial badge or none means a click enables all; tooltips give counts. Both folder and scan imports review the source, copy/link
   mode and deployment apps before submission. A picked folder whose name
   matches a managed skill offers that installed item instead of an import.
   The source filter follows its repository by ID and falls back to All once

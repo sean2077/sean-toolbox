@@ -247,12 +247,9 @@ fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
         skills.set_hidden_selected_count(1);
         skills.set_all_selected(true);
         skills.set_selection_text(messages::skills_selection_scope(1, 3).render(locale).into());
-        skills.set_batch_target(1);
-        skills.set_batch_deployment_text(
-            messages::skills_batch_deployment("Codex", 2, 3)
-                .render(locale)
-                .into(),
-        );
+        // Mixed deployments: Claude Code on all three, Codex on two of them.
+        skills.set_batch_app0(true);
+        skills.set_batch_partial(model(vec![false, true, false, false, false]));
     }
     skills.set_source_options(model(vec![
         messages::common_all().render(locale).into(),
@@ -509,6 +506,14 @@ fn probe_controls(
     let mut verified = Vec::new();
     match scene {
         "settings" => {
+            ui.set_settings_category(1);
+            render_frame(adapter, pixels);
+            click("settings-general")?;
+            if ui.get_settings_category() != 0 {
+                return Err("smoke point settings-general did not open General".into());
+            }
+            verified.push("settings-general");
+            render_frame(adapter, pixels);
             let original = ui.get_setting_theme();
             for (name, value) in [("theme-dark", 2), ("theme-light", 1), ("theme-system", 0)] {
                 click(name)?;
@@ -699,6 +704,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 manager.set_form_advanced(scene == "apps-advanced");
             }
             "settings" => manager.set_page(2),
+            "settings-projects" => {
+                manager.set_page(2);
+                manager.set_settings_category(1);
+            }
             "status" => manager.set_page(3),
             "skills"
             | "skills-discover"

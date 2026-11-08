@@ -2,6 +2,8 @@
 import { Palette } from "std-widgets.slint";
 
 export global Theme {
+    // Shortcut prefix shown in hints: "Ctrl+" here, "⌘" on macOS (set by Rust).
+    in-out property <string> command-key: "Ctrl+";
     // The resolved widget background also handles ColorScheme.unknown (system).
     private property <color> widget-background: Palette.background;
     out property <bool> dark: widget-background.to-oklch().lightness < 0.5;
@@ -200,7 +202,7 @@ export component NavButton inherits Rectangle {
     border-color: Theme.focus;
     accessible-role: tab;
     accessible-label: root.text;
-    accessible-description: root.shortcut == "" ? "" : "Ctrl / ⌘ + " + root.shortcut;
+    accessible-description: root.shortcut == "" ? "" : Theme.command-key + root.shortcut;
     accessible-item-selectable: true;
     accessible-item-selected: root.selected;
     accessible-action-default => { root.clicked(); }
@@ -211,7 +213,6 @@ export component NavButton inherits Rectangle {
         spacing: 8px;
         Icon { source: root.icon; colorize: root.selected ? Theme.accent : Theme.muted; width: 18px; }
         if !root.compact: Text { text: root.text; font-size: 13px; font-weight: root.selected ? 600 : 400; color: root.selected ? Theme.text : Theme.secondary; horizontal-stretch: 1; min-width: 0px; overflow: elide; vertical-alignment: center; }
-        if !root.compact && root.shortcut != "": Text { text: root.shortcut; font-size: 12px; color: Theme.muted; vertical-alignment: center; }
     }
     if root.selected: Rectangle { x: 0px; y: 12px; width: 3px; height: 16px; border-radius: 1.5px; background: Theme.accent; }
     if root.dirty: Rectangle { x: parent.width - 6px; y: 5px; width: 5px; height: 5px; border-radius: 3px; background: Theme.warning; }
@@ -226,7 +227,7 @@ export component NavButton inherits Rectangle {
             reject
         }
     }
-    Tooltip { Hint { text: root.text + (root.shortcut == "" ? "" : " · Ctrl / ⌘ + " + root.shortcut); } }
+    Tooltip { Hint { text: root.text + (root.shortcut == "" ? "" : " · " + Theme.command-key + root.shortcut); } }
 }
 
 export component SearchInput inherits Rectangle {
@@ -274,6 +275,15 @@ export component SearchInput inherits Rectangle {
         enabled: root.enabled;
         clicked => { root.text = ""; root.edited(""); input.focus(); }
     }
+}
+
+/// Title of a settings category, shown above its card.
+export component SettingsHeading inherits VerticalLayout {
+    in property <string> title;
+    in property <string> description;
+    spacing: 3px;
+    Text { text: root.title; color: Theme.text; font-size: 15px; font-weight: 600; }
+    if root.description != "": Caption { text: root.description; }
 }
 
 export component SettingRow inherits Rectangle {

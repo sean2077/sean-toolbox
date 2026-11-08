@@ -348,16 +348,20 @@ export component LauncherWindow inherits Window {
                             text: root.project-opening ? @tr("ui.launcher.opening_in_vs_code" => "Opening in VS Code…") : @tr("ui.launcher.updating" => "Updating…");
                             color: Theme.secondary; font-size: 12px; horizontal-stretch: 1; vertical-alignment: center;
                         }
-                        if !root.project-opening && !root.project-loading: HorizontalLayout {
-                            spacing: 7px;
-                            alignment: start;
-                            Keycap { text: "↑ ↓"; }
-                            Text { text: @tr("ui.action.select" => "Select"); font-size: 12px; color: Theme.muted; vertical-alignment: center; }
-                            Keycap { text: "Enter"; }
-                            Text { text: @tr("ui.action.open" => "Open"); font-size: 12px; color: Theme.muted; vertical-alignment: center; }
-                            Keycap { text: "Esc"; }
-                            Text { text: @tr("ui.launcher.dismiss" => "Dismiss"); font-size: 12px; color: Theme.muted; vertical-alignment: center; }
-                            Rectangle { horizontal-stretch: 1; }
+                        if !root.project-opening && !root.project-loading: VerticalLayout {
+                            alignment: center; horizontal-stretch: 1;
+                            HorizontalLayout {
+                                spacing: 7px;
+                                alignment: start;
+                                Keycap { text: "↑ ↓"; }
+                                Text { text: @tr("ui.action.select" => "Select"); font-size: 12px; color: Theme.muted; vertical-alignment: center; }
+                                Rectangle { width: 4px; }
+                                Keycap { text: "Enter"; }
+                                Text { text: @tr("ui.action.open" => "Open"); font-size: 12px; color: Theme.muted; vertical-alignment: center; }
+                                Rectangle { width: 4px; }
+                                Keycap { text: "Esc"; }
+                                Text { text: @tr("ui.launcher.dismiss" => "Dismiss"); font-size: 12px; color: Theme.muted; vertical-alignment: center; }
+                            }
                         }
                         VerticalLayout {
                             width: 32px;

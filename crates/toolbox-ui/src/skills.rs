@@ -942,21 +942,37 @@ impl Controller {
             .render(locale)
             .into(),
         );
-        let batch_target = skills.get_batch_target().clamp(0, 4) as usize;
-        skills.set_batch_target(batch_target as i32);
-        skills.set_batch_deployment_text(
-            messages::skills_batch_deployment(
-                SkillApp::ALL[batch_target].label(),
-                selection.deployed[batch_target],
-                selection.total,
-            )
-            .render(locale)
-            .into(),
-        );
-        // Preserve the boolean model for clients of the original UI API. The UI now
-        // shows explicit counts and actions, so mixed is no longer displayed as off.
+        // Each batch icon is checked when every selected skill uses the app and
+        // marked partial when only some do; a click enables all unless all are on.
         let fully_deployed =
             |index| selection.total > 0 && selection.deployed[index] == selection.total;
+        let partial = (0..SkillApp::ALL.len())
+            .map(|index| selection.deployed[index] > 0 && !fully_deployed(index))
+            .collect::<Vec<_>>();
+        let hints = SkillApp::ALL
+            .iter()
+            .enumerate()
+            .map(|(index, app)| {
+                let action = if fully_deployed(index) {
+                    messages::skills_batch_click_disable()
+                } else {
+                    messages::skills_batch_click_enable()
+                };
+                SharedString::from(format!(
+                    "{}
+{}",
+                    messages::skills_batch_deployment(
+                        app.label(),
+                        selection.deployed[index],
+                        selection.total,
+                    )
+                    .render(locale),
+                    action.render(locale)
+                ))
+            })
+            .collect::<Vec<_>>();
+        skills.set_batch_partial(ModelRc::new(VecModel::from(partial)));
+        skills.set_batch_hints(ModelRc::new(VecModel::from(hints)));
         skills.set_batch_app0(fully_deployed(0));
         skills.set_batch_app1(fully_deployed(1));
         skills.set_batch_app2(fully_deployed(2));
@@ -2174,10 +2190,27 @@ mod tests {
             assert_eq!(skills.get_selected_count(), 2);
             assert_eq!(skills.get_hidden_selected_count(), 1);
             assert_eq!(skills.get_visible_selected_count(), 1);
+            // alpha uses Claude Code and beta does not: the icon is partial,
+            // and its tooltip names the counts and the enabling action.
+            assert!(!skills.get_batch_app0());
+            assert!(skills.get_batch_partial().row_data(0).unwrap());
+            assert!(!skills.get_batch_partial().row_data(1).unwrap());
             assert_eq!(
-                skills.get_batch_deployment_text(),
-                "Claude Code：所选 2 项中已有 1 项部署"
+                skills.get_batch_hints().row_data(0).unwrap(),
+                "Claude Code：所选 2 项中已有 1 项部署
+点击为所选技能全部启用。"
             );
+            controller.toggle_skill_selection("beta".into(), false);
+            assert!(skills.get_batch_app0());
+            assert!(!skills.get_batch_partial().row_data(0).unwrap());
+            assert!(
+                skills
+                    .get_batch_hints()
+                    .row_data(0)
+                    .unwrap()
+                    .ends_with("点击为所选技能全部停用。")
+            );
+            controller.toggle_skill_selection("beta".into(), true);
             controller.toggle_skill_selection_all(false);
             assert_eq!(skills.get_selected_count(), 1);
             assert_eq!(skills.get_hidden_selected_count(), 1);

@@ -651,3 +651,11 @@ msgstr ""
 msgctxt "rust.config_error_vscode_path"
 msgid "The VS Code path is invalid."
 msgstr ""
+
+msgctxt "rust.skills_batch_click_enable"
+msgid "Click to enable for all selected skills."
+msgstr ""
+
+msgctxt "rust.skills_batch_click_disable"
+msgid "Click to disable for all selected skills."
+msgstr ""
