@@ -56,7 +56,7 @@ fn start() -> Result<(), String> {
     let command = match args.first().map(String::as_str) {
         Some("--help" | "-h" | "help") => {
             println!(
-                "Sean Toolbox — 个人工具箱\n\nsean-toolbox                              打开最近项目\nsean-toolbox show [projects|windows|settings|diagnostics|skills]\nsean-toolbox --background                 常驻托盘，不打开界面\nsean-toolbox toggle <profile-id>           切换应用窗口\nsean-toolbox status                       输出 JSON 诊断\nsean-toolbox config                       输出当前配置与版本\nsean-toolbox config-path                  输出配置路径\nsean-toolbox skills [list|status|update|discover]\nsean-toolbox skills daily on|off           每日自动更新 Skills\nsean-toolbox quit                         退出宿主与界面\nsean-toolbox --version\n\n首次默认热键：Ctrl+Alt+Space；WezTerm F3、VS Code F4、Chrome F5。\n配置可在界面修改。两份可执行文件必须保留在同一目录。"
+                "Sean Toolbox — 个人工具箱\n\nsean-toolbox                              打开最近项目\nsean-toolbox show [projects|windows|settings|diagnostics|skills]\nsean-toolbox --background                 常驻托盘，不打开界面\nsean-toolbox toggle <profile-id>           切换应用窗口\nsean-toolbox status                       输出 JSON 诊断\nsean-toolbox config                       输出当前配置与版本\nsean-toolbox config-path                  输出配置路径\nsean-toolbox skills [list|status|update|discover]\nsean-toolbox skills daily on|off           每日自动更新 Skills\nsean-toolbox skills deploy symlink|copy     设置新启用的应用部署方式\nsean-toolbox quit                         退出宿主与界面\nsean-toolbox --version\n\n首次默认热键：Ctrl+Alt+Space；WezTerm F3、VS Code F4、Chrome F5。\n配置可在界面修改。两份可执行文件必须保留在同一目录。"
             );
             return Ok(());
         }

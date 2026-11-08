@@ -18,7 +18,7 @@ Sean Toolbox 使用 Rust + Slint，支持 Windows、macOS 和 Linux，优先面�
 
 更多截图：[项目管理](docs/images/projects.png) · [Quake 停靠](docs/images/quake-editor.png) · [Skills 管理（示例数据）](docs/images/skills-manager.png)。
 
-截图使用当前源码和示例数据生成；尚未发布的界面变化不包含在下方的 0.2.0 发行包中。
+截图使用当前源码和示例数据生成；尚未发布的界面变化不包含在下方的 0.3.0 发行包中。
 
 ## 功能
 
@@ -32,7 +32,7 @@ Sean Toolbox 使用 Rust + Slint，支持 Windows、macOS 和 Linux，优先面�
 
 ## 下载与开始使用
 
-正式版下载：[最新版本](https://github.com/sean2077/sean-toolbox/releases/latest) · [0.2.0](https://github.com/sean2077/sean-toolbox/releases/tag/v0.2.0)。
+正式版下载：[最新版本](https://github.com/sean2077/sean-toolbox/releases/latest) · [0.3.0](https://github.com/sean2077/sean-toolbox/releases/tag/v0.3.0)。
 
 按系统和处理器选择 Release 中的压缩包；开发构建仍可从 [Actions](https://github.com/sean2077/sean-toolbox/actions/workflows/ci.yml) 的成功运行记录中下载。
 
