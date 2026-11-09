@@ -26,6 +26,8 @@ import uuid
 
 
 SENTINEL = (237, 0, 237)
+# Fixture contract: the palette, preferred sizes and 72px/36px bands live in
+# crates/toolbox-ui/examples/repaint_probe.rs; update both files together.
 COLORS = {
     "dark": {"canvas": (23, 25, 31), "sidebar": (18, 20, 25), "footer": (40, 53, 79)},
     "light": {"canvas": (246, 247, 249), "sidebar": (238, 240, 244), "footer": (220, 231, 255)},
@@ -330,7 +332,7 @@ def main() -> None:
                          "--pid", str(process.pid), "--title", title,
                          "--scale", str(scale), "--theme", theme,
                          "--resize-dispatch", args.resize_dispatch],
-                        capture_output=True, text=True, timeout=25, check=False,
+                        capture_output=True, text=True, timeout=40, check=False,
                     )
                     log.seek(0)
                     native_log = log.read().decode("utf-8", errors="replace")

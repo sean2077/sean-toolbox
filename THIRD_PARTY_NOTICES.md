@@ -71,9 +71,10 @@ README displays the official Slint attribution badge.
 original license files, with the exact Windows invalidation fix from upstream
 [PR #13568](https://github.com/slint-ui/slint/pull/13568) backported. This prevents
 unpainted client-area bands after native redraws without upgrading the rest of
-Slint. See its [PATCH.md](vendor/i-slint-backend-winit/PATCH.md) for the verified
-archive checksum, source revision, patch and removal conditions. The same
-Royalty-free 2.0 license choice and attribution apply.
+Slint. See its
+[PATCH.md](https://github.com/sean2077/sean-toolbox/blob/main/vendor/i-slint-backend-winit/PATCH.md)
+for the verified archive checksum, source revision, patch and removal
+conditions. The same Royalty-free 2.0 license choice and attribution apply.
 
 ## Other Rust dependencies
 

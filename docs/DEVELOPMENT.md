@@ -109,8 +109,10 @@ python scripts/smoke_windows_repaint.py --binary target/debug/examples/repaint_p
 ```
 
 探针从独立进程以 `SWP_ASYNCWINDOWPOS` / `ShowWindowAsync` 将位置、尺寸、最小化与恢复
-请求交给窗口所属 UI 线程，并等待实际几何或状态到位后采样。它不在放大或恢复后主动
-刷新窗口，像素与局部重绘断言保持独立；这也避免同步跨进程窗口操作与绘制交错。
+请求交给窗口所属 UI 线程，并等待实际几何或状态到位后采样。放大或恢复后不会先做一次
+完整刷新来掩盖问题；像素检查先等待初始帧稳定，随后按断言同步请求内部重绘和底部/右侧
+局部失效重绘，用未失效像素和失效区域恢复来区分内部重绘与原生失效。位置与尺寸操作
+异步排队，避免同步跨进程窗口操作与绘制交错。
 
 需要调查外部同步调整尺寸时，可追加 `--resize-dispatch sync`；该选项只改变放大请求，
 定位、最小化与恢复仍异步执行，所有失败条件和退出码保持一致。它是独立诊断入口，
@@ -125,11 +127,15 @@ python scripts/smoke_windows_repaint.py --binary target/debug/examples/repaint_p
 CI 的 Windows 构建在普通测试后执行 `python scripts/check_windows_repaint.py`：先临时
 移除上游重绘调用，确认单组测试准确失败在底部失效区域，再按字节恢复源码、重新构建并
 运行完整矩阵。反向验证和正向矩阵必须同时满足，最后检查源码与锁文件仍干净。
-该入口只用于干净的 CI checkout；普通本地检查使用前面的 smoke 命令。
+该入口只用于干净的 CI checkout；普通本地检查使用前面的 smoke 命令。若在本地强制
+中断，先执行 `git checkout -- vendor/i-slint-backend-winit/winitwindowadapter.rs`
+恢复被临时改写的源码。
 
 缩放矩阵通过 `SLINT_SCALE_FACTOR` 提供，
 它覆盖物理失效区域与逻辑坐标的换算，不代替两台真实显示器之间的 DPI 切换验收。
-无桌面组件截图也不能替代这项原生后端检查。
+该探针走普通事件循环的 `WM_PAINT` 路径；winit 在嵌套模态循环中缓冲重绘时，更新区域
+可能先被 `DefWindowProcW` 验证，因此不在本次覆盖范围。无桌面组件截图也不能替代这项
+原生后端检查。
 
 ## 模块结构
 

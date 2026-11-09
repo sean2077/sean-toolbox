@@ -18,7 +18,9 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ADAPTER = Path("vendor/i-slint-backend-winit/winitwindowadapter.rs")
+VENDOR = Path("vendor/i-slint-backend-winit")
+ADAPTER = VENDOR / "winitwindowadapter.rs"
+CLEAN_PATHS = (VENDOR.as_posix(), "Cargo.toml", "Cargo.lock")
 REPAINT_CALL = (
     b'        #[cfg(target_os = "windows")]\n'
     b"        self.mark_windows_update_region_dirty();\n\n"
@@ -36,18 +38,40 @@ def require(condition: object, message: str) -> None:
         raise RuntimeError(message)
 
 
-def build_probe(label: str) -> None:
+def build_probe(label: str) -> Path:
     print(f"=== BUILD {label} ===", flush=True)
-    subprocess.run(
-        ["cargo", "build", "--locked", "-p", "toolbox-ui", "--example", "repaint_probe"],
-        cwd=ROOT, check=True,
+    result = subprocess.run(
+        [
+            "cargo", "build", "--locked", "--message-format=json",
+            "-p", "toolbox-ui", "--example", "repaint_probe",
+        ],
+        cwd=ROOT, check=True, stdout=subprocess.PIPE,
+        text=True, encoding="utf-8", errors="replace",
     )
+    executables = []
+    for line in result.stdout.splitlines():
+        try:
+            message = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        target = message.get("target")
+        if (
+            message.get("reason") == "compiler-artifact"
+            and isinstance(target, dict)
+            and target.get("name") == "repaint_probe"
+            and message.get("executable")
+        ):
+            executables.append(Path(message["executable"]))
+    require(executables, "cargo did not report the repaint_probe executable")
+    executable = executables[-1]
+    print(f"=== PROBE {label}: {executable} ===", flush=True)
+    return executable
 
 
-def run_probe(label: str, arguments: list[str]) -> subprocess.CompletedProcess[str]:
+def run_probe(label: str, arguments: list[str], binary: Path) -> subprocess.CompletedProcess[str]:
     print(f"=== RUN {label} ===", flush=True)
     result = subprocess.run(
-        [sys.executable, "scripts/smoke_windows_repaint.py", *arguments],
+        [sys.executable, "scripts/smoke_windows_repaint.py", "--binary", str(binary), *arguments],
         cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
     )
     for stream, output in (("stdout", result.stdout), ("stderr", result.stderr)):
@@ -100,7 +124,7 @@ def check_positive(result: subprocess.CompletedProcess[str]) -> None:
 def main() -> None:
     require(sys.platform == "win32", "this check requires a Windows desktop")
     subprocess.run(
-        ["git", "diff", "--exit-code", "HEAD", "--", ADAPTER.as_posix(), "Cargo.lock"],
+        ["git", "diff", "--exit-code", "HEAD", "--", *CLEAN_PATHS],
         cwd=ROOT, check=True,
     )
     adapter = ROOT / ADAPTER
@@ -111,8 +135,8 @@ def main() -> None:
     errors = []
     try:
         adapter.write_bytes(original.replace(call, b"", 1))
-        build_probe("unpatched")
-        check_negative(run_probe("unpatched light/1.0", ["--themes", "light", "--scales", "1.0"]))
+        binary = build_probe("unpatched")
+        check_negative(run_probe("unpatched light/1.0", ["--themes", "light", "--scales", "1.0"], binary))
         print("PASS: unpatched probe failed at initial bottom invalidation", flush=True)
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         errors.append(f"negative control: {error}")
@@ -125,15 +149,15 @@ def main() -> None:
 
     # Run the full positive matrix even if the negative control failed unexpectedly.
     try:
-        build_probe("patched")
-        check_positive(run_probe("patched complete matrix", []))
+        binary = build_probe("patched")
+        check_positive(run_probe("patched complete matrix", [], binary))
     except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
         errors.append(f"positive matrix: {error}")
         print(f"FAIL: {errors[-1]}", file=sys.stderr, flush=True)
 
     require(adapter.read_bytes() == original, "adapter bytes changed after restoration")
     subprocess.run(
-        ["git", "diff", "--exit-code", "--", ADAPTER.as_posix(), "Cargo.lock"],
+        ["git", "diff", "--exit-code", "HEAD", "--", *CLEAN_PATHS],
         cwd=ROOT, check=True,
     )
     require(not errors, "; ".join(errors))

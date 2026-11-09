@@ -51,6 +51,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     probe.set_dark(args[1] == "dark");
     probe.set_caption(args[2].as_str().into());
+    // The Python driver reaps the fixture after each case. Do not leave an
+    // always-on-top probe window behind if the driver itself is killed.
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_secs(60));
+        std::process::exit(0);
+    });
     probe.run()?;
     Ok(())
 }

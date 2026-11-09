@@ -45,6 +45,13 @@ dirty in Slint's renderer. Internal redraws without a Windows update region
 retain partial rendering. No polling, extra repaint timer, background-color
 toggle, or Linux/macOS behavior change is introduced.
 
+The backport follows winit's normal `WM_PAINT` path. When winit's event handler
+is borrowed, for example while a native modal dialog pumps messages, winit lets
+`DefWindowProcW` validate the update region before the buffered
+`RedrawRequested`; `GetUpdateRect` is then empty and this change does not mark
+that discarded region. That nested-loop path remains outside the backport and
+the native probe.
+
 This patches only the winit backend crate. Slint, slint-build and the translation
 extractor remain at 1.18.1. At the time of this backport (2026-11-09), Slint's
 latest published stable release was still 1.18.1 and 1.19.0 was unreleased.
@@ -64,6 +71,12 @@ the winit/Win32 update-region path. Cross-display DPI transitions still require
 an environment with differently scaled displays.
 
 Remove the root Cargo patch and this directory when upgrading to a stable
-Slint release that contains #13568 (or an equivalent fix). Update the Slint
-compiler/runtime, translation extractor and attribution together, then rerun
-the native repaint regression and normal workspace checks.
+Slint release that contains #13568 (or an equivalent fix). Also remove the
+Windows negative-control step and `scripts/check_windows_repaint.py`, which
+hard-code this adapter path and the backported call; keep or relocate
+`scripts/smoke_windows_repaint.py` and
+`crates/toolbox-ui/examples/repaint_probe.rs` only if the upstream fix still
+needs the native regression. Update the links and limitations in
+`THIRD_PARTY_NOTICES.md`, `docs/DEVELOPMENT.md` and `docs/VALIDATION.md`.
+Update the Slint compiler/runtime, translation extractor and attribution
+together, then rerun the native repaint regression and normal workspace checks.
