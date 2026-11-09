@@ -97,10 +97,14 @@ mod tests {
 
     #[test]
     fn wrapper_preserves_workspace_and_remote_targets_through_search() {
-        let directory = tempfile::tempdir().unwrap();
-        let folder_uri = Url::from_directory_path(directory.path().join("local-project")).unwrap();
-        let workspace_uri =
-            Url::from_file_path(directory.path().join("team.code-workspace")).unwrap();
+        // Search also matches full paths, so random temporary paths can add unrelated hits.
+        let directory = Path::new(if cfg!(windows) {
+            "C:/fixture"
+        } else {
+            "/fixture"
+        });
+        let folder_uri = Url::from_directory_path(directory.join("local-project")).unwrap();
+        let workspace_uri = Url::from_file_path(directory.join("team.code-workspace")).unwrap();
         let projects = parse_recent_value(
             &serde_json::json!({"entries": [
                 {"folderUri": folder_uri.as_str()},

@@ -93,6 +93,51 @@ Skills 场景包括详情、问题恢复、本机导入、链接来源、带隐�
 
 开发时可用绝对路径环境变量 `SEAN_TOOLBOX_CONFIG` 指定独立配置。宿主单实例按当前用户隔离，桌面集成测试使用临时用户目录和独立显示服务。
 
+### Windows 软件渲染重绘回归
+
+管理窗口与项目面板共用 winit 软件渲染后端。Slint 1.18.1 未包含上游
+[#13568](https://github.com/slint-ui/slint/pull/13568) 的 Windows 失效区域修复，
+窗口尺寸、缩放或恢复后可能残留未绘制的底部或右侧区域。根 Cargo patch 仅替换
+`i-slint-backend-winit`，回移该修复；来源、校验值和移除条件见
+[`vendor/i-slint-backend-winit/PATCH.md`](../vendor/i-slint-backend-winit/PATCH.md)。
+
+在具备桌面的 Windows 会话运行：
+
+```sh
+cargo build --locked -p toolbox-ui --example repaint_probe
+python scripts/smoke_windows_repaint.py --binary target/debug/examples/repaint_probe.exe
+```
+
+探针从独立进程以 `SWP_ASYNCWINDOWPOS` / `ShowWindowAsync` 将位置、尺寸、最小化与恢复
+请求交给窗口所属 UI 线程，并等待实际几何或状态到位后采样。放大或恢复后优先采用应用
+自身的初始帧；若窗口没有自动重绘，测试会请求一次全客户区原生失效重绘（Windows 重绘
+路径），不修改 Slint 属性或软件缓冲区。随后按断言同步请求内部重绘和底部/右侧局部失效
+重绘，用未失效像素和失效区域恢复来区分内部重绘与原生失效。位置与尺寸操作异步排队，
+避免同步跨进程窗口操作与绘制交错。
+
+需要调查外部同步调整尺寸时，可追加 `--resize-dispatch sync`；该选项只改变放大请求，
+定位、最小化与恢复仍异步执行，所有失败条件和退出码保持一致。它是独立诊断入口，
+不属于默认矩阵的通过结论。
+
+该脚本用独立静态窗口检查真实 Win32 客户区：先直接写入哨兵色，确认无失效区域的内部
+重绘不会覆盖它，再分别请求底部与右侧区域重绘并核对原像素恢复。每组还覆盖窗口放大和
+最小化后恢复，默认检查浅深主题及 100% / 150% / 200% 缩放，共 6 组、18 个阶段。
+脚本仅操作同时匹配随机标题与自建进程 PID 的窗口，不启动宿主、不读取用户配置；失败或
+超时会回收测试进程。非 Windows 平台明确失败，不把未执行记为通过。
+
+CI 的 Windows 构建在普通测试后执行 `python scripts/check_windows_repaint.py`：先临时
+移除上游重绘调用，确认单组测试准确失败在底部失效区域，再按字节恢复源码、重新构建并
+运行完整矩阵。反向验证和正向矩阵必须同时满足，最后检查源码与锁文件仍干净。
+该入口只用于干净的 CI checkout；普通本地检查使用前面的 smoke 命令。若在本地强制
+中断，先执行 `git checkout -- vendor/i-slint-backend-winit/winitwindowadapter.rs`
+恢复被临时改写的源码。
+
+缩放矩阵通过 `SLINT_SCALE_FACTOR` 提供，
+它覆盖物理失效区域与逻辑坐标的换算，不代替两台真实显示器之间的 DPI 切换验收。
+该探针走普通事件循环的 `WM_PAINT` 路径；winit 在嵌套模态循环中缓冲重绘时，更新区域
+可能先被 `DefWindowProcW` 验证，因此不在本次覆盖范围。无桌面组件截图也不能替代这项
+原生后端检查。
+
 ## 模块结构
 
 | crate | 职责 |

@@ -1,6 +1,6 @@
 [workspace]
 members = ["crates/toolbox-core", "crates/toolbox-i18n", "crates/toolbox-ipc", "crates/toolbox-projects", "crates/toolbox-skills", "crates/toolbox-windows", "crates/toolbox-host", "crates/toolbox-ui"]
-exclude = ["vendor/global-hotkey"]
+exclude = ["vendor/global-hotkey", "vendor/i-slint-backend-winit"]
 resolver = "2"
 
 [workspace.package]
@@ -22,6 +22,7 @@ url = "2.5.8"
 
 [patch.crates-io]
 global-hotkey = { path = "vendor/global-hotkey" }
+i-slint-backend-winit = { path = "vendor/i-slint-backend-winit" }
 
 [profile.release]
 codegen-units = 1
