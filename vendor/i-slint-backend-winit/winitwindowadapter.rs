@@ -855,6 +855,11 @@ impl WinitWindowAdapter {
 
         self.pending_redraw.set(false);
 
+        #[cfg(all(target_os = "windows", debug_assertions))]
+        if let Some(window) = self.winit_window() {
+            Self::trace_native_repaint(&window, "draw entry");
+        }
+
         #[cfg(target_os = "windows")]
         self.mark_windows_update_region_dirty();
 
@@ -1139,6 +1144,31 @@ impl WinitWindowAdapter {
         WindowInner::from_pub(self.window()).context().set_platform_default_font_size(Some(size));
     }
 
+    #[cfg(all(target_os = "windows", debug_assertions))]
+    fn trace_native_repaint(window: &winit::window::Window, phase: &str) {
+        if std::env::var_os("SEAN_TOOLBOX_REPAINT_TRACE").is_none() {
+            return;
+        }
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        use windows::Win32::Foundation::{HWND, RECT};
+        use windows::Win32::Graphics::Gdi::GetUpdateRect;
+        use windows::Win32::UI::WindowsAndMessaging::{GetClientRect, InSendMessageEx};
+        let Ok(handle) = window.window_handle() else { return };
+        let RawWindowHandle::Win32(handle) = handle.as_raw() else { return };
+        let hwnd = HWND(handle.hwnd.get() as *mut core::ffi::c_void);
+        let mut client = RECT::default();
+        let mut update = RECT::default();
+        let client_ok = unsafe { GetClientRect(hwnd, &mut client) }.is_ok();
+        let dirty = unsafe { GetUpdateRect(hwnd, Some(&mut update), false) }.as_bool();
+        let sent = unsafe { InSendMessageEx(None) };
+        eprintln!(
+            "Repaint trace: {phase} sent={sent:#x} visible={:?} minimized={:?} client_ok={client_ok} client={:?} dirty={dirty} update={:?}",
+            window.is_visible(), window.is_minimized(),
+            (client.left, client.top, client.right, client.bottom),
+            (update.left, update.top, update.right, update.bottom),
+        );
+    }
+
     #[cfg(target_os = "windows")]
     fn queue_windows_resize_invalidation(&self) {
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -1146,7 +1176,15 @@ impl WinitWindowAdapter {
         use windows::Win32::Graphics::Gdi::InvalidateRect;
 
         let Some(window) = self.winit_window() else { return };
+        #[cfg(debug_assertions)]
+        Self::trace_native_repaint(&window, "queue resize invalidation");
+        #[cfg(debug_assertions)]
+        if std::env::var_os("SEAN_TOOLBOX_REPAINT_DISABLE_DEFER").is_some() {
+            return;
+        }
         if self.pending_resize_invalidation.swap(true, Ordering::AcqRel) {
+            #[cfg(debug_assertions)]
+            Self::trace_native_repaint(&window, "resize invalidation already pending");
             return;
         }
 
@@ -1157,6 +1195,8 @@ impl WinitWindowAdapter {
         if corelib::api::invoke_from_event_loop(move || {
             pending.store(false, Ordering::Release);
             let Some(window) = window.upgrade() else { return };
+            #[cfg(debug_assertions)]
+            Self::trace_native_repaint(&window, "resize callback before invalidate");
             if window.is_visible() != Some(true) || window.is_minimized() == Some(true) {
                 return;
             }
@@ -1164,11 +1204,21 @@ impl WinitWindowAdapter {
             let RawWindowHandle::Win32(handle) = handle.as_raw() else { return };
             let hwnd = HWND(handle.hwnd.get() as *mut core::ffi::c_void);
             // The live window keeps the handle valid until this callback returns.
-            let _ = unsafe { InvalidateRect(Some(hwnd), None, false) };
+            let invalidated = unsafe { InvalidateRect(Some(hwnd), None, false) };
+            #[cfg(debug_assertions)]
+            if std::env::var_os("SEAN_TOOLBOX_REPAINT_TRACE").is_some() {
+                eprintln!("Repaint trace: InvalidateRect succeeded={}", invalidated.as_bool());
+                Self::trace_native_repaint(&window, "resize callback after invalidate");
+            }
+            let _ = invalidated;
         })
         .is_err()
         {
             self.pending_resize_invalidation.store(false, Ordering::Release);
+            #[cfg(debug_assertions)]
+            if std::env::var_os("SEAN_TOOLBOX_REPAINT_TRACE").is_some() {
+                eprintln!("Repaint trace: failed to queue resize invalidation");
+            }
         }
     }
 
@@ -1365,6 +1415,8 @@ impl WinitWindowAdapter {
         match event {
             WinitWindowEvent::RedrawRequested => self.draw()?,
             WinitWindowEvent::Resized(size) => {
+                #[cfg(all(target_os = "windows", debug_assertions))]
+                Self::trace_native_repaint(winit_window, "native Resized entry");
                 // Include zero-sized minimize events so restoring the same size still repaints.
                 #[cfg(target_os = "windows")]
                 let native_size_changed = self.last_native_resize.replace(Some(size)) != Some(size);

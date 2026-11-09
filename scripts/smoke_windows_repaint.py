@@ -203,7 +203,10 @@ class NativeWindow:
         require(self.user.GetWindowRect(self.hwnd, ctypes.byref(outer)), "GetWindowRect failed")
         width += outer.right - outer.left - client_width
         height += outer.bottom - outer.top - client_height
-        require(self.user.SetWindowPos(self.hwnd, None, 0, 0, width, height, 0x0002 | 0x0004 | 0x0010),
+        flags = 0x0002 | 0x0004 | 0x0010  # SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
+        if os.environ.get("SEAN_TOOLBOX_REPAINT_GROW_ASYNC") == "1":
+            flags |= 0x4000  # SWP_ASYNCWINDOWPOS; diagnostic changes only resize dispatch.
+        require(self.user.SetWindowPos(self.hwnd, None, 0, 0, width, height, flags),
                 "SetWindowPos failed")  # SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
 
 
@@ -320,6 +323,8 @@ def main() -> None:
                     require(completed.returncode == 0,
                             f"Windows repaint failed ({theme}, scale={scale}):\n"
                             f"{completed.stdout}{completed.stderr}{native_log}")
+                    if "SEAN_TOOLBOX_REPAINT_DIAGNOSTIC" in os.environ:
+                        print(native_log, file=sys.stderr, end="")
                     if completed.stderr:
                         print(completed.stderr, file=sys.stderr, end="")
                     require(process.poll() is None, f"fixture exited early ({theme}, scale={scale}): {native_log}")
@@ -343,4 +348,26 @@ if __name__ == "__main__":
         main()
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         print(f"FAIL: {error}", file=sys.stderr)
+        if (sys.platform == "win32" and "--worker" not in sys.argv
+                and "SEAN_TOOLBOX_REPAINT_DIAGNOSTIC" not in os.environ):
+            variants = {
+                "traced-sync": {},
+                "traced-async": {"SEAN_TOOLBOX_REPAINT_GROW_ASYNC": "1"},
+                "traced-async-without-defer": {"SEAN_TOOLBOX_REPAINT_GROW_ASYNC": "1",
+                                              "SEAN_TOOLBOX_REPAINT_DISABLE_DEFER": "1"},
+            }
+            for label, options in variants.items():
+                print(f"Running resize diagnostic: {label}", file=sys.stderr, flush=True)
+                try:
+                    diagnostic = subprocess.run(
+                        [sys.executable, *sys.argv, "--scales", "1.0", "--themes", "light"],
+                        env={**os.environ, "SEAN_TOOLBOX_REPAINT_DIAGNOSTIC": label,
+                             "SEAN_TOOLBOX_REPAINT_TRACE": "1", **options},
+                        stdin=subprocess.DEVNULL, timeout=80, check=False,
+                    )
+                    print(f"Resize diagnostic {label} returned {diagnostic.returncode}",
+                          file=sys.stderr, flush=True)
+                except (OSError, subprocess.SubprocessError) as diagnostic_error:
+                    print(f"Resize diagnostic {label} failed: {diagnostic_error}",
+                          file=sys.stderr, flush=True)
         sys.exit(1)
