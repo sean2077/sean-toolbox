@@ -125,12 +125,12 @@ python scripts/smoke_windows_repaint.py --binary target/debug/examples/repaint_p
 脚本仅操作同时匹配随机标题与自建进程 PID 的窗口，不启动宿主、不读取用户配置；失败或
 超时会回收测试进程。非 Windows 平台明确失败，不把未执行记为通过。
 
-CI 的 Windows 构建在普通测试后执行 `python scripts/check_windows_repaint.py`：先临时
-移除上游重绘调用，确认单组测试准确失败在底部失效区域，再按字节恢复源码、重新构建并
-运行完整矩阵。反向验证和正向矩阵必须同时满足，最后检查源码与锁文件仍干净。
-该入口只用于干净的 CI checkout；普通本地检查使用前面的 smoke 命令。若在本地强制
-中断，先执行 `git checkout -- vendor/i-slint-backend-winit/winitwindowadapter.rs`
-恢复被临时改写的源码。
+CI 的 Windows 构建在普通测试后执行 `python scripts/check_windows_repaint.py`：在系统临时
+目录复制 vendored 后端，去掉上游重绘调用，并通过 `cargo build --config` 的临时 patch
+构建负向探针；确认单组测试准确失败在底部失效区域后，使用仓库源码重新构建并运行完整
+矩阵。反向验证和正向矩阵必须同时满足，最后检查源码与锁文件仍干净。该入口只用于干净
+的 CI checkout；普通本地检查使用前面的 smoke 命令。临时 overlay 位于系统临时目录，
+强制中断不会改写 tracked source。
 
 缩放矩阵通过 `SLINT_SCALE_FACTOR` 提供，
 它覆盖物理失效区域与逻辑坐标的换算，不代替两台真实显示器之间的 DPI 切换验收。
