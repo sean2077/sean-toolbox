@@ -56,7 +56,7 @@ This patches only the winit backend crate. Slint, slint-build and the translatio
 extractor remain at 1.18.1. At the time of this backport (2026-11-09), Slint's
 latest published stable release was still 1.18.1 and 1.19.0 was unreleased.
 
-## Verification and removal
+## Verification and upgrade
 
 To audit the backport, download the original archive, verify its SHA-256 above,
 and compare its files with this directory. Except for `PATCH.md` and the two
@@ -70,13 +70,42 @@ resize, and minimize/restore. Component-only software screenshots do not cover
 the winit/Win32 update-region path. Cross-display DPI transitions still require
 an environment with differently scaled displays.
 
-Remove the root Cargo patch and this directory when upgrading to a stable
-Slint release that contains #13568 (or an equivalent fix). Also remove the
-Windows negative-control step and `scripts/check_windows_repaint.py`, which
-hard-code this adapter path and the backported call; keep or relocate
-`scripts/smoke_windows_repaint.py` and
-`crates/toolbox-ui/examples/repaint_probe.rs` only if the upstream fix still
-needs the native regression. Update the links and limitations in
-`THIRD_PARTY_NOTICES.md`, `docs/DEVELOPMENT.md` and `docs/VALIDATION.md`.
-Update the Slint compiler/runtime, translation extractor and attribution
-together, then rerun the native repaint regression and normal workspace checks.
+### Slint upgrade workflow
+
+Before changing a Slint version, check whether the target stable release contains
+#13568 or an equivalent Windows update-region fix.
+
+If the target release contains the fix:
+
+1. Remove the root `[patch.crates-io]` entry and this directory; update
+   `Cargo.lock` so the backend resolves from crates.io again.
+2. Upgrade every Slint component together: `slint`, `slint-build`, renderer and
+   backend selection crates, and the pinned `slint-tr-extractor`.
+3. Remove or rewrite the Windows negative-control step and
+   `scripts/check_windows_repaint.py`; keep or relocate
+   `scripts/smoke_windows_repaint.py` and
+   `crates/toolbox-ui/examples/repaint_probe.rs` if the upstream fix still needs
+   the native regression.
+4. Update `THIRD_PARTY_NOTICES.md`, `docs/DEVELOPMENT.md`,
+   `docs/VALIDATION.md`, packaged links, and any license or attribution changes.
+5. Run the native regression (if retained) and the full workspace gates.
+
+If the target release does not contain the fix:
+
+1. Download the target `i-slint-backend-winit` crate and verify its SHA-256.
+2. Reapply the upstream change to `winitwindowadapter.rs`; adapt only if the
+   target source changed. Update the provenance, version, archive hash, and
+   upstream commit in this file.
+3. Update the root `Cargo.toml` patch entry, `Cargo.lock`, and the exact
+   `slint`/`slint-build` pins in `crates/toolbox-ui/Cargo.toml`.
+4. Update the CI `slint-tr-extractor` pin and any license or attribution files.
+5. Audit the vendored directory again: only this file and the adapter may differ
+   from the published crate; all license files stay byte-identical.
+6. Run the native reverse/positive check and the full workspace gates.
+
+If the upstream fix exists in a different form, remove this local patch and keep
+or adapt the native smoke test as the regression.
+
+Do not upgrade only `slint` or only this backend: the backend version must match
+the exact Slint dependency. A Slint upgrade does not authorize a release, tag, or
+version bump; follow the project release process separately.
