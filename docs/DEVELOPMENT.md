@@ -93,6 +93,31 @@ Skills 场景包括详情、问题恢复、本机导入、链接来源、带隐�
 
 开发时可用绝对路径环境变量 `SEAN_TOOLBOX_CONFIG` 指定独立配置。宿主单实例按当前用户隔离，桌面集成测试使用临时用户目录和独立显示服务。
 
+### Windows 软件渲染重绘回归
+
+管理窗口与项目面板共用 winit 软件渲染后端。Slint 1.18.1 未包含上游
+[#13568](https://github.com/slint-ui/slint/pull/13568) 的 Windows 失效区域修复，
+窗口尺寸、缩放或恢复后可能残留未绘制的底部或右侧区域。根 Cargo patch 仅替换
+`i-slint-backend-winit`，回移该修复；来源、校验值和移除条件见
+[`vendor/i-slint-backend-winit/PATCH.md`](../vendor/i-slint-backend-winit/PATCH.md)。
+
+在具备桌面的 Windows 会话运行：
+
+```sh
+cargo build --locked -p toolbox-ui --example repaint_probe
+python scripts/smoke_windows_repaint.py --binary target/debug/examples/repaint_probe.exe
+```
+
+该脚本用独立静态窗口检查真实 Win32 客户区：先直接写入哨兵色，确认无失效区域的内部
+重绘不会覆盖它，再分别请求底部与右侧区域重绘并核对原像素恢复。每组还覆盖窗口放大和
+最小化后恢复，默认检查浅深主题及 100% / 150% / 200% 缩放，共 6 组、18 个阶段。
+脚本仅操作同时匹配随机标题与自建进程 PID 的窗口，不启动宿主、不读取用户配置；失败或
+超时会回收测试进程。非 Windows 平台明确失败，不把未执行记为通过。
+
+CI 的 Windows 构建在普通测试后执行此检查。缩放矩阵通过 `SLINT_SCALE_FACTOR` 提供，
+它覆盖物理失效区域与逻辑坐标的换算，不代替两台真实显示器之间的 DPI 切换验收。
+无桌面组件截图也不能替代这项原生后端检查。
+
 ## 模块结构
 
 | crate | 职责 |

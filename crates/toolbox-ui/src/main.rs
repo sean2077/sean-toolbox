@@ -4815,7 +4815,7 @@ mod tests {
     }
 
     #[test]
-    fn skills_tabs_icons_and_source_chips_accept_pointer_clicks() {
+    fn skills_tabs_icons_and_source_chips_accept_first_pointer_clicks() {
         with_test_ui(|ui, controller, _| {
             use slint::platform::{PointerEventButton, WindowEvent};
             ui.set_setting_language(1);
@@ -4859,16 +4859,19 @@ mod tests {
                 skills.set_view(view);
             }
 
-            // The first row's Claude Code toggle, and the first enabled toggle
-            // found along that row, must receive the click as well.
+            // Each app must act on the first click from the search field, not
+            // just after repeated clicks happen to give its FocusScope focus.
             receive_skills_snapshot(controller, skills_snapshot());
-            let toggled = Rc::new(std::cell::Cell::new(-1));
+            let toggled = Rc::new(std::cell::RefCell::new(Vec::new()));
             let toggles = toggled.clone();
-            skills.on_toggle_row_app(move |_, app, _| toggles.set(app));
-            let mut hits = Vec::new();
-            for y in (330..=420).step_by(6) {
+            skills.on_toggle_row_app(move |id, app, enabled| {
+                toggles.borrow_mut().push((id.to_string(), app, enabled));
+            });
+            for app in 0..5 {
+                ui.invoke_focus_page();
                 render();
-                let position = slint::LogicalPosition::new(887.0, y as f32);
+                // First-row app centers in the default 1120x780 layout.
+                let position = slint::LogicalPosition::new(887.0 + app as f32 * 34.0, 362.0);
                 ui.window()
                     .dispatch_event(WindowEvent::PointerMoved { position });
                 ui.window().dispatch_event(WindowEvent::PointerPressed {
@@ -4879,14 +4882,24 @@ mod tests {
                     position,
                     button: PointerEventButton::Left,
                 });
-                if toggled.get() >= 0 {
-                    hits.push((y, toggled.get()));
-                    toggled.set(-1);
-                }
+                assert_eq!(
+                    *toggled.borrow(),
+                    vec![("source:alpha".to_owned(), app, app != 0)],
+                    "app {app} must toggle exactly once on its first click"
+                );
+                toggled.borrow_mut().clear();
             }
-            assert!(
-                hits.iter().any(|&(_, app)| app == 0),
-                "an app icon click must toggle that app: {hits:?}"
+            // Clicking still gives the final app keyboard focus.
+            ui.window().dispatch_event(WindowEvent::KeyPressed {
+                text: slint::platform::Key::Space.into(),
+            });
+            ui.window().dispatch_event(WindowEvent::KeyReleased {
+                text: slint::platform::Key::Space.into(),
+            });
+            assert_eq!(
+                *toggled.borrow(),
+                vec![("source:alpha".to_owned(), 4, true)],
+                "the clicked app must remain keyboard-operable"
             );
 
             // The source chip beside the first skill name opens its repository.

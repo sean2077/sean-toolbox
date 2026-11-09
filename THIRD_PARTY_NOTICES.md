@@ -67,6 +67,14 @@ retained in `licenses/Slint-Royalty-free-2.0.md`. The application provides the
 `AboutSlint` widget on its top-level Diagnostics & About page, and the public
 README displays the official Slint attribution badge.
 
+`vendor/i-slint-backend-winit` retains the published 1.18.1 backend and its
+original license files, with the exact Windows invalidation fix from upstream
+[PR #13568](https://github.com/slint-ui/slint/pull/13568) backported. This prevents
+unpainted client-area bands after native redraws without upgrading the rest of
+Slint. See its [PATCH.md](vendor/i-slint-backend-winit/PATCH.md) for the verified
+archive checksum, source revision, patch and removal conditions. The same
+Royalty-free 2.0 license choice and attribution apply.
+
 ## Other Rust dependencies
 
 `vendor/global-hotkey` preserves global-hotkey 0.9.0 and its original MIT / Apache

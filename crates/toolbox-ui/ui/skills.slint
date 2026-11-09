@@ -105,6 +105,8 @@ component AppToggle inherits Rectangle {
     touch := TouchArea { enabled: root.enabled; mouse-cursor: pointer; clicked => { keys.focus(); root.toggled(!root.checked); } }
     keys := FocusScope {
         enabled: root.enabled;
+        // Let the TouchArea toggle on the first click and set keyboard focus.
+        focus-on-click: false;
         key-pressed(event) => {
             if event.text == Key.Return || event.text == Key.Space { if !event.repeat { root.toggled(!root.checked); } return accept; }
             reject

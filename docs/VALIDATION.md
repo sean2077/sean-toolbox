@@ -774,3 +774,40 @@ Quake 截图更新了共享的“已启用／未启用”文案。截图使用�
 发布工作流在 `main` 的版本变化推送后创建带注解的 `v0.3.0` 标签，四平台构建/测试通过后
 上传并核对 8 个资产，再公开 Release。本次没有执行 Windows 实机的文件占用、junction、
 休眠恢复或文件选择器验收。
+
+## 2026-11-09：Windows 底部空白与 Skills 图标首击修复
+
+基线为 `main` 的 `a25c62dcbee6690dca41c6e6c2ceb66186642943`（0.3.0）。本地环境为
+Linux x86_64 容器、Rust/Cargo 1.99.1、Slint 1.18.1；工具链、开发库和测试字体均放在
+任务专用目录，未改动系统或用户配置。
+
+- 截图中的白条横跨整个客户区，并截断侧栏底部状态行；原版组件在相同的 1120×780、
+  150% 缩放下可以完整渲染，不是列表预留的空行。对照上游
+  [Slint #13537](https://github.com/slint-ui/slint/issues/13537)，只回移
+  [#13568](https://github.com/slint-ui/slint/pull/13568) 的 Windows 失效区域修复。
+  发布包 SHA-256 与原锁文件一致；逐文件比较确认仅后端 `winitwindowadapter.rs` 增加
+  上游的 33 行，原许可证保持不变。Slint 编译器、运行时、翻译提取器和其他依赖版本不变。
+- Skills 部署图标的 `FocusScope` 改为 `focus-on-click: false`，由 `TouchArea` 同时
+  取得键盘焦点并执行切换。原测试扫描多次点击可能漏掉首击无响应，现改为逐个图标仅点一次，
+  断言目标 Skill、应用、启停值及调用次数，并保留空格键操作检查。
+- 新增 Windows 原生静态窗口探针及 CI 检查，通过 GDI 哨兵色和局部失效重绘检查底部、
+  右侧区域；内部重绘必须保留未失效像素。覆盖浅深主题、100% / 150% / 200% 缩放及
+  初始、放大、最小化后恢复三种状态，具体运行方式见[开发指南](DEVELOPMENT.md#windows-软件渲染重绘回归)。
+
+| 本地检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过，包含新增原生探针的编译检查 |
+| 完整 workspace 测试 | **268 通过、3 失败、1 ignored**；命令退出 101，未记为全通过 |
+| UI 测试 | **103 项通过** |
+| 组件布局 | **48 张预览通过**；Skills / 设置、中英文、浅深主题、1120×780 / 800×580、100% / 150% / 200%，核对底部侧栏/画布颜色及尺寸约束；使用任务目录的 Noto Sans CJK SC 字体 |
+| 图标首击回归敏感性 | 修改 Slint 控件前失败：首次点击无回调；修复后五个图标单次点击及空格键操作通过 |
+| 完整翻译检查 | 固定 `slint-tr-extractor 1.18.1` 与 GNU gettext，`translations.py check` 通过 |
+| Python 发布脚本行为测试 | **27 项通过** |
+| 依赖许可收集 | **450 个包**完成离线收集，包含回移后端的原始许可证 |
+| 原生回归脚本静态检查 | Rust 格式、Python 编译及 CLI 参数检查通过；非 Windows 执行明确失败，不作为原生通过证据 |
+
+3 项失败均为既有 `toolbox-ipc` Unix socket 测试，当前容器返回 `EPERM / Operation not permitted`。
+在未修改的基线独立重跑同一 crate，同样为 1 通过、3 失败；没有跳过、放宽断言或修改 IPC。
+原有 X11 ignored 用例保持独立入口。Windows 原生重绘需看此 PR 的 Windows CI 实际结果，
+不能由 Linux 组件截图推定通过；真实混合 DPI 多显示器移动仍需对应桌面验收。
