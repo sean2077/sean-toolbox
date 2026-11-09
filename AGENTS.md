@@ -28,6 +28,7 @@ cargo test --locked --workspace
 
 - 手写代码位于 `crates/*/src/`、`crates/toolbox-ui/ui/main.slint` 和 `scripts/`。`target/`、`dist/`、许可汇总及 Slint 生成代码通过对应命令更新。
 - `vendor/global-hotkey` 是 X11 解绑修复的补丁依赖，来源与改动记录在 `PATCH.md`。依赖许可补充文本按精确版本记录在 `licenses/dependencies/manifest.json`，升级时核对原文和哈希。
+- `vendor/i-slint-backend-winit` 是 Windows 失效区域修复的临时回移；升级或移除 Slint 前先读它的 `PATCH.md`（Slint upgrade workflow），所有 Slint 组件、`slint-tr-extractor`、许可证/归属和文档需同步更新。
 - `.agents/**`、`.claude/**`、`.codex/**` 和 `CLAUDE.md` 由 agent-scaffold 管理，使用其 `upgrade`、`verify` 更新。项目指导写在本文件 managed block 之外。
 - 根 README 面向新用户；操作、CLI 与配置由 `docs/USAGE.md` 维护；构建和架构由 `docs/DEVELOPMENT.md` 维护；模块细节放对应 crate README。打包与发布正文分别在 `packaging/README.md`、`packaging/RELEASE_NOTES.md`。
 - 新增长期文档放 `docs/` 并从现有入口链接，一次性计划和设计讨论留在 issue、PR 或提交记录。规格文档标明当前状态。
@@ -36,6 +37,7 @@ cargo test --locked --workspace
 ## Git 与发布
 
 - 默认分支为 `main`。提交信息使用英文，可用 `feat:`、`fix(scope):`、`docs:` 等前缀，不添加 `Co-Authored-By`。
+- 迭代完成且格式、严格 Clippy、workspace 测试通过后，按用户约定直接合并到 `main`；若改动涉及可执行文件，再重建并重启本地应用。发布、tag 和版本号仍需单独授权。
 - 版本以根 `Cargo.toml` 的 `[workspace.package].version` 为准，tag 为 `v<version>`；带 `-` 的版本由 CI 发布为 prerelease。
 - 版本号、tag 或发布操作先读 `.agents/tools/release/README.md`。已发布 tag 保持不动，发布结果以远端 tag、CI release job 和资产状态为准。
 - 当前发行包未进行 Windows Authenticode、macOS Developer ID 签名或 Apple 公证。

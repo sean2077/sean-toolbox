@@ -138,6 +138,13 @@ CI 的 Windows 构建在普通测试后执行 `python scripts/check_windows_repa
 可能先被 `DefWindowProcW` 验证，因此不在本次覆盖范围。无桌面组件截图也不能替代这项
 原生后端检查。
 
+Slint 升级、回移或移除这个本地 patch 时，先按 `PATCH.md` 的
+[Slint upgrade workflow](../vendor/i-slint-backend-winit/PATCH.md#slint-upgrade-workflow)
+判断目标稳定版是否已包含 #13568：已包含则删除本地 patch，否则按目标版本重新回移。
+`slint`、`slint-build`、backend/renderer 选择 crate、CI 中的 `slint-tr-extractor`、
+许可证/归属和文档必须同步升级；不要只升级 `slint` 而保留旧 backend。升级不等于发布，
+tag、版本号和 Release 仍按发布流程单独授权。
+
 ## 模块结构
 
 | crate | 职责 |
