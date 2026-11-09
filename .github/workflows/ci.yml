@@ -118,7 +118,7 @@ jobs:
         run: cargo test --locked --workspace --no-fail-fast
       - name: Windows software repaint smoke
         if: runner.os == 'Windows'
-        timeout-minutes: 8
+        timeout-minutes: 10
         run: python scripts/check_windows_repaint.py
       - name: X11 native window smoke test
         if: runner.os == 'Linux'

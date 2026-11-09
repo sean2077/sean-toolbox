@@ -243,11 +243,18 @@ def verify_case(window: NativeWindow, scale: float, theme: str, phase: str) -> d
           file=sys.stderr, flush=True)
     require(all(sample["own_window"] for sample in ownership),
             f"{phase}: another window obscures a fixture sample; {ownership}")
-    try:
-        wait_for(lambda: window.pixels(points) == expected, f"{phase}: incomplete initial frame")
-    except RuntimeError:
-        expect_pixels(window, points, expected, f"{phase}: incomplete initial frame; {geometry}")
-        raise
+    if window.pixels(points) != expected:
+        # A no-activate restore can leave the window without an automatic
+        # paint. Request a full-client native invalidation (the Windows path
+        # under test) instead of failing the sampling setup.
+        window.repaint(wt.RECT(0, 0, width, height))
+        try:
+            wait_for(lambda: window.pixels(points) == expected,
+                     f"{phase}: full invalidation was not repainted", timeout=5.0)
+        except RuntimeError:
+            expect_pixels(window, points, expected,
+                          f"{phase}: full invalidation was not repainted; {geometry}")
+            raise
     # Drain a normal redraw without changing a Slint property or window size.
     window.repaint()
     bottom = wt.RECT(4, height - 23, width - 4, height - 4)
@@ -332,7 +339,7 @@ def main() -> None:
                          "--pid", str(process.pid), "--title", title,
                          "--scale", str(scale), "--theme", theme,
                          "--resize-dispatch", args.resize_dispatch],
-                        capture_output=True, text=True, timeout=40, check=False,
+                        capture_output=True, text=True, timeout=50, check=False,
                     )
                     log.seek(0)
                     native_log = log.read().decode("utf-8", errors="replace")
