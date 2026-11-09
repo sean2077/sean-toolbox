@@ -77,7 +77,7 @@ class NativeWindow:
             "RedrawWindow": ([wt.HWND, pointer(wt.RECT), wt.HRGN, wt.UINT], wt.BOOL),
             "SetWindowPos": ([wt.HWND, wt.HWND, ctypes.c_int, ctypes.c_int,
                               ctypes.c_int, ctypes.c_int, wt.UINT], wt.BOOL),
-            "ShowWindow": ([wt.HWND, ctypes.c_int], wt.BOOL),
+            "ShowWindowAsync": ([wt.HWND, ctypes.c_int], wt.BOOL),
         }
         for name, (arguments, result) in signatures.items():
             function = getattr(self.user, name)
@@ -139,10 +139,15 @@ class NativeWindow:
                 f"fixture's maximum outer size {(maximum_width, maximum_height)} does not fit work area; {geometry}")
         x = work_left + (work_right - work_left - maximum_width) // 2
         y = work_top + (work_bottom - work_top - maximum_height) // 2
-        # Place only our PID/title-matched fixture once, without activating or
-        # resizing it. Leave room for growth and prevent unrelated occlusion.
-        require(self.user.SetWindowPos(self.hwnd, wt.HWND(-1), x, y, 0, 0, 0x0001 | 0x0010),
-                f"cannot place fixture inside work area; {geometry}")  # HWND_TOPMOST, SWP_NOSIZE | SWP_NOACTIVATE
+        # Queue placement on the owning UI thread, as winit does. A synchronous
+        # cross-process move can overlap that thread's paint with native bit copying.
+        # Place only our PID/title-matched fixture, leaving room for later growth.
+        flags = 0x0001 | 0x0010 | 0x4000  # SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS
+        require(self.user.SetWindowPos(self.hwnd, wt.HWND(-1), x, y, 0, 0, flags),
+                f"cannot place fixture inside work area; {geometry}")  # HWND_TOPMOST
+        target = [x, y, x + right - left, y + bottom - top]
+        wait_for(lambda: self.geometry()["outer"] == target,
+                 f"fixture placement did not reach {target}")
 
     def visible_geometry(self, phase: str) -> dict:
         geometry = self.geometry()
@@ -197,17 +202,17 @@ class NativeWindow:
         require(self.user.RedrawWindow(self.hwnd, ctypes.byref(rect) if rect else None, None, flags),
                 "RedrawWindow failed")
 
-    def grow(self, width: int, height: int) -> None:
+    def grow(self, width: int, height: int, dispatch: str) -> None:
         client_width, client_height = self.size()
         outer = wt.RECT()
         require(self.user.GetWindowRect(self.hwnd, ctypes.byref(outer)), "GetWindowRect failed")
         width += outer.right - outer.left - client_width
         height += outer.bottom - outer.top - client_height
-        flags = 0x0002 | 0x0004 | 0x0010  # SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
-        if os.environ.get("SEAN_TOOLBOX_REPAINT_GROW_ASYNC") == "1":
-            flags |= 0x4000  # SWP_ASYNCWINDOWPOS; diagnostic changes only resize dispatch.
+        flags = 0x0002 | 0x0004 | 0x0010
+        if dispatch == "async":
+            flags |= 0x4000  # SWP_ASYNCWINDOWPOS
         require(self.user.SetWindowPos(self.hwnd, None, 0, 0, width, height, flags),
-                "SetWindowPos failed")  # SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
+                "SetWindowPos failed")  # SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE, plus dispatch above
 
 
 def sample_points(rect: wt.RECT) -> list[tuple[int, int]]:
@@ -231,8 +236,11 @@ def verify_case(window: NativeWindow, scale: float, theme: str, phase: str) -> d
               (width - 6, height // 2), (width - 6, height - 6)]
     expected = [colors["sidebar"], colors["canvas"], colors["footer"],
                 colors["canvas"], colors["footer"]]
-    print(json.dumps({"phase": phase, "samples": window.sample_ownership(points)}),
+    ownership = window.sample_ownership(points)
+    print(json.dumps({"phase": phase, "samples": ownership}),
           file=sys.stderr, flush=True)
+    require(all(sample["own_window"] for sample in ownership),
+            f"{phase}: another window obscures a fixture sample; {ownership}")
     try:
         wait_for(lambda: window.pixels(points) == expected, f"{phase}: incomplete initial frame")
     except RuntimeError:
@@ -275,15 +283,18 @@ def worker(args) -> None:
     grown = (round(380 * args.scale), round(260 * args.scale))
     window.prepare_visible(grown)
     checks = [verify_case(window, args.scale, args.theme, "initial")]
-    window.grow(*grown)
+    window.grow(*grown, args.resize_dispatch)
     wait_for(lambda: window.size() == grown, f"grown client size did not become {grown}")
     checks.append(verify_case(window, args.scale, args.theme, "grown"))
-    window.user.ShowWindow(window.hwnd, 6)  # SW_MINIMIZE
+    grown_outer = window.geometry()["outer"]
+    require(window.user.ShowWindowAsync(window.hwnd, 6), "cannot queue fixture minimize")  # SW_MINIMIZE
     wait_for(lambda: window.user.IsIconic(window.hwnd), "fixture did not minimize")
-    window.user.ShowWindow(window.hwnd, 9)  # SW_RESTORE
-    wait_for(lambda: not window.user.IsIconic(window.hwnd), "fixture did not restore")
+    require(window.user.ShowWindowAsync(window.hwnd, 9), "cannot queue fixture restore")  # SW_RESTORE
+    wait_for(lambda: not window.user.IsIconic(window.hwnd) and window.size() == grown
+             and window.geometry()["outer"] == grown_outer, "fixture did not restore its geometry")
     checks.append(verify_case(window, args.scale, args.theme, "restored"))
-    print(json.dumps({"theme": args.theme, "scale": args.scale, "checks": checks}))
+    print(json.dumps({"theme": args.theme, "scale": args.scale,
+                      "resize_dispatch": args.resize_dispatch, "checks": checks}))
 
 
 def main() -> None:
@@ -291,6 +302,8 @@ def main() -> None:
     parser.add_argument("--binary", type=Path, default=Path("target/debug/examples/repaint_probe.exe"))
     parser.add_argument("--scales", nargs="+", type=float, choices=(1.0, 1.5, 2.0), default=[1.0, 1.5, 2.0])
     parser.add_argument("--themes", nargs="+", choices=("light", "dark"), default=["light", "dark"])
+    parser.add_argument("--resize-dispatch", choices=("async", "sync"), default="async",
+                        help="dispatch native growth on the owner thread, or diagnose cross-process synchronous growth")
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--pid", type=int, help=argparse.SUPPRESS)
     parser.add_argument("--title", help=argparse.SUPPRESS)
@@ -315,7 +328,8 @@ def main() -> None:
                     completed = subprocess.run(
                         [sys.executable, str(Path(__file__).resolve()), "--worker",
                          "--pid", str(process.pid), "--title", title,
-                         "--scale", str(scale), "--theme", theme],
+                         "--scale", str(scale), "--theme", theme,
+                         "--resize-dispatch", args.resize_dispatch],
                         capture_output=True, text=True, timeout=25, check=False,
                     )
                     log.seek(0)
@@ -323,8 +337,6 @@ def main() -> None:
                     require(completed.returncode == 0,
                             f"Windows repaint failed ({theme}, scale={scale}):\n"
                             f"{completed.stdout}{completed.stderr}{native_log}")
-                    if "SEAN_TOOLBOX_REPAINT_DIAGNOSTIC" in os.environ:
-                        print(native_log, file=sys.stderr, end="")
                     if completed.stderr:
                         print(completed.stderr, file=sys.stderr, end="")
                     require(process.poll() is None, f"fixture exited early ({theme}, scale={scale}): {native_log}")
@@ -348,26 +360,4 @@ if __name__ == "__main__":
         main()
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         print(f"FAIL: {error}", file=sys.stderr)
-        if (sys.platform == "win32" and "--worker" not in sys.argv
-                and "SEAN_TOOLBOX_REPAINT_DIAGNOSTIC" not in os.environ):
-            variants = {
-                "traced-sync": {},
-                "traced-async": {"SEAN_TOOLBOX_REPAINT_GROW_ASYNC": "1"},
-                "traced-async-without-defer": {"SEAN_TOOLBOX_REPAINT_GROW_ASYNC": "1",
-                                              "SEAN_TOOLBOX_REPAINT_DISABLE_DEFER": "1"},
-            }
-            for label, options in variants.items():
-                print(f"Running resize diagnostic: {label}", file=sys.stderr, flush=True)
-                try:
-                    diagnostic = subprocess.run(
-                        [sys.executable, *sys.argv, "--scales", "1.0", "--themes", "light"],
-                        env={**os.environ, "SEAN_TOOLBOX_REPAINT_DIAGNOSTIC": label,
-                             "SEAN_TOOLBOX_REPAINT_TRACE": "1", **options},
-                        stdin=subprocess.DEVNULL, timeout=80, check=False,
-                    )
-                    print(f"Resize diagnostic {label} returned {diagnostic.returncode}",
-                          file=sys.stderr, flush=True)
-                except (OSError, subprocess.SubprocessError) as diagnostic_error:
-                    print(f"Resize diagnostic {label} failed: {diagnostic_error}",
-                          file=sys.stderr, flush=True)
         sys.exit(1)

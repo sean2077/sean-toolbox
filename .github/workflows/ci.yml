@@ -119,9 +119,7 @@ jobs:
       - name: Windows software repaint smoke
         if: runner.os == 'Windows'
         timeout-minutes: 5
-        run: |
-          cargo build --locked -p toolbox-ui --example repaint_probe
-          python scripts/smoke_windows_repaint.py --binary target/debug/examples/repaint_probe.exe
+        run: python scripts/check_windows_repaint.py
       - name: X11 native window smoke test
         if: runner.os == 'Linux'
         run: bash crates/toolbox-windows/tests/run-x11-smoke.sh

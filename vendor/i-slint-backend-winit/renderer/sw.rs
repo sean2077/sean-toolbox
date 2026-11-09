@@ -82,41 +82,6 @@ impl WinitSoftwareRenderer {
     }
 }
 
-#[cfg(all(debug_assertions, target_os = "windows"))]
-fn trace_windows_presented_pixels(window: &winit::window::Window, points: [(usize, usize); 5]) {
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    use windows::Win32::Foundation::{HWND, RECT};
-    use windows::Win32::Graphics::Gdi::{GetClipBox, GetDC, GetPixel, ReleaseDC};
-
-    let Ok(handle) = window.window_handle() else {
-        eprintln!("Repaint trace: after-present window handle unavailable");
-        return;
-    };
-    let RawWindowHandle::Win32(handle) = handle.as_raw() else { return };
-    let hwnd = HWND(handle.hwnd.get() as *mut core::ffi::c_void);
-    let dc = unsafe { GetDC(Some(hwnd)) };
-    if dc.is_invalid() {
-        eprintln!("Repaint trace: after-present GetDC failed");
-        return;
-    }
-
-    // This is a fresh readback DC, not softbuffer's retained presentation DC.
-    // GetPixel may synchronize pending GDI work, so compare this trace run
-    // with the original failure without the observer.
-    let mut clip = RECT::default();
-    let clip_kind = unsafe { GetClipBox(dc, &mut clip) };
-    let pixels = points.map(|(x, y)| {
-        let value = unsafe { GetPixel(dc, x as i32, y as i32) }.0;
-        (value != u32::MAX).then_some((value & 255, (value >> 8) & 255, (value >> 16) & 255))
-    });
-    let released = unsafe { ReleaseDC(Some(hwnd), dc) };
-    let clip = (clip.left, clip.top, clip.right, clip.bottom);
-    eprintln!(
-        "Repaint trace: after-present points={points:?} native_rgb={pixels:?} readback_clip_kind={} readback_clip={clip:?} dc_released={released}",
-        clip_kind.0
-    );
-}
-
 impl super::WinitCompatibleRenderer for WinitSoftwareRenderer {
     fn render(&self, window: &i_slint_core::api::Window) -> Result<DrawOutcome, PlatformError> {
         let size = window.size();
@@ -195,41 +160,11 @@ impl super::WinitCompatibleRenderer for WinitSoftwareRenderer {
                 })
             })
             .collect::<Vec<_>>();
-        #[cfg(all(debug_assertions, target_os = "windows"))]
-        let trace_points = if std::env::var_os("SEAN_TOOLBOX_REPAINT_TRACE").is_some() {
-            let scale = window.scale_factor();
-            let w = width.get() as usize;
-            let h = height.get() as usize;
-            let points = [
-                ((24. * scale) as usize, h.saturating_sub((12. * scale) as usize)),
-                (w / 2, h / 2),
-                (w / 2, h.saturating_sub((12. * scale) as usize)),
-                (w.saturating_sub(6), h / 2),
-                (w.saturating_sub(6), h.saturating_sub(6)),
-            ];
-            let pixels = points.map(|(x, y)| {
-                target_buffer.get(y * w + x).map(|pixel| format!("{pixel:#010x}"))
-            });
-            let damage_trace = damage
-                .iter()
-                .map(|r| (r.x, r.y, r.width.get(), r.height.get()))
-                .collect::<Vec<_>>();
-            eprintln!(
-                "Repaint trace: before-present size={size:?} age={age} damage={damage_trace:?} points={points:?} cpu_argb={pixels:?}"
-            );
-            Some(points)
-        } else {
-            None
-        };
         if !damage.is_empty() {
             winit_window.pre_present_notify();
             target_buffer
                 .present_with_damage(&damage)
                 .map_err(|e| format!("Error presenting softbuffer buffer: {e}"))?;
-            #[cfg(all(debug_assertions, target_os = "windows"))]
-            if let Some(points) = trace_points {
-                trace_windows_presented_pixels(&winit_window, points);
-            }
         }
         Ok(DrawOutcome::Success)
     }
