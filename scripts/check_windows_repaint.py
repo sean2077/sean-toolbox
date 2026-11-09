@@ -2,19 +2,21 @@
 """Check native Windows repaint sensitivity, then run the complete fixed matrix.
 
 Run from a clean CI checkout with `python scripts/check_windows_repaint.py`.
-This temporarily removes the upstream repaint call, builds the static probe,
-and requires the initial bottom-invalidation check to fail. Original source
-bytes are restored before rebuilding and running all six patched cases.
+The negative control builds an unpatched copy of the vendored backend in a
+temporary overlay, so the tracked source is never modified. It requires the
+initial bottom-invalidation check to fail, then rebuilds the repository source
+and runs all six patched cases.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,31 +40,52 @@ def require(condition: object, message: str) -> None:
         raise RuntimeError(message)
 
 
-def build_probe(label: str) -> Path:
+def verify_clean() -> None:
+    subprocess.run(
+        ["git", "diff", "--exit-code", "HEAD", "--", *CLEAN_PATHS],
+        cwd=ROOT, check=True,
+    )
+
+
+def build_probe(
+    label: str, *, config: str | None = None, overlay: Path | None = None
+) -> Path:
     print(f"=== BUILD {label} ===", flush=True)
+    command = ["cargo", "build", "--locked"]
+    if config is not None:
+        command += ["--config", config]
+    command += ["--message-format=json", "-p", "toolbox-ui", "--example", "repaint_probe"]
     result = subprocess.run(
-        [
-            "cargo", "build", "--locked", "--message-format=json",
-            "-p", "toolbox-ui", "--example", "repaint_probe",
-        ],
+        command,
         cwd=ROOT, check=True, stdout=subprocess.PIPE,
         text=True, encoding="utf-8", errors="replace",
     )
     executables = []
+    backend_artifacts = []
+    overlay_root = overlay.resolve() if overlay is not None else None
     for line in result.stdout.splitlines():
         try:
             message = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if message.get("reason") != "compiler-artifact":
+            continue
         target = message.get("target")
+        manifest = message.get("manifest_path")
+        if manifest and "i-slint-backend-winit" in message.get("package_id", ""):
+            backend_artifacts.append(Path(manifest))
         if (
-            message.get("reason") == "compiler-artifact"
-            and isinstance(target, dict)
+            isinstance(target, dict)
             and target.get("name") == "repaint_probe"
             and message.get("executable")
         ):
             executables.append(Path(message["executable"]))
     require(executables, "cargo did not report the repaint_probe executable")
+    if overlay_root is not None:
+        require(
+            any(path.resolve().is_relative_to(overlay_root) for path in backend_artifacts),
+            f"{label} build did not use the temporary backend overlay {overlay_root}",
+        )
     executable = executables[-1]
     print(f"=== PROBE {label}: {executable} ===", flush=True)
     return executable
@@ -123,29 +146,24 @@ def check_positive(result: subprocess.CompletedProcess[str]) -> None:
 
 def main() -> None:
     require(sys.platform == "win32", "this check requires a Windows desktop")
-    subprocess.run(
-        ["git", "diff", "--exit-code", "HEAD", "--", *CLEAN_PATHS],
-        cwd=ROOT, check=True,
-    )
+    verify_clean()
     adapter = ROOT / ADAPTER
-    original = adapter.read_bytes()
-    checksum = hashlib.sha256(original).hexdigest()
-    call = REPAINT_CALL.replace(b"\n", b"\r\n") if b"\r\n" in original else REPAINT_CALL
-    require(original.count(call) == 1, "expected exactly one unchanged upstream repaint call")
+    source = adapter.read_bytes()
+    call = REPAINT_CALL.replace(b"\n", b"\r\n") if b"\r\n" in source else REPAINT_CALL
+    require(source.count(call) == 1, "expected exactly one unchanged upstream repaint call")
     errors = []
     try:
-        adapter.write_bytes(original.replace(call, b"", 1))
-        binary = build_probe("unpatched")
-        check_negative(run_probe("unpatched light/1.0", ["--themes", "light", "--scales", "1.0"], binary))
-        print("PASS: unpatched probe failed at initial bottom invalidation", flush=True)
+        with tempfile.TemporaryDirectory(prefix="sean-toolbox-repaint-") as temporary:
+            overlay = Path(temporary) / VENDOR.name
+            shutil.copytree(ROOT / VENDOR, overlay)
+            (overlay / ADAPTER.name).write_bytes(source.replace(call, b"", 1))
+            config = f'patch.crates-io.i-slint-backend-winit.path="{overlay.as_posix()}"'
+            binary = build_probe("unpatched", config=config, overlay=overlay)
+            check_negative(run_probe("unpatched light/1.0", ["--themes", "light", "--scales", "1.0"], binary))
+            print("PASS: unpatched probe failed at initial bottom invalidation", flush=True)
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         errors.append(f"negative control: {error}")
         print(f"FAIL: {errors[-1]}", file=sys.stderr, flush=True)
-    finally:
-        # Restoration must complete before any patched build or later packaging.
-        adapter.write_bytes(original)
-        require(adapter.read_bytes() == original, "could not restore original adapter bytes")
-        print(f"RESTORED: {ADAPTER.as_posix()} SHA-256 {checksum}", flush=True)
 
     # Run the full positive matrix even if the negative control failed unexpectedly.
     try:
@@ -155,11 +173,7 @@ def main() -> None:
         errors.append(f"positive matrix: {error}")
         print(f"FAIL: {errors[-1]}", file=sys.stderr, flush=True)
 
-    require(adapter.read_bytes() == original, "adapter bytes changed after restoration")
-    subprocess.run(
-        ["git", "diff", "--exit-code", "HEAD", "--", *CLEAN_PATHS],
-        cwd=ROOT, check=True,
-    )
+    verify_clean()
     require(not errors, "; ".join(errors))
     print("PASS: native regression sensitivity and six patched cases / eighteen phases", flush=True)
 

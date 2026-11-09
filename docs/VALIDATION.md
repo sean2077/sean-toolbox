@@ -850,4 +850,6 @@ Windows Server 2022 CI 中，回移上游补丁后的初始窗口已通过底部
 同轮 macOS Intel 的完整测试通过。此前 `toolbox-projects` 搜索测试随机临时路径可能
 额外命中 `team` 的问题，已改为固定的绝对 fixture 路径；生产搜索与精确断言均未改变。
 原生正式结论以无 trace 的完整矩阵及禁用上游调用的反向验证为准。探针走普通事件循环的
-`WM_PAINT` 路径；winit 在嵌套模态循环中缓冲重绘的路径不在本次覆盖范围。
+`WM_PAINT` 路径；winit 在嵌套模态循环中缓冲重绘的路径不在本次覆盖范围。负向检查已改为
+在系统临时目录的 vendored 后端 overlay 中禁用调用，并通过 `cargo build --config` 覆盖
+patch 路径；它不再改写 tracked source，强制中断也不会留下 tracked source 的脏改动。
