@@ -11,6 +11,8 @@ use std::cell::OnceCell;
 use std::rc::Rc;
 use std::rc::Weak;
 use std::sync::Arc;
+#[cfg(target_os = "windows")]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use euclid::approxeq::ApproxEq;
 
@@ -381,6 +383,10 @@ pub struct WinitWindowAdapter {
     window: corelib::api::Window,
     pub(crate) self_weak: Weak<Self>,
     pending_redraw: Cell<bool>,
+    #[cfg(target_os = "windows")]
+    pending_resize_invalidation: Arc<AtomicBool>,
+    #[cfg(target_os = "windows")]
+    last_native_resize: Cell<Option<winit::dpi::PhysicalSize<u32>>>,
     constraints: Cell<corelib::window::LayoutConstraints>,
     /// Indicates if the window is shown, from the perspective of the API user.
     shown: Cell<WindowVisibility>,
@@ -478,6 +484,10 @@ impl WinitWindowAdapter {
             window: corelib::api::Window::new(self_weak.clone() as _),
             self_weak: self_weak.clone(),
             pending_redraw: Default::default(),
+            #[cfg(target_os = "windows")]
+            pending_resize_invalidation: Default::default(),
+            #[cfg(target_os = "windows")]
+            last_native_resize: Default::default(),
             constraints: Default::default(),
             shown: Default::default(),
             window_level: Default::default(),
@@ -1129,6 +1139,39 @@ impl WinitWindowAdapter {
         WindowInner::from_pub(self.window()).context().set_platform_default_font_size(Some(size));
     }
 
+    #[cfg(target_os = "windows")]
+    fn queue_windows_resize_invalidation(&self) {
+        use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::Graphics::Gdi::InvalidateRect;
+
+        let Some(window) = self.winit_window() else { return };
+        if self.pending_resize_invalidation.swap(true, Ordering::AcqRel) {
+            return;
+        }
+
+        let pending = self.pending_resize_invalidation.clone();
+        let window = Arc::downgrade(&window);
+        // A native resize can leave newly exposed client pixels stale. Defer
+        // invalidation until after the current resize handler, coalescing requests.
+        if corelib::api::invoke_from_event_loop(move || {
+            pending.store(false, Ordering::Release);
+            let Some(window) = window.upgrade() else { return };
+            if window.is_visible() != Some(true) || window.is_minimized() == Some(true) {
+                return;
+            }
+            let Ok(handle) = window.window_handle() else { return };
+            let RawWindowHandle::Win32(handle) = handle.as_raw() else { return };
+            let hwnd = HWND(handle.hwnd.get() as *mut core::ffi::c_void);
+            // The live window keeps the handle valid until this callback returns.
+            let _ = unsafe { InvalidateRect(Some(hwnd), None, false) };
+        })
+        .is_err()
+        {
+            self.pending_resize_invalidation.store(false, Ordering::Release);
+        }
+    }
+
     /// Windows invalidates what a window shows when its scale factor changes, which the buffer
     /// age a software surface reports doesn't account for. winit hands over the redraw before it
     /// validates the region, so it can still be read here.
@@ -1322,6 +1365,9 @@ impl WinitWindowAdapter {
         match event {
             WinitWindowEvent::RedrawRequested => self.draw()?,
             WinitWindowEvent::Resized(size) => {
+                // Include zero-sized minimize events so restoring the same size still repaints.
+                #[cfg(target_os = "windows")]
+                let native_size_changed = self.last_native_resize.replace(Some(size)) != Some(size);
                 let resized = self.resize_event(size);
 
                 // Entering fullscreen, maximizing or minimizing the window will
@@ -1341,6 +1387,11 @@ impl WinitWindowAdapter {
                 }
 
                 resized?;
+
+                #[cfg(target_os = "windows")]
+                if native_size_changed && size.width > 0 && size.height > 0 {
+                    self.queue_windows_resize_invalidation();
+                }
             }
             WinitWindowEvent::CloseRequested => {
                 self.window()
@@ -1880,10 +1931,6 @@ impl WindowAdapter for WinitWindowAdapter {
     }
 
     fn request_redraw(&self) {
-        #[cfg(debug_assertions)]
-        if std::env::var_os("SEAN_TOOLBOX_REPAINT_TRACE").is_some() {
-            eprintln!("Repaint trace: request_redraw size={:?} already_pending={}", self.size.get(), self.pending_redraw.get());
-        }
         if !self.pending_redraw.replace(true)
             && let WinitWindowOrNone::HasWindow { window, frame_throttle, .. } =
                 &*self.winit_window_or_none.borrow()

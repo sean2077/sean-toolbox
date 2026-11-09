@@ -98,7 +98,9 @@ Skills 场景包括详情、问题恢复、本机导入、链接来源、带隐�
 管理窗口与项目面板共用 winit 软件渲染后端。Slint 1.18.1 未包含上游
 [#13568](https://github.com/slint-ui/slint/pull/13568) 的 Windows 失效区域修复，
 窗口尺寸、缩放或恢复后可能残留未绘制的底部或右侧区域。根 Cargo patch 仅替换
-`i-slint-backend-winit`，回移该修复；来源、校验值和移除条件见
+`i-slint-backend-winit`，回移该修复，并在原生尺寸变化后通过事件队列合并一次
+客户区失效通知，让后续原生绘制覆盖新区域。重复的相同尺寸通知不会追加重绘；
+最小化后的恢复也纳入处理。来源、校验值和移除条件见
 [`vendor/i-slint-backend-winit/PATCH.md`](../vendor/i-slint-backend-winit/PATCH.md)。
 
 在具备桌面的 Windows 会话运行：

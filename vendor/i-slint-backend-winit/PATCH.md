@@ -1,8 +1,8 @@
-# Local patch: repaint the region invalidated by Windows
+# Local patches: Windows invalidation and resize repainting
 
 This directory contains the published **i-slint-backend-winit 1.18.1** crate
-with a single upstream fix backported. The published version, dependency
-requirements, public interfaces, source notices, normalized `Cargo.toml`,
+with one upstream fix backported and a local Windows resize follow-up. The
+published version, dependency requirements, public interfaces, source notices, normalized `Cargo.toml`,
 `Cargo.toml.orig`, README and all three original license files are preserved.
 The package's `.cargo_vcs_info.json` and standalone `Cargo.lock` are omitted;
 the provenance below records the former and the workspace lockfile owns
@@ -36,14 +36,39 @@ Slint 1.18.1 may still regard the software buffer as current and respond with
 an empty or partial dirty region. The resulting window can retain only part
 of an earlier frame, leaving an unpainted band across the client area.
 
-Only `winitwindowadapter.rs` differs from the published source: the upstream
+Only `winitwindowadapter.rs` differs from the published source. The upstream
 33-line change is applied without adaptation. Before drawing on Windows,
 `mark_windows_update_region_dirty` reads `GetUpdateRect` while winit has not
 yet validated the native update region, converts physical coordinates to
 logical coordinates using the current scale factor, and marks that region
 dirty in Slint's renderer. Internal redraws without a Windows update region
-retain partial rendering. No polling, extra repaint timer, background-color
-toggle, or Linux/macOS behavior change is introduced.
+retain partial rendering.
+
+### Local resize follow-up
+
+The Windows Server 2022 native probe still reproduced missing bottom/right
+regions after external resizing with the upstream fix applied. Both the native
+client and Slint reached the new size. Tracing showed a new buffer, full-window
+damage and correct pixels, followed by another full presentation, while the
+visible new area remained wrong. An internal redraw did not repair it; a later
+native full-client invalidation did. Disabling GDI batching and using an opaque
+window independently failed the same check. These observations are recorded in
+[Actions #51](https://github.com/sean2077/sean-toolbox/actions/runs/42564699095)
+and [Actions #52](https://github.com/sean2077/sean-toolbox/actions/runs/42566400859).
+
+The local follow-up queues a native `InvalidateRect` after a non-zero native
+size change, outside the current resize handler. One pending flag coalesces
+resize notifications before the callback runs; duplicate sizes do not enqueue
+more work. Zero-size notifications are remembered so restoring from minimized
+also counts as a change. The callback uses a weak native-window reference,
+checks visibility/minimization, and invalidates the current client rectangle
+without erasing or synchronously painting it. Closed or hidden windows are
+not kept alive by the callback.
+
+This complements the upstream dirty-region handling: the queued native update
+is painted through that path, while ordinary internal redraws retain partial
+rendering. No polling, repaint timer, background-color toggle, GDI batching
+change, transparency change, or Linux/macOS behavior change is introduced.
 
 This patches only the winit backend crate. Slint, slint-build and the translation
 extractor remain at 1.18.1. At the time of this backport (2026-11-09), Slint's
@@ -53,9 +78,9 @@ latest published stable release was still 1.18.1 and 1.19.0 was unreleased.
 
 To audit the backport, download the original archive, verify its SHA-256 above,
 and compare its files with this directory. Except for `PATCH.md` and the two
-omitted package metadata files, the only difference must be the exact 33-line
-upstream change to `winitwindowadapter.rs`. All original license files must
-remain byte-identical.
+omitted package metadata files, only `winitwindowadapter.rs` may differ: the
+exact 33-line upstream change plus the local queued resize invalidation described
+above. All original license files must remain byte-identical.
 
 Windows regression verification must exercise actual native invalidation and
 presentation, including a cleared client area followed by a system repaint,
@@ -64,6 +89,7 @@ the winit/Win32 update-region path. Cross-display DPI transitions still require
 an environment with differently scaled displays.
 
 Remove the root Cargo patch and this directory when upgrading to a stable
-Slint release that contains #13568 (or an equivalent fix). Update the Slint
+Slint release that contains #13568 (or an equivalent fix) and passes the native
+resize/restore probe without the local follow-up. Update the Slint
 compiler/runtime, translation extractor and attribution together, then rerun
 the native repaint regression and normal workspace checks.
