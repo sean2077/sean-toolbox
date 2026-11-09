@@ -17,6 +17,8 @@ slint::slint! {
         background: root.dark ? #17191f : #f6f7f9;
 
         Rectangle {
+            x: 0px;
+            y: 0px;
             width: 72px;
             height: parent.height;
             background: root.dark ? #121419 : #eef0f4;
