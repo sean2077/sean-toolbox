@@ -32,6 +32,11 @@ COLORS = {
 }
 
 
+class MonitorInfo(ctypes.Structure):
+    _fields_ = [("cbSize", wt.DWORD), ("rcMonitor", wt.RECT),
+                ("rcWork", wt.RECT), ("dwFlags", wt.DWORD)]
+
+
 def require(condition: object, message: str) -> None:
     if not condition:
         raise RuntimeError(message)
@@ -62,6 +67,10 @@ class NativeWindow:
             "IsIconic": ([wt.HWND], wt.BOOL),
             "GetClientRect": ([wt.HWND, pointer(wt.RECT)], wt.BOOL),
             "GetWindowRect": ([wt.HWND, pointer(wt.RECT)], wt.BOOL),
+            "ClientToScreen": ([wt.HWND, pointer(wt.POINT)], wt.BOOL),
+            "WindowFromPoint": ([wt.POINT], wt.HWND),
+            "MonitorFromWindow": ([wt.HWND, wt.DWORD], wt.HMONITOR),
+            "GetMonitorInfoW": ([wt.HMONITOR, pointer(MonitorInfo)], wt.BOOL),
             "GetDC": ([wt.HWND], wt.HDC),
             "ReleaseDC": ([wt.HWND, wt.HDC], ctypes.c_int),
             "FillRect": ([wt.HDC, pointer(wt.RECT), wt.HBRUSH], ctypes.c_int),
@@ -105,6 +114,54 @@ class NativeWindow:
         rect = wt.RECT()
         require(self.user.GetClientRect(self.hwnd, ctypes.byref(rect)), "GetClientRect failed")
         return rect.right - rect.left, rect.bottom - rect.top
+
+    def geometry(self) -> dict:
+        outer = wt.RECT()
+        require(self.user.GetWindowRect(self.hwnd, ctypes.byref(outer)), "GetWindowRect failed")
+        monitor = self.user.MonitorFromWindow(self.hwnd, 2)  # MONITOR_DEFAULTTONEAREST
+        require(monitor, "MonitorFromWindow failed")
+        info = MonitorInfo()
+        info.cbSize = ctypes.sizeof(info)
+        require(self.user.GetMonitorInfoW(monitor, ctypes.byref(info)), "GetMonitorInfoW failed")
+        return {"client_size": self.size(),
+                "outer": [outer.left, outer.top, outer.right, outer.bottom],
+                "work_area": [info.rcWork.left, info.rcWork.top, info.rcWork.right, info.rcWork.bottom]}
+
+    def prepare_visible(self, maximum_client_size: tuple[int, int]) -> None:
+        geometry = self.geometry()
+        print(json.dumps({"phase": "original", **geometry}), file=sys.stderr, flush=True)
+        left, top, right, bottom = geometry["outer"]
+        work_left, work_top, work_right, work_bottom = geometry["work_area"]
+        client_width, client_height = geometry["client_size"]
+        maximum_width = maximum_client_size[0] + right - left - client_width
+        maximum_height = maximum_client_size[1] + bottom - top - client_height
+        require(maximum_width <= work_right - work_left and maximum_height <= work_bottom - work_top,
+                f"fixture's maximum outer size {(maximum_width, maximum_height)} does not fit work area; {geometry}")
+        x = work_left + (work_right - work_left - maximum_width) // 2
+        y = work_top + (work_bottom - work_top - maximum_height) // 2
+        # Place only our PID/title-matched fixture once, without activating or
+        # resizing it. Leave room for growth and prevent unrelated occlusion.
+        require(self.user.SetWindowPos(self.hwnd, wt.HWND(-1), x, y, 0, 0, 0x0001 | 0x0010),
+                f"cannot place fixture inside work area; {geometry}")  # HWND_TOPMOST, SWP_NOSIZE | SWP_NOACTIVATE
+
+    def visible_geometry(self, phase: str) -> dict:
+        geometry = self.geometry()
+        print(json.dumps({"phase": phase, **geometry}), file=sys.stderr, flush=True)
+        left, top, right, bottom = geometry["outer"]
+        work_left, work_top, work_right, work_bottom = geometry["work_area"]
+        require(work_left <= left < right <= work_right and work_top <= top < bottom <= work_bottom,
+                f"{phase}: fixture is not completely inside its work area; {geometry}")
+        return geometry
+
+    def sample_ownership(self, points: list[tuple[int, int]]) -> list[dict]:
+        samples = []
+        for x, y in points:
+            screen = wt.POINT(x, y)
+            require(self.user.ClientToScreen(self.hwnd, ctypes.byref(screen)),
+                    f"ClientToScreen failed at {(x, y)}")
+            samples.append({"client": [x, y], "screen": [screen.x, screen.y],
+                            "own_window": self.user.WindowFromPoint(screen) == self.hwnd})
+        return samples
 
     def pixels(self, points: list[tuple[int, int]]) -> list[tuple[int, int, int]]:
         dc = self.user.GetDC(self.hwnd)
@@ -163,17 +220,20 @@ def expect_pixels(window: NativeWindow, points, expected, message: str) -> None:
 
 
 def verify_case(window: NativeWindow, scale: float, theme: str, phase: str) -> dict:
-    width, height = window.size()
+    geometry = window.visible_geometry(phase)
+    width, height = geometry["client_size"]
     colors = COLORS[theme]
     points = [(int(24 * scale), height - int(12 * scale)),
               (width // 2, height // 2), (width // 2, height - int(12 * scale)),
               (width - 6, height // 2), (width - 6, height - 6)]
     expected = [colors["sidebar"], colors["canvas"], colors["footer"],
                 colors["canvas"], colors["footer"]]
+    print(json.dumps({"phase": phase, "samples": window.sample_ownership(points)}),
+          file=sys.stderr, flush=True)
     try:
         wait_for(lambda: window.pixels(points) == expected, f"{phase}: incomplete initial frame")
     except RuntimeError:
-        expect_pixels(window, points, expected, f"{phase}: incomplete initial frame; size={(width, height)}")
+        expect_pixels(window, points, expected, f"{phase}: incomplete initial frame; {geometry}")
         raise
     # Drain a normal redraw without changing a Slint property or window size.
     window.repaint()
@@ -200,7 +260,7 @@ def verify_case(window: NativeWindow, scale: float, theme: str, phase: str) -> d
     require(actual == original_right,
             f"{phase}: right invalidation was not repainted; size={(width, height)}, "
             f"points={right_points}, expected={original_right}, actual={actual}")
-    return {"phase": phase, "client_size": [width, height],
+    return {"phase": phase, **geometry,
             "bottom_points": bottom_points, "right_points": right_points}
 
 
@@ -209,8 +269,9 @@ def worker(args) -> None:
     initial = (round(320 * args.scale), round(220 * args.scale))
     wait_for(lambda: window.size() == initial,
              f"initial client size did not become {initial}; scale={args.scale}")
-    checks = [verify_case(window, args.scale, args.theme, "initial")]
     grown = (round(380 * args.scale), round(260 * args.scale))
+    window.prepare_visible(grown)
+    checks = [verify_case(window, args.scale, args.theme, "initial")]
     window.grow(*grown)
     wait_for(lambda: window.size() == grown, f"grown client size did not become {grown}")
     checks.append(verify_case(window, args.scale, args.theme, "grown"))
@@ -259,6 +320,8 @@ def main() -> None:
                     require(completed.returncode == 0,
                             f"Windows repaint failed ({theme}, scale={scale}):\n"
                             f"{completed.stdout}{completed.stderr}{native_log}")
+                    if completed.stderr:
+                        print(completed.stderr, file=sys.stderr, end="")
                     require(process.poll() is None, f"fixture exited early ({theme}, scale={scale}): {native_log}")
                     results.append(json.loads(completed.stdout))
                 except subprocess.TimeoutExpired as error:

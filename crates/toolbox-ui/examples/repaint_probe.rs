@@ -15,6 +15,9 @@ slint::slint! {
         min-width: 240px;
         min-height: 160px;
         background: root.dark ? #17191f : #f6f7f9;
+        callback geometry-changed(length, length);
+        changed width => { root.geometry-changed(root.width, root.height); }
+        changed height => { root.geometry-changed(root.width, root.height); }
 
         Rectangle {
             x: 0px;
@@ -43,6 +46,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .renderer_name("software".into())
         .select()?;
     let probe = RepaintProbe::new()?;
+    probe.on_geometry_changed(|width, height| {
+        eprintln!("Slint logical size: {width}x{height}");
+    });
     probe.set_dark(args[1] == "dark");
     probe.set_caption(args[2].as_str().into());
     probe.run()?;
