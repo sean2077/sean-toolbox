@@ -160,6 +160,26 @@ impl super::WinitCompatibleRenderer for WinitSoftwareRenderer {
                 })
             })
             .collect::<Vec<_>>();
+        #[cfg(debug_assertions)]
+        if std::env::var_os("SEAN_TOOLBOX_REPAINT_TRACE").is_some() {
+            let scale = window.scale_factor();
+            let w = width.get() as usize;
+            let h = height.get() as usize;
+            let points = [
+                ((24. * scale) as usize, h.saturating_sub((12. * scale) as usize)),
+                (w / 2, h / 2),
+                (w / 2, h.saturating_sub((12. * scale) as usize)),
+                (w.saturating_sub(6), h / 2),
+                (w.saturating_sub(6), h.saturating_sub(6)),
+            ];
+            let pixels = points.map(|(x, y)| {
+                target_buffer.get(y * w + x).map(|pixel| format!("{pixel:#010x}"))
+            });
+            let damage_trace = damage.iter()
+                .map(|r| (r.x, r.y, r.width.get(), r.height.get()))
+                .collect::<Vec<_>>();
+            eprintln!("Repaint trace: render size={size:?} age={age} damage={damage_trace:?} pixels={pixels:?}");
+        }
         if !damage.is_empty() {
             winit_window.pre_present_notify();
             target_buffer

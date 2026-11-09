@@ -232,9 +232,33 @@ def verify_case(window: NativeWindow, scale: float, theme: str, phase: str) -> d
           file=sys.stderr, flush=True)
     try:
         wait_for(lambda: window.pixels(points) == expected, f"{phase}: incomplete initial frame")
-    except RuntimeError:
-        expect_pixels(window, points, expected, f"{phase}: incomplete initial frame; {geometry}")
-        raise
+    except RuntimeError as frame_error:
+        if phase != "grown":
+            expect_pixels(window, points, expected, f"{phase}: incomplete initial frame; {geometry}")
+            raise
+        try:
+            original_actual = window.pixels(points)
+        except Exception as sample_error:
+            original_actual = {"read_error": str(sample_error)}
+        failure = RuntimeError(f"{frame_error}; {geometry}; points={points}, "
+                               f"expected={expected}, actual={original_actual}")
+        try:
+            print(json.dumps({"phase": phase, "diagnostic": "before_repaint", **geometry,
+                              "points": points, "expected": expected, "actual": original_actual}),
+                  file=sys.stderr, flush=True)
+            for kind, rect in (("internal_repaint", None),
+                               ("full_client_invalidation", wt.RECT(0, 0, width, height))):
+                result = {"phase": phase, "diagnostic": kind, **geometry, "points": points}
+                try:
+                    window.repaint(rect)
+                    result["actual"] = window.pixels(points)
+                except Exception as diagnostic_error:
+                    result["error"] = str(diagnostic_error)
+                print(json.dumps(result), file=sys.stderr, flush=True)
+        finally:
+            # Recovery attempts provide evidence only; never turn the original
+            # failed frame into a passing case or replace it with a probe error.
+            raise failure from frame_error
     # Drain a normal redraw without changing a Slint property or window size.
     window.repaint()
     bottom = wt.RECT(4, height - 23, width - 4, height - 4)
@@ -304,7 +328,7 @@ def main() -> None:
     for theme in args.themes:
         for scale in args.scales:
             title = f"Sean Toolbox repaint probe {uuid.uuid4().hex}"
-            environment = {**os.environ, "SLINT_SCALE_FACTOR": str(scale)}
+            environment = {**os.environ, "SLINT_SCALE_FACTOR": str(scale), "SEAN_TOOLBOX_REPAINT_TRACE": "1"}
             with tempfile.TemporaryFile() as log:
                 process = subprocess.Popen([str(binary), theme, title], env=environment,
                                            stdin=subprocess.DEVNULL, stdout=log, stderr=log)

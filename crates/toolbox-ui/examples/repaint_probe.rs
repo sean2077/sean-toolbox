@@ -4,6 +4,7 @@
 //! Once shown, only Windows invalidation can repaint the damaged test regions.
 
 use slint::ComponentHandle;
+use slint::winit_030::{EventResult, WinitWindowAccessor, winit::event::WindowEvent};
 
 slint::slint! {
     export component RepaintProbe inherits Window {
@@ -48,6 +49,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let probe = RepaintProbe::new()?;
     probe.on_geometry_changed(|width, height| {
         eprintln!("Slint logical size: {width}x{height}");
+    });
+    probe.window().on_winit_window_event(|window, event| {
+        if matches!(
+            event,
+            WindowEvent::Resized(_) | WindowEvent::RedrawRequested
+        ) {
+            let size = window.size();
+            eprintln!(
+                "Winit event before Slint dispatch: {event:?}; cached physical size: {}x{}",
+                size.width, size.height
+            );
+        }
+        EventResult::Propagate
     });
     probe.set_dark(args[1] == "dark");
     probe.set_caption(args[2].as_str().into());

@@ -1880,6 +1880,10 @@ impl WindowAdapter for WinitWindowAdapter {
     }
 
     fn request_redraw(&self) {
+        #[cfg(debug_assertions)]
+        if std::env::var_os("SEAN_TOOLBOX_REPAINT_TRACE").is_some() {
+            eprintln!("Repaint trace: request_redraw size={:?} already_pending={}", self.size.get(), self.pending_redraw.get());
+        }
         if !self.pending_redraw.replace(true)
             && let WinitWindowOrNone::HasWindow { window, frame_throttle, .. } =
                 &*self.winit_window_or_none.borrow()
