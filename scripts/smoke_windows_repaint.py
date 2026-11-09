@@ -367,4 +367,18 @@ if __name__ == "__main__":
         main()
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         print(f"FAIL: {error}", file=sys.stderr)
+        if (sys.platform == "win32" and "--worker" not in sys.argv
+                and "SEAN_TOOLBOX_REPAINT_VARIANT" not in os.environ):
+            for variant in ("unbatched", "opaque"):
+                print(f"Running repaint diagnostic variant: {variant}", file=sys.stderr, flush=True)
+                try:
+                    completed = subprocess.run(
+                        [sys.executable, *sys.argv, "--scales", "1.0", "--themes", "light"],
+                        env={**os.environ, "SEAN_TOOLBOX_REPAINT_VARIANT": variant},
+                        stdin=subprocess.DEVNULL, timeout=80, check=False,
+                    )
+                    result = {"variant": variant, "returncode": completed.returncode}
+                except (OSError, subprocess.SubprocessError) as diagnostic_error:
+                    result = {"variant": variant, "returncode": None, "error": str(diagnostic_error)}
+                print(json.dumps(result), file=sys.stderr, flush=True)
         sys.exit(1)

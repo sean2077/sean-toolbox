@@ -42,10 +42,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.len() != 3 || !matches!(args[1].as_str(), "light" | "dark") {
         return Err("use scripts/smoke_windows_repaint.py to run this fixture".into());
     }
-    slint::BackendSelector::new()
+    let variant =
+        std::env::var("SEAN_TOOLBOX_REPAINT_VARIANT").unwrap_or_else(|_| "baseline".into());
+    if !matches!(variant.as_str(), "baseline" | "unbatched" | "opaque") {
+        return Err("unknown repaint diagnostic variant".into());
+    }
+    eprintln!("Repaint variant: {variant}");
+    #[cfg(windows)]
+    if variant == "unbatched" {
+        // SAFETY: This changes only the current UI thread's GDI batch limit.
+        let previous_limit = unsafe { windows_sys::Win32::Graphics::Gdi::GdiSetBatchLimit(1) };
+        if previous_limit == 0 {
+            return Err("GdiSetBatchLimit(1) failed".into());
+        }
+    }
+    let backend = slint::BackendSelector::new()
         .backend_name("winit".into())
-        .renderer_name("software".into())
-        .select()?;
+        .renderer_name("software".into());
+    let backend = if variant == "opaque" {
+        backend.with_winit_window_attributes_hook(|attributes| attributes.with_transparent(false))
+    } else {
+        backend
+    };
+    backend.select()?;
     let probe = RepaintProbe::new()?;
     probe.on_geometry_changed(|width, height| {
         eprintln!("Slint logical size: {width}x{height}");
