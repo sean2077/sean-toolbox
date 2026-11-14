@@ -438,6 +438,8 @@ impl SkillsService {
             SkillApp::Gemini => ".gemini/skills",
             SkillApp::OpenCode => ".config/opencode/skills",
             SkillApp::Grok => ".grok/skills",
+            SkillApp::SharedAgents => ".agents/skills",
+            SkillApp::SharedAgent => ".agent/skills",
         };
         self.home.join(suffix)
     }
@@ -1455,7 +1457,6 @@ impl SkillsService {
             .map(|app| (Some(app), self.app_root(app)))
             .collect();
         roots.push((None, self.home.join(".cc-switch/skills")));
-        roots.push((None, self.home.join(".agents/skills")));
         let mut errors = Vec::new();
         let mut visited = 0;
         for (app, root) in roots {

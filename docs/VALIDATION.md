@@ -853,3 +853,27 @@ Windows Server 2022 CI 中，回移上游补丁后的初始窗口已通过底部
 `WM_PAINT` 路径；winit 在嵌套模态循环中缓冲重绘的路径不在本次覆盖范围。负向检查已改为
 在系统临时目录的 vendored 后端 overlay 中禁用调用，并通过 `cargo build --config` 覆盖
 patch 路径；它不再改写 tracked source，强制中断也不会留下 tracked source 的脏改动。
+
+## 2026-11-15：通用 Skills 部署目标
+
+日期按新加坡时间记录。本轮基于 `724406b`，在 Linux x86_64 容器中使用仓库固定的
+Rust 1.99.1、Slint 1.18.1 和锁定依赖验证，未修改依赖版本或锁文件。
+
+新增 `~/.agents/skills` 与 `~/.agent/skills` 两个独立、显式选择的部署目标。
+原五个应用的顺序和序列化名称保持不变，已有技能不会自动启用新增目录。
+
+| 本地检查 | 结果与范围 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace --no-fail-fast` | **274 通过、3 失败、1 ignored**；退出 101，未记为全通过 |
+| core / Skills 测试 | **28 / 44 项通过**；覆盖旧 wire 名称、精确目录、独立启停、重启恢复、复制与符号链接更新/卸载、扫描去重、受管部署排除及未知同名目录保护 |
+| UI 测试 | **105 项通过**；覆盖两个新目标的行/详情/批量命令、安装与本机导入选择、中英文切换，以及全部七个部署按钮的首击与键盘操作 |
+| 组件布局 | 检查 **16 张**生产 Slint 组件预览：列表、批量选择、详情、本机导入，中英文，1120×780 / 800×580；另用 **2 张 800×1600** 预览检查完整目标列表中的新目录名称与路径 |
+
+3 项失败全部来自未修改的 `toolbox-ipc` Unix socket 测试，容器在绑定 socket 时返回
+`EPERM / Operation not permitted`。保留原测试与断言，没有把环境限制改为跳过或通过。
+既有 X11 原生用例仍由其独立入口运行，本轮没有运行原生 Windows/macOS 或 X11 桌面验收。
+布局预览使用显式示例数据，中文使用任务目录中的 Noto Sans CJK SC 字体，不读取用户
+Skills 或配置。扩展高度截图检查完整路径的排版，不代表原生滚动或焦点验收；各平台
+完整检查以 PR 最新提交的 GitHub Actions 结果为准。

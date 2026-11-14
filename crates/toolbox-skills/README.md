@@ -28,8 +28,9 @@ multiline frontmatter name/description fields, with the directory name as a
 fallback; it is not a general YAML evaluator. A package whose `SKILL.md` cannot
 be read is skipped and reported in warnings instead of hiding the rest of the
 repository catalog. Install from a repository or a concrete local skill
-directory. Local scanning includes the five app roots, `~/.cc-switch/skills`,
-and `~/.agents/skills`. Symlinked or reparse-point app folders are listed with
+directory. Local scanning includes all seven deployment roots and
+`~/.cc-switch/skills`. Managed deployments are excluded from the import list.
+Symlinked or reparse-point app folders are listed with
 their target. A local import is either copied into a private master or linked:
 link mode keeps the source in place and creates app symlinks, is live, and has
 no remote update source. Existing app links to the same source are adopted;
@@ -59,13 +60,18 @@ The host supplies `<configuration-directory>/skills` as the private root:
 - `manager.lock`: single-writer exclusion.
 - `pending.json`: an interrupted filesystem transaction, when present.
 
-The default app destinations are `~/.claude/skills`, `~/.codex/skills`,
-`~/.gemini/skills`, `~/.config/opencode/skills`, and `~/.grok/skills`.
+The default deployment destinations are `~/.claude/skills`, `~/.codex/skills`,
+`~/.gemini/skills`, `~/.config/opencode/skills`, `~/.grok/skills`,
+`~/.agents/skills`, and `~/.agent/skills`. The two shared paths are distinct,
+opt-in destinations, not aliases. Enabling one never enables the other, and
+existing skills keep their current deployment selections. Both shared targets
+support the same copy and symlink lifecycle as app-specific targets; the master
+copy remains in Toolbox's private storage.
 These are per-user default paths, not project-local roots or custom harness
 configuration directories. Copy deployment works on Windows without Developer
 Mode; symlink deployment needs Developer Mode or the symlink privilege. The
-shared `.agents/skills` directory is only a read-only import source. Some
-harnesses also discover another harness's directory: switches report Sean
+shared paths must be chosen according to the consuming harness. Some
+harnesses discover shared or another harness's directory: switches report Sean
 Toolbox's managed deployments, rather than guaranteeing a skill cannot be
 discovered through another location.
 

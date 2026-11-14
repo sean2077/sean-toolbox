@@ -4818,6 +4818,7 @@ mod tests {
     fn skills_tabs_icons_and_source_chips_accept_first_pointer_clicks() {
         with_test_ui(|ui, controller, _| {
             use slint::platform::{PointerEventButton, WindowEvent};
+            use toolbox_core::skills::SkillApp;
             ui.set_setting_language(1);
             controller.settings_changed();
             ui.set_page(4);
@@ -4867,11 +4868,11 @@ mod tests {
             skills.on_toggle_row_app(move |id, app, enabled| {
                 toggles.borrow_mut().push((id.to_string(), app, enabled));
             });
-            for app in 0..5 {
+            for app in 0..SkillApp::ALL.len() as i32 {
                 ui.invoke_focus_page();
                 render();
-                // First-row app centers in the default 1120x780 layout.
-                let position = slint::LogicalPosition::new(887.0 + app as f32 * 34.0, 362.0);
+                // Observed first-row centers for all seven deployment targets.
+                let position = slint::LogicalPosition::new(819.0 + app as f32 * 34.0, 362.0);
                 ui.window()
                     .dispatch_event(WindowEvent::PointerMoved { position });
                 ui.window().dispatch_event(WindowEvent::PointerPressed {
@@ -4898,7 +4899,11 @@ mod tests {
             });
             assert_eq!(
                 *toggled.borrow(),
-                vec![("source:alpha".to_owned(), 4, true)],
+                vec![(
+                    "source:alpha".to_owned(),
+                    SkillApp::ALL.len() as i32 - 1,
+                    true,
+                )],
                 "the clicked app must remain keyboard-operable"
             );
 
