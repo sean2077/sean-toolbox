@@ -1817,6 +1817,10 @@ msgctxt "rust.skills_app_count"
 msgid "{app} {count}"
 msgstr "{app} {count}"
 
+msgctxt "rust.skills_shared_agents"
+msgid "Shared (.agents)"
+msgstr "通用 (.agents)"
+
 msgctxt "rust.skills_local_path"
 msgid "{app} · {path}"
 msgstr "{app} · {path}"

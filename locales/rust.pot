@@ -414,6 +414,10 @@ msgctxt "rust.skills_app_count"
 msgid "{app} {count}"
 msgstr ""
 
+msgctxt "rust.skills_shared_agents"
+msgid "Shared (.agents)"
+msgstr ""
+
 msgctxt "rust.skills_local_path"
 msgid "{app} · {path}"
 msgstr ""

@@ -57,7 +57,7 @@ fn remap_source_filter(filter: i32, previous: &[String], current: &[String]) -> 
 struct SelectionSummary {
     total: usize,
     visible: usize,
-    deployed: [usize; 5],
+    deployed: [usize; SkillApp::ALL.len()],
 }
 
 fn selection_summary(
@@ -315,6 +315,13 @@ fn source_options(snapshot: &SkillsSnapshot, locale: Locale) -> Vec<String> {
     options
 }
 
+fn app_label(app: SkillApp, locale: Locale) -> String {
+    match app {
+        SkillApp::SharedAgents => messages::skills_shared_agents().render(locale),
+        _ => app.label().to_owned(),
+    }
+}
+
 fn app_counts_text(snapshot: &SkillsSnapshot, locale: Locale) -> String {
     let counts = SkillApp::ALL
         .iter()
@@ -324,7 +331,8 @@ fn app_counts_text(snapshot: &SkillsSnapshot, locale: Locale) -> String {
                 .iter()
                 .filter(|skill| skill.apps.contains(app))
                 .count();
-            (count > 0).then(|| messages::skills_app_count(app.label(), count).render(locale))
+            (count > 0)
+                .then(|| messages::skills_app_count(app_label(*app, locale), count).render(locale))
         })
         .collect::<Vec<_>>();
     if counts.is_empty() {
@@ -373,7 +381,7 @@ fn filtered_rows(
                 let apps = skill
                     .apps
                     .iter()
-                    .map(|app| app.label())
+                    .map(|app| app_label(*app, locale))
                     .collect::<Vec<_>>()
                     .join(", ");
                 let apps = if apps.is_empty() {
@@ -385,9 +393,9 @@ fn filtered_rows(
                 let app_hint = |app| {
                     let path = deployment_path(snapshot, app, &skill.directory);
                     if skill.apps.contains(&app) {
-                        messages::skills_app_deployed(app.label(), path)
+                        messages::skills_app_deployed(app_label(app, locale), path)
                     } else {
-                        messages::skills_app_not_deployed(app.label(), path)
+                        messages::skills_app_not_deployed(app_label(app, locale), path)
                     }
                     .render(locale)
                     .into()
@@ -419,11 +427,13 @@ fn filtered_rows(
                     app2: skill.apps.contains(&SkillApp::Gemini),
                     app3: skill.apps.contains(&SkillApp::OpenCode),
                     app4: skill.apps.contains(&SkillApp::Grok),
+                    app5: skill.apps.contains(&SkillApp::SharedAgents),
                     app0_hint: app_hint(SkillApp::Claude),
                     app1_hint: app_hint(SkillApp::Codex),
                     app2_hint: app_hint(SkillApp::Gemini),
                     app3_hint: app_hint(SkillApp::OpenCode),
                     app4_hint: app_hint(SkillApp::Grok),
+                    app5_hint: app_hint(SkillApp::SharedAgents),
                     deployment_count: skill.apps.len() as i32,
                 }
             })
@@ -455,6 +465,7 @@ fn filtered_rows(
                 app2: false,
                 app3: false,
                 app4: false,
+                app5: false,
                 ..SkillListRow::default()
             })
             .collect(),
@@ -464,7 +475,7 @@ fn filtered_rows(
             .map(|skill| {
                 let app = skill
                     .app
-                    .map(|app| app.label().to_owned())
+                    .map(|app| app_label(app, locale))
                     .unwrap_or_else(|| messages::skills_shared().render(locale));
                 let detail = match (&skill.target, skill.linked) {
                     (Some(target), true) => messages::skills_local_link(app, &skill.path, target),
@@ -490,6 +501,7 @@ fn filtered_rows(
                     app2: false,
                     app3: false,
                     app4: false,
+                    app5: false,
                     ..SkillListRow::default()
                 }
             })
@@ -958,17 +970,19 @@ impl Controller {
                 } else {
                     messages::skills_batch_click_enable()
                 };
-                SharedString::from(format!(
-                    "{}
-{}",
-                    messages::skills_batch_deployment(
-                        app.label(),
-                        selection.deployed[index],
-                        selection.total,
-                    )
-                    .render(locale),
-                    action.render(locale)
-                ))
+                let mut hint = messages::skills_batch_deployment(
+                    app_label(*app, locale),
+                    selection.deployed[index],
+                    selection.total,
+                )
+                .render(locale);
+                if matches!(app, SkillApp::SharedAgents) {
+                    hint.push('\n');
+                    hint.push_str(&deployment_path(snapshot, *app, ""));
+                }
+                hint.push('\n');
+                hint.push_str(&action.render(locale));
+                SharedString::from(hint)
             })
             .collect::<Vec<_>>();
         skills.set_batch_partial(ModelRc::new(VecModel::from(partial)));
@@ -978,6 +992,7 @@ impl Controller {
         skills.set_batch_app2(fully_deployed(2));
         skills.set_batch_app3(fully_deployed(3));
         skills.set_batch_app4(fully_deployed(4));
+        skills.set_batch_app5(fully_deployed(5));
         let previous_id = skills.get_selected_id();
         // An open detail page keeps its skill when an edit made there moves it
         // out of the current filter; it closes only once the skill is gone.
@@ -1137,7 +1152,7 @@ impl Controller {
             .enumerate()
             .map(|(index, app)| SkillAppRow {
                 index: index as i32,
-                name: app.label().into(),
+                name: app_label(*app, locale).into(),
                 path: deployment_path(snapshot, *app, &directory).into(),
                 enabled: enabled_apps.contains(app),
             })
@@ -2003,6 +2018,17 @@ mod tests {
         assert_eq!(std::path::Path::new(actual), std::path::Path::new(expected));
     }
 
+    fn shared_target_snapshot() -> SkillsSnapshot {
+        let mut snapshot = ux_snapshot();
+        for target in &mut snapshot.app_paths {
+            if target.app == SkillApp::SharedAgents {
+                target.path = "/home/sean/.agents/skills".into();
+            }
+        }
+        snapshot.installed[0].apps.push(SkillApp::SharedAgents);
+        snapshot
+    }
+
     fn receive_snapshot(controller: &Controller, snapshot: SkillsSnapshot, submitted: bool) {
         controller.receive_skills(
             Ok(Response {
@@ -2173,9 +2199,131 @@ mod tests {
             SelectionSummary {
                 total: 2,
                 visible: 1,
-                deployed: [1, 0, 0, 0, 0],
+                deployed: [1, 0, 0, 0, 0, 0],
             }
         );
+    }
+
+    #[test]
+    fn shared_target_routes_row_detail_and_batch_commands() {
+        let (index, app, path) = (5, SkillApp::SharedAgents, "/home/sean/.agents/skills");
+        crate::tests::with_test_ui(move |ui, controller, receive| {
+            let snapshot = shared_target_snapshot();
+            receive_snapshot(controller, snapshot.clone(), false);
+            let skills = ui.global::<SkillsState>();
+            let alpha = skills.get_rows().row_data(0).unwrap();
+            let beta = skills.get_rows().row_data(1).unwrap();
+            assert!(alpha.app5);
+            assert!(!beta.app5);
+            assert_eq!(skills.get_apps().row_count(), 6);
+            assert_eq!(
+                skills.get_apps().row_data(5).unwrap().name,
+                "通用 (.agents)"
+            );
+            assert_eq!(
+                skills.get_app_counts_text(),
+                "Claude Code 1 · 通用 (.agents) 1"
+            );
+            let hint = alpha.app5_hint;
+            assert_path_eq(hint.split_once('\n').unwrap().1, &format!("{path}/alpha"));
+
+            controller.toggle_skill_selection_all(true);
+            skills.set_query("alpha".into());
+            controller.render_skills();
+            assert_eq!(skills.get_hidden_selected_count(), 1);
+            assert!(skills.get_batch_partial().row_data(index as usize).unwrap());
+            assert!(!skills.get_batch_app5());
+            assert!(
+                skills
+                    .get_batch_hints()
+                    .row_data(index as usize)
+                    .unwrap()
+                    .contains(path)
+            );
+            controller.batch_set_skill_app(index, true);
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Skills(SkillsCommand::SetEnabledBatch { skill_ids, app: target, enabled: true })
+                    if target == app && skill_ids == ["alpha", "beta"]
+            ));
+
+            receive_snapshot(controller, snapshot.clone(), true);
+            controller.toggle_skill_row_app("alpha".into(), index, true);
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Skills(SkillsCommand::SetEnabled { skill_id, app: target, enabled: true })
+                    if target == app && skill_id == "alpha"
+            ));
+            receive_snapshot(controller, snapshot, true);
+            controller.open_skill_details("alpha".into());
+            assert_path_eq(
+                skills
+                    .get_apps()
+                    .row_data(index as usize)
+                    .unwrap()
+                    .path
+                    .as_str(),
+                &format!("{path}/alpha"),
+            );
+            ui.set_setting_language(1);
+            controller.apply_language();
+            assert_eq!(
+                skills.get_apps().row_data(5).unwrap().name,
+                "Shared (.agents)"
+            );
+            controller.toggle_skill_app(index, false);
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Skills(SkillsCommand::SetEnabled { skill_id, app: target, enabled: false })
+                    if target == app && skill_id == "alpha"
+            ));
+            assert!(receive.try_recv().is_err());
+        });
+    }
+
+    #[test]
+    fn shared_target_is_an_explicit_install_and_local_import_choice() {
+        use toolbox_core::skills::SkillCandidate;
+        let (index, app) = (5, SkillApp::SharedAgents);
+        crate::tests::with_test_ui(move |ui, controller, receive| {
+            let mut snapshot = shared_target_snapshot();
+            snapshot.available.push(SkillCandidate {
+                id: "source:gamma".into(),
+                repository_id: "source".into(),
+                path: "gamma".into(),
+                directory: "gamma".into(),
+                name: "Gamma".into(),
+                description: String::new(),
+                installed: false,
+            });
+            receive_snapshot(controller, snapshot.clone(), false);
+            controller.skills_view(1);
+            let skills = ui.global::<SkillsState>();
+            assert!(skills.get_apps().iter().all(|target| !target.enabled));
+            controller.toggle_skill_app(index, true);
+            assert!(receive.try_recv().is_err());
+            controller.install_selected_skill();
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Skills(SkillsCommand::Install { candidate_id, apps })
+                    if candidate_id == "source:gamma" && apps == [app]
+            ));
+
+            receive_snapshot(controller, snapshot, true);
+            controller.toggle_skill_app(index, false);
+            controller.import_skill_folder(Ok(Some("/tmp/shared-review".into())));
+            assert!(skills.get_apps().iter().all(|target| !target.enabled));
+            controller.toggle_skill_app(index, true);
+            skills.set_link_import(true);
+            assert!(receive.try_recv().is_err());
+            controller.install_selected_skill();
+            assert!(matches!(
+                receive.try_recv().unwrap(),
+                Work::Skills(SkillsCommand::ImportLocal { path, apps, link: true })
+                    if path == "/tmp/shared-review" && apps == [app]
+            ));
+            assert!(receive.try_recv().is_err());
+        });
     }
 
     #[test]

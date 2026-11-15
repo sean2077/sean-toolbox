@@ -321,6 +321,174 @@ fn repository_install_switch_update_and_restart_preserve_disabled_apps() {
 }
 
 #[test]
+fn shared_copy_target_is_opt_in_independent_and_persists_across_updates() {
+    let mut fixture = Fixture::new();
+    fixture.set_mode(SkillDeployMode::Copy);
+    fixture.commit("review", "old revision");
+    fixture.install("review", vec![SkillApp::Claude], 10);
+    fixture.reopen();
+
+    let agents = fixture.home.join(".agents/skills/review");
+    assert!(!agents.exists());
+    let snapshot = fixture.service().snapshot();
+    assert_eq!(snapshot.installed[0].apps, vec![SkillApp::Claude]);
+    let paths = snapshot
+        .app_paths
+        .iter()
+        .filter(|path| path.app == SkillApp::SharedAgents)
+        .collect::<Vec<_>>();
+    assert_eq!(paths.len(), 1);
+    assert!(Path::new(&paths[0].path).ends_with(".agents/skills"));
+
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabled {
+                skill_id: "review".into(),
+                app: SkillApp::SharedAgents,
+                enabled: true,
+            },
+            11,
+        )
+        .unwrap();
+    assert_eq!(file_content(&agents), "old revision");
+    assert!(
+        !fs::symlink_metadata(&agents)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    fixture.reopen();
+    assert_eq!(
+        fixture.service().snapshot().installed[0].apps,
+        vec![SkillApp::Claude, SkillApp::SharedAgents]
+    );
+    fixture.commit("review", "new revision");
+    fixture
+        .service()
+        .execute(SkillsCommand::Update { skill_id: None }, 20)
+        .unwrap();
+    assert_eq!(file_content(&agents), "new revision");
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabled {
+                skill_id: "review".into(),
+                app: SkillApp::SharedAgents,
+                enabled: false,
+            },
+            21,
+        )
+        .unwrap();
+    fixture.reopen();
+    assert!(!agents.exists());
+    assert_eq!(
+        file_content(&fixture.home.join(".claude/skills/review")),
+        "new revision"
+    );
+    assert_eq!(
+        fixture.service().snapshot().installed[0].apps,
+        vec![SkillApp::Claude]
+    );
+    fixture.commit("review", "latest revision");
+    fixture
+        .service()
+        .execute(SkillsCommand::Update { skill_id: None }, 30)
+        .unwrap();
+    assert!(!agents.exists());
+    assert_eq!(
+        file_content(&fixture.home.join(".claude/skills/review")),
+        "latest revision"
+    );
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabled {
+                skill_id: "review".into(),
+                app: SkillApp::SharedAgents,
+                enabled: true,
+            },
+            31,
+        )
+        .unwrap();
+    assert_eq!(file_content(&agents), "latest revision");
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::Uninstall {
+                skill_id: "review".into(),
+            },
+            40,
+        )
+        .unwrap();
+    assert!(!agents.exists());
+    assert!(!fixture.home.join(".claude/skills/review").exists());
+    assert!(!fixture.master("review").exists());
+}
+
+#[test]
+fn shared_scan_lists_source_once_and_excludes_managed_copy() {
+    let mut fixture = Fixture::new();
+    fixture.set_mode(SkillDeployMode::Copy);
+    let source = fixture.home.join(".agents/skills/local-review");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: Shared Review\ndescription: Local source\n---\n",
+    )
+    .unwrap();
+    fixture.commit("managed", "managed copy");
+    fixture.install("managed", vec![SkillApp::SharedAgents], 1);
+    fixture.reopen();
+    fixture
+        .service()
+        .execute(SkillsCommand::ScanLocal, 2)
+        .unwrap();
+    let snapshot = fixture.service().snapshot();
+    assert_eq!(snapshot.local.len(), 1);
+    assert_eq!(snapshot.local[0].app, Some(SkillApp::SharedAgents));
+    assert_eq!(snapshot.local[0].directory, "local-review");
+    assert!(Path::new(&snapshot.local[0].path).ends_with(".agents/skills/local-review"));
+}
+
+#[test]
+fn shared_target_preserves_unmanaged_directory_on_enable_and_uninstall() {
+    let mut fixture = Fixture::new();
+    fixture.set_mode(SkillDeployMode::Copy);
+    fixture.commit("review", "managed copy");
+    fixture.install("review", vec![], 1);
+    let existing = fixture.home.join(".agents/skills/review");
+    fs::create_dir_all(&existing).unwrap();
+    fs::write(existing.join("example.txt"), "unmanaged original").unwrap();
+    assert!(
+        fixture
+            .service()
+            .execute(
+                SkillsCommand::SetEnabled {
+                    skill_id: "review".into(),
+                    app: SkillApp::SharedAgents,
+                    enabled: true,
+                },
+                2,
+            )
+            .is_err()
+    );
+    assert_eq!(file_content(&existing), "unmanaged original");
+    assert!(fixture.service().snapshot().installed[0].apps.is_empty());
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::Uninstall {
+                skill_id: "review".into(),
+            },
+            3,
+        )
+        .unwrap();
+    assert!(!fixture.master("review").exists());
+    assert_eq!(file_content(&existing), "unmanaged original");
+}
+
+#[test]
 fn local_edit_rejects_update_disable_and_uninstall_without_partial_changes() {
     let mut fixture = Fixture::new();
     fixture.set_mode(SkillDeployMode::Copy);
@@ -379,9 +547,20 @@ fn managed_skills_link_app_directories_by_default() {
     let mut fixture = Fixture::new();
     fixture.set_mode(SkillDeployMode::Symlink);
     fixture.commit("review", "linked");
-    fixture.install("review", vec![SkillApp::Claude], 1);
+    fixture.install("review", vec![SkillApp::Claude, SkillApp::SharedAgents], 1);
     let master = fixture.master("review");
     let link = fixture.app(SkillApp::Claude, "review");
+    let shared = fixture.home.join(".agents/skills/review");
+    assert!(
+        fs::symlink_metadata(&shared)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        shared.canonicalize().unwrap(),
+        master.canonicalize().unwrap()
+    );
     assert!(
         fs::symlink_metadata(&link)
             .unwrap()
@@ -398,6 +577,13 @@ fn managed_skills_link_app_directories_by_default() {
         .execute(SkillsCommand::Update { skill_id: None }, 2)
         .unwrap();
     assert_eq!(file_content(&link), "linked v2");
+    assert_eq!(file_content(&shared), "linked v2");
+    assert!(
+        fs::symlink_metadata(&shared)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
     assert!(
         fs::symlink_metadata(&link)
             .unwrap()
@@ -448,6 +634,7 @@ fn managed_skills_link_app_directories_by_default() {
         .unwrap();
     assert!(!master.exists());
     assert!(fs::symlink_metadata(&link).is_err());
+    assert!(fs::symlink_metadata(&shared).is_err());
 }
 
 #[cfg(unix)]

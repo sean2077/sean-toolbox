@@ -15,7 +15,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 use std::rc::{Rc, Weak};
-use toolbox_core::skills::SkillDeployMode;
+use toolbox_core::skills::{SkillApp, SkillDeployMode};
 use toolbox_i18n::{Locale, messages};
 
 slint::include_modules!();
@@ -205,13 +205,32 @@ fn configure_manager(
     ui.set_diagnostic_last_action("Example: WezTerm activated successfully".into());
 }
 
-const SKILL_APPS: [(&str, &str); 5] = [
-    ("Claude Code", r"C:\Users\Demo\.claude\skills"),
-    ("Codex", r"C:\Users\Demo\.codex\skills"),
-    ("Gemini CLI", r"C:\Users\Demo\.gemini\skills"),
-    ("OpenCode", r"C:\Users\Demo\.config\opencode\skills"),
-    ("Grok Build", r"C:\Users\Demo\.grok\skills"),
+const SKILL_APPS: [(SkillApp, &str); SkillApp::ALL.len()] = [
+    (SkillApp::Claude, r"C:\Users\Demo\.claude\skills"),
+    (SkillApp::Codex, r"C:\Users\Demo\.codex\skills"),
+    (SkillApp::Gemini, r"C:\Users\Demo\.gemini\skills"),
+    (SkillApp::OpenCode, r"C:\Users\Demo\.config\opencode\skills"),
+    (SkillApp::Grok, r"C:\Users\Demo\.grok\skills"),
+    (SkillApp::SharedAgents, r"C:\Users\Demo\.agents\skills"),
 ];
+
+fn skill_app_label(app: SkillApp, locale: Locale) -> String {
+    match app {
+        SkillApp::SharedAgents => messages::skills_shared_agents().render(locale),
+        _ => app.label().to_owned(),
+    }
+}
+
+fn skill_deployments(index: usize, view: i32) -> [bool; SkillApp::ALL.len()] {
+    [
+        index < 4 && view == 0,
+        index < 3 && view == 0,
+        index == 1 && view == 0,
+        false,
+        false,
+        index < 2 && view == 0,
+    ]
+}
 
 fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
     let skills = ui.global::<SkillsState>();
@@ -247,9 +266,47 @@ fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
         skills.set_hidden_selected_count(1);
         skills.set_all_selected(true);
         skills.set_selection_text(messages::skills_selection_scope(1, 3).render(locale).into());
-        // Mixed deployments: Claude Code on all three, Codex on two of them.
-        skills.set_batch_app0(true);
-        skills.set_batch_partial(model(vec![false, true, false, false, false]));
+        // Mixed deployments include a shared target on two of the three skills.
+        let counts: [usize; SkillApp::ALL.len()] = std::array::from_fn(|app| {
+            (0..3)
+                .filter(|index| skill_deployments(*index, 0)[app])
+                .count()
+        });
+        skills.set_batch_app0(counts[0] == 3);
+        skills.set_batch_app1(counts[1] == 3);
+        skills.set_batch_app2(counts[2] == 3);
+        skills.set_batch_app3(counts[3] == 3);
+        skills.set_batch_app4(counts[4] == 3);
+        skills.set_batch_app5(counts[5] == 3);
+        skills.set_batch_partial(model(counts.map(|count| count > 0 && count < 3).to_vec()));
+        skills.set_batch_hints(model(
+            SKILL_APPS
+                .iter()
+                .enumerate()
+                .map(|(index, (app, path))| {
+                    let action = if counts[index] == 3 {
+                        messages::skills_batch_click_disable()
+                    } else {
+                        messages::skills_batch_click_enable()
+                    };
+                    let mut hint = messages::skills_batch_deployment(
+                        skill_app_label(*app, locale),
+                        counts[index],
+                        3,
+                    )
+                    .render(locale);
+                    // Match the production hint: only the shared target shows
+                    // its base directory.
+                    if *app == SkillApp::SharedAgents {
+                        hint.push('\n');
+                        hint.push_str(path);
+                    }
+                    hint.push('\n');
+                    hint.push_str(&action.render(locale));
+                    hint.into()
+                })
+                .collect(),
+        ));
     }
     skills.set_source_options(model(vec![
         messages::common_all().render(locale).into(),
@@ -295,25 +352,26 @@ fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
         .filter(|(index, _)| !selected_batch || *index < 2)
         .map(|(index, (name, description, problem, linked))| {
             let enabled = index < 4;
-            let deployed = [
-                enabled && view == 0,
-                index < 3 && view == 0,
-                index == 1 && view == 0,
-                false,
-                false,
-            ];
-            let [app0_hint, app1_hint, app2_hint, app3_hint, app4_hint]: [slint::SharedString; 5] =
-                std::array::from_fn(|app| {
-                    let (label, path) = SKILL_APPS[app];
-                    let destination = format!(r"{path}\{name}");
-                    if deployed[app] {
-                        messages::skills_app_deployed(label, destination)
-                    } else {
-                        messages::skills_app_not_deployed(label, destination)
-                    }
-                    .render(locale)
-                    .into()
-                });
+            let deployed = skill_deployments(index, view);
+            let [
+                app0_hint,
+                app1_hint,
+                app2_hint,
+                app3_hint,
+                app4_hint,
+                app5_hint,
+            ]: [slint::SharedString; SkillApp::ALL.len()] = std::array::from_fn(|app| {
+                let (target, path) = SKILL_APPS[app];
+                let label = skill_app_label(target, locale);
+                let destination = format!(r"{path}\{name}");
+                if deployed[app] {
+                    messages::skills_app_deployed(label, destination)
+                } else {
+                    messages::skills_app_not_deployed(label, destination)
+                }
+                .render(locale)
+                .into()
+            });
             SkillListRow {
                 id: name.into(),
                 name: name.into(),
@@ -351,11 +409,13 @@ fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
                 app0: deployed[0],
                 app1: deployed[1],
                 app2: deployed[2],
+                app5: deployed[5],
                 app0_hint,
                 app1_hint,
                 app2_hint,
                 app3_hint,
                 app4_hint,
+                app5_hint,
                 deployment_count: deployed.into_iter().filter(|enabled| *enabled).count() as i32,
                 ..Default::default()
             }
@@ -438,15 +498,19 @@ fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
         SKILL_APPS
             .into_iter()
             .enumerate()
-            .map(|(index, (name, path))| SkillAppRow {
+            .map(|(index, (app, path))| SkillAppRow {
                 index: index as i32,
-                name: name.into(),
+                name: skill_app_label(app, locale).into(),
                 path: if view == 0 {
                     format!(r"{path}\{selected_name}").into()
                 } else {
                     path.into()
                 },
-                enabled: index < if selected_link { 1 } else { 2 },
+                enabled: if view == 0 {
+                    skill_deployments(selected_index as usize, view)[index]
+                } else {
+                    index < 2
+                },
             })
             .collect(),
     ));

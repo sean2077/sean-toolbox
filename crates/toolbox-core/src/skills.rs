@@ -9,15 +9,17 @@ pub enum SkillApp {
     Gemini,
     OpenCode,
     Grok,
+    SharedAgents,
 }
 
 impl SkillApp {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::Claude,
         Self::Codex,
         Self::Gemini,
         Self::OpenCode,
         Self::Grok,
+        Self::SharedAgents,
     ];
 
     pub fn label(self) -> &'static str {
@@ -27,6 +29,7 @@ impl SkillApp {
             Self::Gemini => "Gemini CLI",
             Self::OpenCode => "OpenCode",
             Self::Grok => "Grok Build",
+            Self::SharedAgents => "Shared (.agents)",
         }
     }
 }
@@ -177,4 +180,23 @@ pub enum SkillsCommand {
     SetDeployMode {
         mode: SkillDeployMode,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn skill_app_wire_names_and_ui_order_remain_compatible() {
+        let legacy = r#"["claude","codex","gemini","open_code","grok"]"#;
+        let existing: Vec<SkillApp> = serde_json::from_str(legacy).unwrap();
+        assert_eq!(existing, SkillApp::ALL[..5]);
+        assert_eq!(serde_json::to_string(&existing).unwrap(), legacy);
+
+        let shared = r#"["shared_agents"]"#;
+        let shared_apps: Vec<SkillApp> = serde_json::from_str(shared).unwrap();
+        assert_eq!(shared_apps, vec![SkillApp::SharedAgents]);
+        assert_eq!(shared_apps, SkillApp::ALL[5..]);
+        assert_eq!(serde_json::to_string(&shared_apps).unwrap(), shared);
+    }
 }
