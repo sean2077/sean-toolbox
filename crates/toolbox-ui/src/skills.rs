@@ -390,7 +390,7 @@ fn filtered_rows(
                     apps
                 };
                 let enabled = !skill.apps.is_empty();
-                let app_hint = |app| {
+                let app_hint = |app: SkillApp| -> SharedString {
                     let path = deployment_path(snapshot, app, &skill.directory);
                     if skill.apps.contains(&app) {
                         messages::skills_app_deployed(app_label(app, locale), path)
@@ -422,18 +422,18 @@ fn filtered_rows(
                     .render(locale)
                     .into(),
                     enabled,
-                    app0: skill.apps.contains(&SkillApp::Claude),
-                    app1: skill.apps.contains(&SkillApp::Codex),
-                    app2: skill.apps.contains(&SkillApp::Gemini),
-                    app3: skill.apps.contains(&SkillApp::OpenCode),
-                    app4: skill.apps.contains(&SkillApp::Grok),
-                    app5: skill.apps.contains(&SkillApp::SharedAgents),
-                    app0_hint: app_hint(SkillApp::Claude),
-                    app1_hint: app_hint(SkillApp::Codex),
-                    app2_hint: app_hint(SkillApp::Gemini),
-                    app3_hint: app_hint(SkillApp::OpenCode),
-                    app4_hint: app_hint(SkillApp::Grok),
-                    app5_hint: app_hint(SkillApp::SharedAgents),
+                    app_states: ModelRc::new(VecModel::from(
+                        SkillApp::ALL
+                            .iter()
+                            .map(|app| skill.apps.contains(app))
+                            .collect::<Vec<_>>(),
+                    )),
+                    app_hints: ModelRc::new(VecModel::from(
+                        SkillApp::ALL
+                            .iter()
+                            .map(|app| app_hint(*app))
+                            .collect::<Vec<_>>(),
+                    )),
                     deployment_count: skill.apps.len() as i32,
                 }
             })
@@ -460,12 +460,6 @@ fn filtered_rows(
                 source_target: "".into(),
                 status: "".into(),
                 enabled: false,
-                app0: false,
-                app1: false,
-                app2: false,
-                app3: false,
-                app4: false,
-                app5: false,
                 ..SkillListRow::default()
             })
             .collect(),
@@ -496,12 +490,6 @@ fn filtered_rows(
                     source_target: "".into(),
                     status: "".into(),
                     enabled: false,
-                    app0: false,
-                    app1: false,
-                    app2: false,
-                    app3: false,
-                    app4: false,
-                    app5: false,
                     ..SkillListRow::default()
                 }
             })
@@ -522,6 +510,27 @@ fn filtered_rows(
             .then_with(|| left.id.cmp(&right.id))
     });
     rows
+}
+
+/// Compare rows without treating model identity as a content change. Slint's
+/// `ModelRc` equality is pointer-based, while rows are rebuilt each render.
+fn same_skill_row(left: &SkillListRow, right: &SkillListRow) -> bool {
+    left.id == right.id
+        && left.name == right.name
+        && left.detail == right.detail
+        && left.description == right.description
+        && left.installed == right.installed
+        && left.problem == right.problem
+        && left.linked == right.linked
+        && left.selected == right.selected
+        && left.updatable == right.updatable
+        && left.source == right.source
+        && left.source_target == right.source_target
+        && left.status == right.status
+        && left.enabled == right.enabled
+        && left.deployment_count == right.deployment_count
+        && left.app_states.iter().eq(right.app_states.iter())
+        && left.app_hints.iter().eq(right.app_hints.iter())
 }
 
 impl Controller {
@@ -987,12 +996,10 @@ impl Controller {
             .collect::<Vec<_>>();
         skills.set_batch_partial(ModelRc::new(VecModel::from(partial)));
         skills.set_batch_hints(ModelRc::new(VecModel::from(hints)));
-        skills.set_batch_app0(fully_deployed(0));
-        skills.set_batch_app1(fully_deployed(1));
-        skills.set_batch_app2(fully_deployed(2));
-        skills.set_batch_app3(fully_deployed(3));
-        skills.set_batch_app4(fully_deployed(4));
-        skills.set_batch_app5(fully_deployed(5));
+        let enabled = (0..SkillApp::ALL.len())
+            .map(fully_deployed)
+            .collect::<Vec<_>>();
+        skills.set_batch_enabled(ModelRc::new(VecModel::from(enabled)));
         let previous_id = skills.get_selected_id();
         // An open detail page keeps its skill when an edit made there moves it
         // out of the current filter; it closes only once the skill is gone.
@@ -1155,12 +1162,23 @@ impl Controller {
                 name: app_label(*app, locale).into(),
                 path: deployment_path(snapshot, *app, &directory).into(),
                 enabled: enabled_apps.contains(app),
+                badge: if *app == SkillApp::SharedAgents {
+                    ".as".into()
+                } else {
+                    "".into()
+                },
             })
             .collect::<Vec<_>>();
         if !skills.get_apps().iter().eq(apps.iter().cloned()) {
             skills.set_apps(ModelRc::new(VecModel::from(apps)));
         }
-        if !skills.get_rows().iter().eq(rows.iter().cloned()) {
+        let current_rows = skills.get_rows().iter().collect::<Vec<_>>();
+        let rows_changed = current_rows.len() != rows.len()
+            || !current_rows
+                .iter()
+                .zip(rows.iter())
+                .all(|(current, next)| same_skill_row(current, next));
+        if rows_changed {
             skills.set_rows(ModelRc::new(VecModel::from(rows)));
         }
         let filtered = !skills.get_query().trim().is_empty()
@@ -1678,6 +1696,18 @@ pub(super) fn connect_callbacks(ui: &crate::AppWindow) {
 mod tests {
     use super::*;
 
+    fn row_app(row: &SkillListRow, index: usize) -> bool {
+        row.app_states.row_data(index).unwrap_or(false)
+    }
+
+    fn row_app_hint(row: &SkillListRow, index: usize) -> SharedString {
+        row.app_hints.row_data(index).unwrap_or_default()
+    }
+
+    fn batch_app(skills: &SkillsState, index: usize) -> bool {
+        skills.get_batch_enabled().row_data(index).unwrap_or(false)
+    }
+
     #[test]
     fn source_chips_lead_to_the_repository_folder_link_or_managed_copy() {
         use toolbox_core::skills::SkillRepository;
@@ -1963,8 +1993,8 @@ mod tests {
         assert_eq!(rows[0].source, "sean2077/skills");
         assert_eq!(rows[0].status, "Enabled");
         assert!(rows[0].enabled);
-        assert!(rows[0].app0);
-        assert!(!rows[0].app4);
+        assert!(row_app(&rows[0], 0));
+        assert!(!row_app(&rows[0], 4));
     }
 
     #[test]
@@ -2213,8 +2243,8 @@ mod tests {
             let skills = ui.global::<SkillsState>();
             let alpha = skills.get_rows().row_data(0).unwrap();
             let beta = skills.get_rows().row_data(1).unwrap();
-            assert!(alpha.app5);
-            assert!(!beta.app5);
+            assert!(row_app(&alpha, 5));
+            assert!(!row_app(&beta, 5));
             assert_eq!(skills.get_apps().row_count(), 6);
             assert_eq!(
                 skills.get_apps().row_data(5).unwrap().name,
@@ -2224,7 +2254,7 @@ mod tests {
                 skills.get_app_counts_text(),
                 "Claude Code 1 · 通用 (.agents) 1"
             );
-            let hint = alpha.app5_hint;
+            let hint = row_app_hint(&alpha, 5);
             assert_path_eq(hint.split_once('\n').unwrap().1, &format!("{path}/alpha"));
 
             controller.toggle_skill_selection_all(true);
@@ -2232,7 +2262,7 @@ mod tests {
             controller.render_skills();
             assert_eq!(skills.get_hidden_selected_count(), 1);
             assert!(skills.get_batch_partial().row_data(index as usize).unwrap());
-            assert!(!skills.get_batch_app5());
+            assert!(!batch_app(&skills, 5));
             assert!(
                 skills
                     .get_batch_hints()
@@ -2340,7 +2370,7 @@ mod tests {
             assert_eq!(skills.get_visible_selected_count(), 1);
             // alpha uses Claude Code and beta does not: the icon is partial,
             // and its tooltip names the counts and the enabling action.
-            assert!(!skills.get_batch_app0());
+            assert!(!batch_app(&skills, 0));
             assert!(skills.get_batch_partial().row_data(0).unwrap());
             assert!(!skills.get_batch_partial().row_data(1).unwrap());
             assert_eq!(
@@ -2349,7 +2379,7 @@ mod tests {
 点击为所选技能全部启用。"
             );
             controller.toggle_skill_selection("beta".into(), false);
-            assert!(skills.get_batch_app0());
+            assert!(batch_app(&skills, 0));
             assert!(!skills.get_batch_partial().row_data(0).unwrap());
             assert!(
                 skills
@@ -2401,7 +2431,7 @@ mod tests {
                 skills.get_apps().row_data(1).unwrap().path.as_str(),
                 "/apps/Codex/alpha",
             );
-            let hint = skills.get_rows().row_data(0).unwrap().app0_hint;
+            let hint = row_app_hint(&skills.get_rows().row_data(0).unwrap(), 0);
             let (_, deployment_path) = hint
                 .split_once('\n')
                 .expect("application tooltip includes its deployment path");
@@ -2732,8 +2762,8 @@ mod tests {
             completed.deploy_mode = SkillDeployMode::Copy;
             receive_snapshot(controller, completed, true);
             assert_eq!(skills.get_deploy_mode(), 1);
-            assert!(skills.get_rows().row_data(0).unwrap().app0);
-            assert!(!skills.get_rows().row_data(1).unwrap().app0);
+            assert!(row_app(&skills.get_rows().row_data(0).unwrap(), 0));
+            assert!(!row_app(&skills.get_rows().row_data(1).unwrap(), 0));
             assert_eq!(
                 controller
                     .state
