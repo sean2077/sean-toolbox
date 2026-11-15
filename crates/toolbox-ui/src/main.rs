@@ -4771,18 +4771,18 @@ mod tests {
             let skills = ui.global::<SkillsState>();
             controller.toggle_skill_selection("source:alpha".into(), true);
             assert_eq!(skills.get_selected_count(), 1);
-            assert!(skills.get_batch_app0());
-            assert!(!skills.get_batch_app1());
+            assert!(skills.get_batch_enabled().row_data(0).unwrap());
+            assert!(!skills.get_batch_enabled().row_data(1).unwrap());
             controller.toggle_skill_selection_all(true);
             assert_eq!(skills.get_selected_count(), 2);
             assert!(skills.get_all_selected());
-            assert!(skills.get_batch_app0());
-            assert!(!skills.get_batch_app1());
+            assert!(skills.get_batch_enabled().row_data(0).unwrap());
+            assert!(!skills.get_batch_enabled().row_data(1).unwrap());
             controller.toggle_skill_selection_all(false);
             assert_eq!(skills.get_selected_count(), 0);
-            assert!(!skills.get_batch_app0());
+            assert!(!skills.get_batch_enabled().row_data(0).unwrap());
             controller.toggle_skill_selection("source:beta".into(), true);
-            assert!(skills.get_batch_app0());
+            assert!(skills.get_batch_enabled().row_data(0).unwrap());
             controller.batch_set_skill_app(1, true);
             assert!(matches!(
                 receive.try_recv().unwrap(),
