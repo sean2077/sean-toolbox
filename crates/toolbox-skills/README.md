@@ -70,7 +70,7 @@ These are per-user default paths, not project-local roots or custom harness
 configuration directories. Copy deployment works on Windows without Developer
 Mode; symlink deployment needs Developer Mode or the symlink privilege. The
 shared path must be supported by the consuming harness. Some
-harnesses discover shared or another harness's directory: switches report Sean
+harnesses also discover the shared or another harness's directory: switches report Sean
 Toolbox's managed deployments, rather than guaranteeing a skill cannot be
 discovered through another location.
 

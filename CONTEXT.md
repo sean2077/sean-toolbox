@@ -62,12 +62,17 @@ _Equivalent (en)_: toolbox
 _Equivalent (en)_: managed skill, master copy
 
 **部署方式（deploy mode）**：
-Skills 的全局设置，决定新启用的应用目录使用符号链接（默认）还是复制主副本。已有部署保持原方式；停用再启用后按当前方式部署。链接方式的本机导入不受此设置影响。
+Skills 的全局设置，决定新启用的部署目标使用符号链接（默认）还是复制主副本。已有部署保持原方式；停用再启用后按当前方式部署。链接方式的本机导入不受此设置影响。
 _Equivalent (en)_: deploy mode
 _Avoid_: 同步方式、安装方式（安装方式也指仓库安装或本机导入）
 
+**通用部署目标（shared .agents target）**：
+Skills 的部署目标 `~/.agents/skills`，供支持该共享目录的工具读取。部署、更新、停用和冲突保护与其他应用目标相同；主副本仍保存在工具箱独立数据目录。
+_Equivalent (en)_: shared .agents target
+_Avoid_: 主副本目录（主副本不在此目录）
+
 **链接技能（linked skill）**：
-以本机目录为源、不保存主副本的 Skill。应用目录使用指向源目录的符号链接部署；源目录的修改立即生效，不参与远程更新，卸载只移除工具箱创建的链接并保留源目录。
+以本机目录为源、不保存主副本的 Skill。部署目标使用指向源目录的符号链接部署；源目录的修改立即生效，不参与远程更新，卸载只移除工具箱创建的链接并保留源目录。
 _Equivalent (en)_: linked skill
 
 **每日更新（daily update）**：
