@@ -10,18 +10,16 @@ pub enum SkillApp {
     OpenCode,
     Grok,
     SharedAgents,
-    SharedAgent,
 }
 
 impl SkillApp {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 6] = [
         Self::Claude,
         Self::Codex,
         Self::Gemini,
         Self::OpenCode,
         Self::Grok,
         Self::SharedAgents,
-        Self::SharedAgent,
     ];
 
     pub fn label(self) -> &'static str {
@@ -32,7 +30,6 @@ impl SkillApp {
             Self::OpenCode => "OpenCode",
             Self::Grok => "Grok Build",
             Self::SharedAgents => "Shared (.agents)",
-            Self::SharedAgent => "Shared (.agent)",
         }
     }
 }
@@ -196,12 +193,9 @@ mod tests {
         assert_eq!(existing, SkillApp::ALL[..5]);
         assert_eq!(serde_json::to_string(&existing).unwrap(), legacy);
 
-        let shared = r#"["shared_agents","shared_agent"]"#;
+        let shared = r#"["shared_agents"]"#;
         let shared_apps: Vec<SkillApp> = serde_json::from_str(shared).unwrap();
-        assert_eq!(
-            shared_apps,
-            vec![SkillApp::SharedAgents, SkillApp::SharedAgent]
-        );
+        assert_eq!(shared_apps, vec![SkillApp::SharedAgents]);
         assert_eq!(shared_apps, SkillApp::ALL[5..]);
         assert_eq!(serde_json::to_string(&shared_apps).unwrap(), shared);
     }

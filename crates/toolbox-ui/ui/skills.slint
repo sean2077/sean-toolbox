@@ -147,8 +147,8 @@ export struct SkillListRow {
     id: string, name: string, detail: string, description: string,
     installed: bool, problem: bool, linked: bool, selected: bool, updatable: bool,
     source: string, source-target: string, status: string, enabled: bool,
-    app0: bool, app1: bool, app2: bool, app3: bool, app4: bool, app5: bool, app6: bool,
-    app0-hint: string, app1-hint: string, app2-hint: string, app3-hint: string, app4-hint: string, app5-hint: string, app6-hint: string,
+    app0: bool, app1: bool, app2: bool, app3: bool, app4: bool, app5: bool,
+    app0-hint: string, app1-hint: string, app2-hint: string, app3-hint: string, app4-hint: string, app5-hint: string,
     deployment-count: int,
 }
 export struct SkillAppRow { index: int, name: string, path: string, enabled: bool }
@@ -196,15 +196,14 @@ export global SkillsState {
     in-out property <int> hidden-selected-count: 0;
     in-out property <string> selection-text;
     // Per-app batch state: partly deployed flags and tooltip text with counts.
-    in-out property <[bool]> batch-partial: [false, false, false, false, false, false, false];
-    in-out property <[string]> batch-hints: ["", "", "", "", "", "", ""];
+    in-out property <[bool]> batch-partial: [false, false, false, false, false, false];
+    in-out property <[string]> batch-hints: ["", "", "", "", "", ""];
     in-out property <bool> batch-app0: false;
     in-out property <bool> batch-app1: false;
     in-out property <bool> batch-app2: false;
     in-out property <bool> batch-app3: false;
     in-out property <bool> batch-app4: false;
     in-out property <bool> batch-app5: false;
-    in-out property <bool> batch-app6: false;
     in-out property <bool> link-import: false;
     in-out property <string> repository-url;
     in-out property <string> repository-branch;
@@ -464,14 +463,13 @@ export component SkillsPage inherits Rectangle {
                             Caption { text: @tr("ui.skills.batch_icons_hint" => "Click an app to enable or disable it for every selected skill."); color: Theme.secondary; vertical-alignment: center; horizontal-stretch: 1; }
                             // Aligned with the app columns of the rows below.
                             HorizontalLayout {
-                                width: 234px; spacing: 4px; alignment: center;
+                                width: 200px; spacing: 4px; alignment: center;
                                 AppToggle { icon: @image-url("icons/apps/claude.svg"); name: "Claude Code"; hint: SkillsState.batch-hints[0]; checked: SkillsState.batch-app0; partial: SkillsState.batch-partial[0]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(0, value); } }
                                 AppToggle { icon: @image-url("icons/apps/codex.svg"); name: "Codex"; hint: SkillsState.batch-hints[1]; checked: SkillsState.batch-app1; partial: SkillsState.batch-partial[1]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(1, value); } }
                                 AppToggle { icon: @image-url("icons/apps/gemini.svg"); name: "Gemini CLI"; hint: SkillsState.batch-hints[2]; checked: SkillsState.batch-app2; partial: SkillsState.batch-partial[2]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(2, value); } }
                                 AppToggle { icon: @image-url("icons/apps/opencode.svg"); name: "OpenCode"; hint: SkillsState.batch-hints[3]; checked: SkillsState.batch-app3; partial: SkillsState.batch-partial[3]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(3, value); } }
                                 AppToggle { icon: @image-url("icons/apps/grok.svg"); name: "Grok Build"; hint: SkillsState.batch-hints[4]; checked: SkillsState.batch-app4; partial: SkillsState.batch-partial[4]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(4, value); } }
                                 AppToggle { badge: ".as"; name: SkillsState.apps[5].name; hint: SkillsState.batch-hints[5]; checked: SkillsState.batch-app5; partial: SkillsState.batch-partial[5]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(5, value); } }
-                                AppToggle { badge: ".a"; name: SkillsState.apps[6].name; hint: SkillsState.batch-hints[6]; checked: SkillsState.batch-app6; partial: SkillsState.batch-partial[6]; enabled: root.editable; toggled(value) => { SkillsState.batch-app(6, value); } }
                             }
                             Rectangle { width: 38px; }
                         }
@@ -485,7 +483,7 @@ export component SkillsPage inherits Rectangle {
                         if root.wide && SkillsState.view == 0: HorizontalLayout {
                             height: 28px; padding-left: 14px; padding-right: 12px; spacing: 10px;
                             Text { text: @tr("ui.skills.skill_column" => "Skill"); color: Theme.muted; font-size: 12px; vertical-alignment: center; horizontal-stretch: 1; }
-                            Text { width: 234px; text: @tr("ui.skills.deploy_column" => "Deployed to"); color: Theme.muted; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+                            Text { width: 200px; text: @tr("ui.skills.deploy_column" => "Deployed to"); color: Theme.muted; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
                             Rectangle { width: 34px; }
                         }
                         Rectangle {
@@ -493,6 +491,8 @@ export component SkillsPage inherits Rectangle {
                             skill-scroll := ScrollView {
                                 visible: SkillsState.rows.length > 0;
                                 width: parent.width; height: parent.height;
+                                // FocusScope hides the nested layout from automatic content sizing.
+                                content-height: max(self.visible-height, skill-list-layout.min-height);
                                 horizontal-scrollbar-policy: always-off;
                                 vertical-stretch: 1;
                                 list-keys := FocusScope {
@@ -501,7 +501,7 @@ export component SkillsPage inherits Rectangle {
                                     accessible-label: @tr("ui.skills.skill_list" => "Skills. Use arrow keys to navigate and Enter for details.");
                                     accessible-item-count: SkillsState.rows.length;
                                     accessible-delegate-focus: SkillsState.selected-index;
-                                    VerticalLayout {
+                                    skill-list-layout := VerticalLayout {
                                         padding: 4px; spacing: 0px;
                                         for item[index] in SkillsState.rows: Rectangle {
                                             height: root.row-height;
@@ -541,14 +541,13 @@ export component SkillsPage inherits Rectangle {
                                                     if SkillsState.view != 0: Text { text: item.detail; color: Theme.muted; font-size: 12px; overflow: elide; min-width: 0px; }
                                                 }
                                                 if SkillsState.view == 0: HorizontalLayout {
-                                                    width: 234px; spacing: 4px; alignment: center;
+                                                    width: 200px; spacing: 4px; alignment: center;
                                                     AppToggle { icon: @image-url("icons/apps/claude.svg"); name: "Claude Code"; hint: item.app0-hint; checked: item.app0; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 0, value); } }
                                                     AppToggle { icon: @image-url("icons/apps/codex.svg"); name: "Codex"; hint: item.app1-hint; checked: item.app1; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 1, value); } }
                                                     AppToggle { icon: @image-url("icons/apps/gemini.svg"); name: "Gemini CLI"; hint: item.app2-hint; checked: item.app2; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 2, value); } }
                                                     AppToggle { icon: @image-url("icons/apps/opencode.svg"); name: "OpenCode"; hint: item.app3-hint; checked: item.app3; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 3, value); } }
                                                     AppToggle { icon: @image-url("icons/apps/grok.svg"); name: "Grok Build"; hint: item.app4-hint; checked: item.app4; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 4, value); } }
                                                     AppToggle { badge: ".as"; name: SkillsState.apps[5].name; hint: item.app5-hint; checked: item.app5; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 5, value); } }
-                                                    AppToggle { badge: ".a"; name: SkillsState.apps[6].name; hint: item.app6-hint; checked: item.app6; enabled: root.editable; toggled(value) => { SkillsState.toggle-row-app(item.id, 6, value); } }
                                                 }
                                                 if SkillsState.view == 0: ActionButton {
                                                     width: 34px; text: @tr("ui.skills.more_actions_for" => "Actions for {0}", item.name); icon-only: true; with-icon: false; subtle: true;

@@ -4814,6 +4814,201 @@ mod tests {
         });
     }
 
+    fn render_test_window(ui: &AppWindow) {
+        let size = ui.window().size();
+        TEST_WINDOWS.with(|windows| {
+            let windows = windows.borrow();
+            let mut pixels =
+                slint::SharedPixelBuffer::<slint::Rgb8Pixel>::new(size.width, size.height);
+            windows[0].draw_if_needed(|renderer| {
+                renderer.render(pixels.make_mut_slice(), size.width as usize);
+            });
+        });
+    }
+
+    fn click_test_window(ui: &AppWindow, position: slint::LogicalPosition) {
+        use slint::platform::{PointerEventButton, WindowEvent};
+        ui.window()
+            .dispatch_event(WindowEvent::PointerMoved { position });
+        ui.window().dispatch_event(WindowEvent::PointerPressed {
+            position,
+            button: PointerEventButton::Left,
+        });
+        ui.window().dispatch_event(WindowEvent::PointerReleased {
+            position,
+            button: PointerEventButton::Left,
+        });
+    }
+
+    fn scroll_test_window(ui: &AppWindow, position: slint::LogicalPosition, delta_y: f32) {
+        use slint::platform::WindowEvent;
+        ui.window()
+            .dispatch_event(WindowEvent::PointerMoved { position });
+        ui.window().dispatch_event(WindowEvent::PointerScrolled {
+            position,
+            delta_x: 0.0,
+            delta_y,
+        });
+        render_test_window(ui);
+    }
+
+    #[test]
+    fn skills_lists_scroll_to_last_row_and_back_over_text_and_controls() {
+        use toolbox_core::skills::{LocalSkill, SkillApp, SkillCandidate};
+        for view in [0, 1, 2] {
+            with_test_ui(move |ui, controller, _| {
+                let mut snapshot = skills_snapshot();
+                let template = snapshot.installed[0].clone();
+                snapshot.installed = (0..40)
+                    .map(|index| {
+                        let mut skill = template.clone();
+                        let name = format!("scroll-{index:02}");
+                        skill.id = format!("source:{name}");
+                        skill.directory = name.clone();
+                        skill.name = name.clone();
+                        skill.description = format!("Description for {name}");
+                        skill
+                    })
+                    .collect();
+                snapshot.available = (0..40)
+                    .map(|index| {
+                        let name = format!("scroll-{index:02}");
+                        SkillCandidate {
+                            id: format!("discovery:{name}"),
+                            repository_id: "source".into(),
+                            path: name.clone(),
+                            directory: name.clone(),
+                            name: name.clone(),
+                            description: format!("Description for {name}"),
+                            installed: false,
+                        }
+                    })
+                    .collect();
+                snapshot.local = (0..40)
+                    .map(|index| {
+                        let name = format!("scroll-{index:02}");
+                        LocalSkill {
+                            path: format!("/local/{name}"),
+                            directory: name.clone(),
+                            name: name.clone(),
+                            description: format!("Description for {name}"),
+                            app: Some(SkillApp::Claude),
+                            linked: false,
+                            target: None,
+                        }
+                    })
+                    .collect();
+                receive_skills_snapshot(controller, snapshot);
+                controller.skills_view(view);
+                ui.set_setting_language(1);
+                controller.settings_changed();
+                ui.set_page(4);
+                ui.window().set_size(slint::LogicalSize::new(1120.0, 780.0));
+                ui.show().unwrap();
+                let skills = ui.global::<SkillsState>();
+                assert_eq!(skills.get_rows().row_count(), 40);
+                let opened = Rc::new(RefCell::new(String::new()));
+                let observed = opened.clone();
+                skills.on_open_details(move |id| *observed.borrow_mut() = id.to_string());
+                render_test_window(ui);
+
+                // This point is inside the last visible row in all three views.
+                // Observe the clicked skill, not an internal scroll offset.
+                let probe = slint::LogicalPosition::new(320.0, 685.0);
+                click_test_window(ui, probe);
+                let initial = opened.borrow().clone();
+                assert!(
+                    !initial.is_empty(),
+                    "view {view}: the row probe must hit a skill"
+                );
+                let last = match view {
+                    0 => "source:scroll-39",
+                    1 => "discovery:scroll-39",
+                    _ => "/local/scroll-39",
+                };
+                assert_ne!(initial, last, "the fixture must exceed the visible list");
+
+                // Wheel events must propagate through text and through the
+                // deployment buttons (or the same right-hand area in other views).
+                for pointer in [
+                    slint::LogicalPosition::new(320.0, 375.0),
+                    slint::LogicalPosition::new(1023.0, 362.0),
+                ] {
+                    scroll_test_window(ui, pointer, -10_000.0);
+                    opened.borrow_mut().clear();
+                    click_test_window(ui, probe);
+                    assert_eq!(
+                        opened.borrow().as_str(),
+                        last,
+                        "view {view}: scrolling over {pointer:?} must reach the final skill"
+                    );
+                    scroll_test_window(ui, pointer, 10_000.0);
+                    opened.borrow_mut().clear();
+                    click_test_window(ui, probe);
+                    assert_eq!(
+                        *opened.borrow(),
+                        initial,
+                        "view {view}: reverse scrolling must restore the first page"
+                    );
+                }
+            });
+        }
+    }
+
+    #[test]
+    fn skills_details_and_import_scroll_to_shared_deployment_checkbox() {
+        use toolbox_core::skills::{SkillApp, SkillAppPath};
+        for import in [false, true] {
+            with_test_ui(move |ui, controller, _| {
+                let mut snapshot = skills_snapshot();
+                snapshot.app_paths = SkillApp::ALL
+                    .iter()
+                    .map(|app| SkillAppPath {
+                        app: *app,
+                        path: if *app == SkillApp::SharedAgents {
+                            "/home/sean/.agents/skills".into()
+                        } else {
+                            format!("/apps/{}", app.label())
+                        },
+                    })
+                    .collect();
+                receive_skills_snapshot(controller, snapshot);
+                ui.set_setting_language(1);
+                controller.settings_changed();
+                ui.set_page(4);
+                if import {
+                    controller.import_skill_folder(Ok(Some("/local/import-review".into())));
+                } else {
+                    controller.open_skill_details("source:alpha".into());
+                }
+                ui.window().set_size(slint::LogicalSize::new(1120.0, 780.0));
+                ui.show().unwrap();
+                let skills = ui.global::<SkillsState>();
+                let toggled = Rc::new(RefCell::new(Vec::new()));
+                let observed = toggled.clone();
+                skills.on_toggle_app(move |index, _| observed.borrow_mut().push(index));
+                render_test_window(ui);
+                scroll_test_window(ui, slint::LogicalPosition::new(600.0, 500.0), -10_000.0);
+
+                // The shared target is below the initial viewport. Click down
+                // the real checkbox column after scrolling to the final fields.
+                for y in (150..710).step_by(6) {
+                    click_test_window(ui, slint::LogicalPosition::new(258.0, y as f32));
+                    render_test_window(ui);
+                }
+                assert!(
+                    toggled.borrow().contains(&5),
+                    "shared deployment must be reachable in {}",
+                    if import {
+                        "local import"
+                    } else {
+                        "installed details"
+                    }
+                );
+            });
+        }
+    }
+
     #[test]
     fn skills_tabs_icons_and_source_chips_accept_first_pointer_clicks() {
         with_test_ui(|ui, controller, _| {
@@ -4871,8 +5066,8 @@ mod tests {
             for app in 0..SkillApp::ALL.len() as i32 {
                 ui.invoke_focus_page();
                 render();
-                // Observed first-row centers for all seven deployment targets.
-                let position = slint::LogicalPosition::new(819.0 + app as f32 * 34.0, 362.0);
+                // First-row centers for the six deployment targets.
+                let position = slint::LogicalPosition::new(853.0 + app as f32 * 34.0, 362.0);
                 ui.window()
                     .dispatch_event(WindowEvent::PointerMoved { position });
                 ui.window().dispatch_event(WindowEvent::PointerPressed {

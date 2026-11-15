@@ -212,13 +212,11 @@ const SKILL_APPS: [(SkillApp, &str); SkillApp::ALL.len()] = [
     (SkillApp::OpenCode, r"C:\Users\Demo\.config\opencode\skills"),
     (SkillApp::Grok, r"C:\Users\Demo\.grok\skills"),
     (SkillApp::SharedAgents, r"C:\Users\Demo\.agents\skills"),
-    (SkillApp::SharedAgent, r"C:\Users\Demo\.agent\skills"),
 ];
 
 fn skill_app_label(app: SkillApp, locale: Locale) -> String {
     match app {
         SkillApp::SharedAgents => messages::skills_shared_agents().render(locale),
-        SkillApp::SharedAgent => messages::skills_shared_agent().render(locale),
         _ => app.label().to_owned(),
     }
 }
@@ -231,7 +229,6 @@ fn skill_deployments(index: usize, view: i32) -> [bool; SkillApp::ALL.len()] {
         false,
         false,
         index < 2 && view == 0,
-        index == 3 && view == 0,
     ]
 }
 
@@ -281,7 +278,6 @@ fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
         skills.set_batch_app3(counts[3] == 3);
         skills.set_batch_app4(counts[4] == 3);
         skills.set_batch_app5(counts[5] == 3);
-        skills.set_batch_app6(counts[6] == 3);
         skills.set_batch_partial(model(counts.map(|count| count > 0 && count < 3).to_vec()));
         skills.set_batch_hints(model(
             SKILL_APPS
@@ -360,7 +356,6 @@ fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
                 app3_hint,
                 app4_hint,
                 app5_hint,
-                app6_hint,
             ]: [slint::SharedString; SkillApp::ALL.len()] = std::array::from_fn(|app| {
                 let (target, path) = SKILL_APPS[app];
                 let label = skill_app_label(target, locale);
@@ -411,14 +406,12 @@ fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
                 app1: deployed[1],
                 app2: deployed[2],
                 app5: deployed[5],
-                app6: deployed[6],
                 app0_hint,
                 app1_hint,
                 app2_hint,
                 app3_hint,
                 app4_hint,
                 app5_hint,
-                app6_hint,
                 deployment_count: deployed.into_iter().filter(|enabled| *enabled).count() as i32,
                 ..Default::default()
             }

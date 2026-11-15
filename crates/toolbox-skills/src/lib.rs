@@ -439,7 +439,6 @@ impl SkillsService {
             SkillApp::OpenCode => ".config/opencode/skills",
             SkillApp::Grok => ".grok/skills",
             SkillApp::SharedAgents => ".agents/skills",
-            SkillApp::SharedAgent => ".agent/skills",
         };
         self.home.join(suffix)
     }

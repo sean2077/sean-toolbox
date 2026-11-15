@@ -418,10 +418,6 @@ msgctxt "rust.skills_shared_agents"
 msgid "Shared (.agents)"
 msgstr ""
 
-msgctxt "rust.skills_shared_agent"
-msgid "Shared (.agent)"
-msgstr ""
-
 msgctxt "rust.skills_local_path"
 msgid "{app} · {path}"
 msgstr ""
