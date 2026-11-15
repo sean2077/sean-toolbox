@@ -289,17 +289,21 @@ fn configure_skills(ui: &AppWindow, locale: Locale, view: i32, scene: &str) {
                     } else {
                         messages::skills_batch_click_enable()
                     };
-                    format!(
-                        "{}\n{path}\n{}",
-                        messages::skills_batch_deployment(
-                            skill_app_label(*app, locale),
-                            counts[index],
-                            3
-                        )
-                        .render(locale),
-                        action.render(locale),
+                    let mut hint = messages::skills_batch_deployment(
+                        skill_app_label(*app, locale),
+                        counts[index],
+                        3,
                     )
-                    .into()
+                    .render(locale);
+                    // Match the production hint: only the shared target shows
+                    // its base directory.
+                    if *app == SkillApp::SharedAgents {
+                        hint.push('\n');
+                        hint.push_str(path);
+                    }
+                    hint.push('\n');
+                    hint.push_str(&action.render(locale));
+                    hint.into()
                 })
                 .collect(),
         ));
