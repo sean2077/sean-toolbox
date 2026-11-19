@@ -655,6 +655,18 @@ impl Controller {
             ui.window().set_minimized(false);
         }
         ui.show().map_err(|e| e.to_string())?;
+        // Wayland cannot map a window that was created while hidden: winit's
+        // set_visible is a no-op there, so the window only appears once it
+        // presents a frame. A window first shown after startup gets no initial
+        // RedrawRequested, so request one (and retry focus) after the event loop
+        // had a chance to create the native window.
+        let redraw = ui.clone_strong();
+        Timer::single_shot(Duration::ZERO, move || {
+            redraw.window().request_redraw();
+            redraw
+                .window()
+                .with_winit_window(|window| window.focus_window());
+        });
         // A window that was never shown has no native size yet. Checking before
         // `show` would replace Slint's preferred size with the minimum on every
         // first display; only correct a real, already-observed size below it.
