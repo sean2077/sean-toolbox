@@ -3006,7 +3006,7 @@ mod tests {
                 false,
             );
             assert_eq!(ui.get_shortcut_recording(), 1);
-            assert_eq!(ui.get_form_hotkey(), "F3");
+            assert!(ui.get_form_hotkey().is_empty());
             controller.record_shortcut(
                 &char::from(slint::platform::Key::F4).to_string(),
                 false,
@@ -3022,9 +3022,10 @@ mod tests {
             controller.save_profile();
             assert!(receive.try_recv().is_err());
             assert_eq!(ui.get_form_hotkey(), "F4");
-            assert_eq!(
-                controller.state.borrow().config.windows.profiles[0].hotkey,
-                "F3"
+            assert!(
+                controller.state.borrow().config.windows.profiles[0]
+                    .hotkey
+                    .is_empty()
             );
             assert!(ui.get_profile_dirty());
             acknowledge_recorder(controller, receive, 1);
@@ -3064,7 +3065,7 @@ mod tests {
             controller.record_shortcut("s", true, false, false, false);
             controller.poll_shortcut_capture();
             assert_eq!(ui.get_shortcut_recording(), 0);
-            assert_eq!(ui.get_form_hotkey(), "F3");
+            assert!(ui.get_form_hotkey().is_empty());
             assert!(receive.try_recv().is_err());
             controller.handle(shortcut_reply(
                 token,
@@ -3470,7 +3471,7 @@ mod tests {
             ui.show().unwrap();
             ui.on_text_matches(|query, text| text_matches(&query, &text));
             ui.set_settings_query("appearance".into());
-            ui.set_setting_hotkey("F3".into());
+            ui.set_setting_hotkey("F4".into());
             controller.settings_changed();
             controller.save_settings();
             assert!(ui.get_settings_query().is_empty());
@@ -3505,7 +3506,7 @@ mod tests {
     fn settings_field_errors_follow_each_edit_before_saving() {
         with_test_ui(|ui, controller, receive| {
             ui.set_page(2);
-            ui.set_setting_hotkey("F3".into());
+            ui.set_setting_hotkey("F4".into());
             controller.settings_changed();
             assert!(
                 !ui.get_setting_hotkey_error().is_empty(),

@@ -48,7 +48,7 @@ Sean Toolbox 使用 Rust + Slint，支持 Windows、macOS 和 Linux，优先面�
 首次启动后：
 
 1. 按 `Ctrl+Alt+Space` 打开最近项目，输入关键词搜索，按 `Enter` 打开。
-2. 从托盘打开“窗口快捷键”，确认程序路径和快捷键。默认示例为 WezTerm `F3`、VS Code `F4`、Chrome `F5`；Windows 新配置的 `F3` 默认唤出 [WezTerm 下拉终端](docs/USAGE.md#wezterm-下拉终端windows)。
+2. 从托盘打开“窗口快捷键”，确认程序路径和快捷键。默认示例为 VS Code `F4`、Chrome `F5`；WezTerm 默认不绑定快捷键，由自带的 quake 下拉（Windows fork 或 Linux KWin 脚本）或托盘切换。
 3. 在“设置”中选择主题、语言和开机启动。开机启动默认关闭。
 4. 从托盘或管理窗口打开“Skills 管理”，添加来源仓库、安装所需 Skill，再按需开启每日自动更新。宿主运行时执行更新，退出期间错过的更新在下次启动补跑。
 
@@ -61,7 +61,8 @@ Sean Toolbox 使用 Rust + Slint，支持 Windows、macOS 和 Linux，优先面�
 | Windows | 支持；Quake 可置顶、失焦收起 | 控制管理员权限的应用窗口需要相应权限 |
 | macOS | 支持；Quake 可调整位置和尺寸 | 在系统设置中授予辅助功能权限 |
 | Linux X11 | 支持；Quake 可置顶 | EWMH 窗口管理器；Quake 需要 XRandR 1.5 |
-| Linux Wayland | 外部窗口控制与全局快捷键暂未实现 | 可使用项目搜索和设置；托盘需要 StatusNotifierItem 支持 |
+| Linux Wayland（KDE Plasma） | 支持；KWin 脚本负责全局快捷键和窗口切换 | 需要 `qdbus6`；脚本由宿主自动安装并加载 |
+| 其他 Linux Wayland 桌面 | 外部窗口控制与全局快捷键暂未实现 | 可使用项目搜索和设置；托盘需要 StatusNotifierItem 支持 |
 
 macOS 和 Linux 的 Quake 窗口暂不支持失焦自动收起；最近项目面板支持失焦收起。Linux 文件导入、导出需要 XDG Desktop Portal 文件选择后端或 `zenity`。
 

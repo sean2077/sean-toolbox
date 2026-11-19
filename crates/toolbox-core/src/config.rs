@@ -144,7 +144,9 @@ impl AppProfile {
             name: "WezTerm".into(),
             platform,
             matcher: matcher.into(),
-            hotkey: "F3".into(),
+            // F3 belongs to the native WezTerm quake dropdown (Windows fork,
+            // KWin script on Wayland); the toolbox profile starts unbound.
+            hotkey: String::new(),
             enabled: true,
             maximize: false,
             cycle_continuous: true,
@@ -696,7 +698,7 @@ mod tests {
     fn wezterm_preset_enables_a_windows_dropdown_without_migrating_saved_profiles() {
         let mut profile = AppProfile::wezterm(Platform::Windows);
         assert!(profile.quake.enabled);
-        assert_eq!(profile.hotkey, "F3");
+        assert!(profile.hotkey.is_empty());
         assert_eq!(profile.quake.edge, QuakeEdge::Top);
         assert_eq!(
             (profile.quake.width_percent, profile.quake.height_percent),

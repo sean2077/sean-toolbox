@@ -287,7 +287,27 @@ impl App {
         self.ui.show(page)
     }
 
-    fn toggle(&mut self, id: &str, reply: Option<Reply>) {
+    fn launch(&self, id: &str) -> Result<(), String> {
+        if !self.config.windows.enabled {
+            return Err("窗口模块已停用 / Window module is disabled".into());
+        }
+        let profile = self
+            .config
+            .windows
+            .profiles
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or("Unknown profile")?;
+        if !profile.enabled {
+            return Err("此应用配置已停用 / Profile is disabled".into());
+        }
+        if profile.platform != Platform::current() {
+            return Err("此配置属于其他操作系统 / Profile belongs to another platform".into());
+        }
+        toolbox_windows::launch_profile(profile)
+    }
+
+    fn toggle(&mut self, id: &str, mut reply: Option<Reply>) {
         let result: Result<(), String> = (|| {
             if !self.config.windows.enabled {
                 return Err("窗口模块已停用 / Window module is disabled".into());
@@ -312,6 +332,22 @@ impl App {
             {
                 return Err("失焦收起监听未就绪，请重新保存配置或查看运行状态 / Foreground watcher is unavailable".into());
             }
+            #[cfg(target_os = "linux")]
+            if self.hotkeys.as_ref().is_some_and(Hotkeys::is_wayland) {
+                let result = self
+                    .hotkeys
+                    .as_ref()
+                    .expect("the Wayland backend was checked above")
+                    .invoke_profile(id)
+                    .or_else(|_| toolbox_windows::launch_profile(profile).map(|_| ()));
+                if let Some(reply) = reply.take() {
+                    let _ = reply.send(match &result {
+                        Ok(()) => Response::success("应用切换已请求 / Toggle requested"),
+                        Err(error) => Response::error(error.clone()),
+                    });
+                }
+                return result;
+            }
             if self.busy.contains(id) {
                 return Err(
                     "此应用正在处理上一操作 / Application operation is already in progress".into(),
@@ -329,7 +365,7 @@ impl App {
         })();
         if let Err(error) = result {
             self.status.last_action = error.clone();
-            if let Some(reply) = reply {
+            if let Some(reply) = reply.take() {
                 let _ = reply.send(Response::error(error));
             }
         }
@@ -505,6 +541,10 @@ impl App {
                 self.toggle(&id, Some(reply));
                 return;
             }
+            HostCommand::Launch { id } => match self.launch(&id) {
+                Ok(()) => self.response("应用已启动 / Application launched", false),
+                Err(e) => Response::error(e),
+            },
             HostCommand::Quit => self.response("Sean Toolbox stopped", false),
         };
         let _ = reply.send(response);
@@ -565,9 +605,16 @@ impl ApplicationHandler<Event> for App {
         if self.hotkeys.is_some() {
             return;
         }
-        let (hotkeys, warnings) = Hotkeys::new(&self.config);
+        let (hotkeys, warnings) = Hotkeys::new(&self.config, &self.executable);
         self.status.hotkeys = hotkeys.available();
         self.status.warnings.extend(warnings);
+        if hotkeys.is_wayland() && hotkeys.available() {
+            // The window worker may have reported X11 capabilities before the
+            // compositor script was loaded; the script owns window control now.
+            self.status.backend = "Linux / KWin (Wayland)".into();
+            self.status.window_control = true;
+            self.status.warnings.retain(|w| !w.starts_with("Windows:"));
+        }
         self.hotkeys = Some(hotkeys);
         self.create_tray();
         #[cfg(windows)]
@@ -592,6 +639,9 @@ impl ApplicationHandler<Event> for App {
     fn window_event(&mut self, _: &ActiveEventLoop, _: WindowId, _: WindowEvent) {}
 
     fn exiting(&mut self, _: &ActiveEventLoop) {
+        if let Some(hotkeys) = &mut self.hotkeys {
+            hotkeys.shutdown();
+        }
         self.skills.stop();
         self.stop_window_worker();
     }
@@ -676,10 +726,21 @@ impl ApplicationHandler<Event> for App {
                 }
             }
             Event::Capabilities(capabilities, reply) => {
-                self.status.backend = capabilities.backend;
-                self.status.window_control = capabilities.available;
+                let wayland = self
+                    .hotkeys
+                    .as_ref()
+                    .is_some_and(|hotkeys| hotkeys.is_wayland() && hotkeys.available());
+                if wayland {
+                    self.status.backend = "Linux / KWin (Wayland)".into();
+                    self.status.window_control = true;
+                } else {
+                    self.status.backend = capabilities.backend;
+                    self.status.window_control = capabilities.available;
+                }
                 self.status.warnings.retain(|w| !w.starts_with("Windows:"));
-                if let Some(reason) = capabilities.reason {
+                if let Some(reason) = capabilities.reason
+                    && !wayland
+                {
                     self.status.warnings.push(format!("Windows: {reason}"));
                 }
                 if let Some(reply) = reply {

@@ -34,6 +34,11 @@ pub enum HostCommand {
     Toggle {
         id: String,
     },
+    /// Start a profile without touching its windows. The Wayland KWin script
+    /// uses this because the compositor, not the host, owns the toggle.
+    Launch {
+        id: String,
+    },
     Status,
     Quit,
 }

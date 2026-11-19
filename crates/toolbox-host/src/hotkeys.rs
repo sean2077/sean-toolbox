@@ -2,7 +2,7 @@ use global_hotkey::{
     GlobalHotKeyManager,
     hotkey::{Code, HotKey, Modifiers},
 };
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, path::Path, str::FromStr};
 use toolbox_core::{Config, HotkeySpec, Platform};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,22 +26,43 @@ impl Registrar for GlobalHotKeyManager {
 type Bindings = HashMap<u32, (HotKey, Binding)>;
 pub struct Hotkeys {
     manager: Option<Box<dyn Registrar>>,
+    #[cfg(target_os = "linux")]
+    wayland: Option<crate::wayland::KWinHotkeys>,
     active: Bindings,
 }
 pub struct Prepared {
     desired: Bindings,
     added: Vec<HotKey>,
+    #[cfg(target_os = "linux")]
+    wayland: Option<String>,
 }
 
 impl Hotkeys {
-    pub fn new(config: &Config) -> (Self, Vec<String>) {
+    pub fn new(config: &Config, executable: &Path) -> (Self, Vec<String>) {
         let mut warnings = Vec::new();
-        let wayland = cfg!(target_os = "linux")
-            && (std::env::var_os("WAYLAND_DISPLAY").is_some()
-                || std::env::var("XDG_SESSION_TYPE")
-                    .is_ok_and(|s| s.eq_ignore_ascii_case("wayland")));
-        let manager = if wayland {
-            warnings.push("Hotkeys: Wayland global shortcuts are not supported in this beta; use the tray or CLI / Wayland 暂不支持全局快捷键，可使用托盘或命令行".into());
+        #[cfg(target_os = "linux")]
+        let wayland_session = crate::wayland::is_wayland();
+        #[cfg(not(target_os = "linux"))]
+        let wayland_session = false;
+        #[cfg(target_os = "linux")]
+        let wayland = if wayland_session {
+            match crate::wayland::KWinHotkeys::detect(executable) {
+                Ok(mut backend) => {
+                    warnings.extend(backend.sync(config));
+                    Some(backend)
+                }
+                Err(error) => {
+                    warnings.push(format!(
+                        "Hotkeys: {error} / Wayland 全局快捷键不可用，可使用托盘或命令行"
+                    ));
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let manager = if wayland_session {
+            // The compositor owns global shortcuts on Wayland.
             None
         } else {
             match GlobalHotKeyManager::new() {
@@ -54,6 +75,8 @@ impl Hotkeys {
         };
         let mut this = Self {
             manager,
+            #[cfg(target_os = "linux")]
+            wayland,
             active: HashMap::new(),
         };
         if let Some(manager) = &this.manager {
@@ -77,8 +100,41 @@ impl Hotkeys {
     }
 
     pub fn available(&self) -> bool {
+        #[cfg(target_os = "linux")]
+        if let Some(wayland) = &self.wayland {
+            return wayland.available();
+        }
         self.manager.is_some() && !self.active.is_empty()
     }
+
+    pub fn is_wayland(&self) -> bool {
+        #[cfg(target_os = "linux")]
+        {
+            self.wayland.is_some()
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            false
+        }
+    }
+
+    /// Ask the compositor script to run the profile's toggle. Used by the CLI
+    /// and tray because native Wayland clients cannot enumerate windows.
+    pub fn invoke_profile(&self, id: &str) -> Result<(), String> {
+        #[cfg(target_os = "linux")]
+        if let Some(wayland) = &self.wayland {
+            return wayland.invoke(id);
+        }
+        Err("Wayland shortcuts are not active".into())
+    }
+
+    pub fn shutdown(&mut self) {
+        #[cfg(target_os = "linux")]
+        if let Some(wayland) = &mut self.wayland {
+            wayland.shutdown();
+        }
+    }
+
     pub fn binding(&self, id: u32) -> Option<Binding> {
         self.active.get(&id).map(|(_, b)| b.clone())
     }
@@ -102,7 +158,15 @@ impl Hotkeys {
                 }
             }
         }
-        Ok(Prepared { desired, added })
+        Ok(Prepared {
+            desired,
+            added,
+            #[cfg(target_os = "linux")]
+            wayland: self
+                .wayland
+                .as_ref()
+                .map(|_| crate::wayland::render(config)),
+        })
     }
 
     pub fn rollback(&self, prepared: Prepared) {
@@ -124,6 +188,10 @@ impl Hotkeys {
                 }
             }
             self.active = prepared.desired;
+        }
+        #[cfg(target_os = "linux")]
+        if let (Some(backend), Some(script)) = (self.wayland.as_mut(), prepared.wayland) {
+            warnings.extend(backend.sync_script(&script));
         }
         warnings
     }
@@ -205,6 +273,8 @@ mod tests {
                 held: held.clone(),
                 denied: native_key("F12").unwrap().id(),
             })),
+            #[cfg(target_os = "linux")]
+            wayland: None,
             active: HashMap::new(),
         };
         let initial = Config::default();
