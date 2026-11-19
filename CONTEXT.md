@@ -28,6 +28,11 @@ _Avoid_: 窗口（单独使用时含义不清）
 宿主内执行 `WindowService` 的专门线程，收到请求后执行窗口操作。
 _Equivalent (en)_: window worker
 
+**KWin 后端（KWin backend）**：
+Linux Wayland 会话下由宿主生成并加载的 KWin 脚本。脚本由合成器注册全局快捷键、切换应用窗口，并通过用户 systemd 模板单元请求宿主启动应用；仅在 KDE Plasma 上可用。
+_Equivalent (en)_: KWin backend
+_Avoid_: Wayland 后端（非 KDE 的 Wayland 合成器不支持）
+
 **启动候选（launch candidate）**：
 应用配置中 `launch` 数组的一项，包含可执行文件、独立参数数组和工作目录。按顺序尝试；某个候选成功启动后，不再尝试后续候选。
 _Equivalent (en)_: launch candidate

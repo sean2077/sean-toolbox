@@ -34,6 +34,7 @@
 | Windows | 进程文件名，如 `Code.exe`；也支持 `class:<窗口类名>` 精确匹配窗口类 |
 | macOS | bundle ID、应用名或可执行文件名，如 `com.microsoft.VSCode` |
 | Linux X11 | WM_CLASS 或进程文件名，如 `org.wezfurlong.wezterm` |
+| Linux Wayland（KWin） | 应用 ID（`resourceClass`），如 `org.wezfurlong.wezterm` |
 
 普通切换模式的行为：
 
@@ -44,6 +45,12 @@
 切换到其他应用后，再按快捷键会接着上次的位置选择下一个窗口。“仅最大化新窗口”用于启动时的窗口大小；已有窗口保留原尺寸。应用启动期间主动切换到其他窗口，会停止自动聚焦。
 
 默认配置包含 WezTerm `F3`、VS Code `F4` 和 Chrome `F5`。Windows 会尝试常用安装目录，macOS 使用 `/Applications`，Linux 使用 `PATH`；安装位置不同时，在编辑区修改启动程序。
+
+Linux Wayland（KDE Plasma）由合成器负责全局快捷键：宿主把当前配置渲染成 KWin 脚本，写入 `~/.local/share/sean-toolbox/kwin/sean-toolbox-wayland.js` 并通过 KWin 的 D-Bus 接口加载。脚本按快捷键切换窗口；应用没有窗口时，脚本启动 `sean-toolbox-launch@<id>.service`，由宿主执行启动命令。宿主退出时卸载脚本。
+
+- 保存配置后，脚本会重写并重载；`sean-toolbox toggle <id>` 和托盘切换通过 KGlobalAccel 触发同一个脚本动作，与物理快捷键行为一致。
+- WezTerm 的 `F3` 由 quake 的 KWin 脚本持有；在此模式下把 WezTerm 配置的快捷键留空，否则两个动作会争用 `F3`。
+- 非 KDE 的 Wayland 合成器仍只支持项目搜索和设置，窗口切换与全局快捷键不可用。
 
 “保存应用”成功后留在当前编辑区，继续调整无需重新选中。“测试已保存配置”使用最近一次成功保存的内容，编辑中的草稿仍会保留。只有当前系统支持、已启用且已有保存版本的应用才能测试；通用设置中关闭应用快捷键时也不可测试。列表搜索不会改变配置身份，删除与切换应用时的放弃修改确认会明确说明具体操作。
 
@@ -301,6 +308,7 @@ Skills 命令立即返回是否接受任务，接受不代表更新完成。使�
 | 现象 | 检查方法 |
 | --- | --- |
 | 快捷键没有响应 | 在“运行状态”检查注册结果，调整与系统或其他应用冲突的快捷键 |
+| Linux Wayland 快捷键没有响应 | 确认运行状态显示 `Linux / KWin (Wayland)`；需要 KDE Plasma 与 `qdbus6`，非 KDE 合成器暂不支持；`F3` 是否与 quake 冲突 |
 | 应用可以启动但无法切回窗口 | 核对匹配标识；Windows 检查目标应用的权限，macOS 检查辅助功能授权 |
 | macOS 更换安装位置后无法控制窗口 | 在“系统设置 → 隐私与安全性 → 辅助功能”重新授权，再到运行状态页重新检查 |
 | Linux 没有托盘图标 | 确认桌面提供托盘宿主；也可通过命令行打开界面 |

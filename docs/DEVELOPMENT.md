@@ -155,7 +155,7 @@ tag、版本号和 Release 仍按发布流程单独授权。
 | [toolbox-windows](../crates/toolbox-windows/README.md) | 应用窗口切换和 Quake 状态、Win32 / Accessibility / X11 适配 |
 | [toolbox-projects](../crates/toolbox-projects/README.md) | VS Code 历史读取、项目身份、排序和打开方式 |
 | [toolbox-skills](../crates/toolbox-skills/README.md) | Skills 来源、发现、集中存储、按应用部署、更新与独立状态 |
-| `toolbox-host` | 单实例、全局快捷键、托盘、配置保存、窗口 worker、Skills worker 和界面进程管理 |
+| `toolbox-host` | 单实例、全局快捷键、托盘、配置保存、窗口 worker、Skills worker 和界面进程管理；Linux Wayland 的 KWin 脚本后端位于 `src/wayland.rs` |
 | [toolbox-ui](../crates/toolbox-ui/README.md) | Slint 项目面板与管理窗口、编辑状态、项目查询和文件选择 |
 
 `sean-toolbox` 是常驻宿主，`sean-toolbox-ui` 是按需启动的界面进程。Slint、SQLite 和项目查询位于界面一侧，宿主负责快捷键、托盘及窗口控制。窗口 worker 接到请求后执行操作，宿主主循环等待事件。

@@ -14,6 +14,25 @@ pub use backend::{Desktop, Window, WindowRect, quake_bounds};
 pub use engine::{Engine, EngineOptions};
 use toolbox_core::{AppProfile, Platform};
 
+/// Start a profile without touching its windows. A Wayland client cannot
+/// enumerate or activate other applications, so the host only launches here and
+/// the compositor script owns the toggle.
+pub fn launch_profile(profile: &AppProfile) -> Result<(), String> {
+    let prepared = launch::prepare_profile(profile)?;
+    let mut errors = Vec::new();
+    for command in &prepared.launch {
+        match launch::spawn(command) {
+            Ok(()) => return Ok(()),
+            Err(error) => errors.push(error),
+        }
+    }
+    Err(format!(
+        "{}：启动失败 / Launch failed\n{}",
+        profile.name,
+        errors.join("\n")
+    ))
+}
+
 #[derive(Debug, Clone)]
 pub struct WindowCapabilities {
     pub backend: String,
