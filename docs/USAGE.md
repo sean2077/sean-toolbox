@@ -44,19 +44,19 @@
 
 切换到其他应用后，再按快捷键会接着上次的位置选择下一个窗口。“仅最大化新窗口”用于启动时的窗口大小；已有窗口保留原尺寸。应用启动期间主动切换到其他窗口，会停止自动聚焦。
 
-默认配置包含 WezTerm `F3`、VS Code `F4` 和 Chrome `F5`。Windows 会尝试常用安装目录，macOS 使用 `/Applications`，Linux 使用 `PATH`；安装位置不同时，在编辑区修改启动程序。
+默认配置包含 VS Code `F4` 和 Chrome `F5`；WezTerm 默认不绑定快捷键，由 WezTerm 自带的 quake 下拉（Windows fork 或 Linux KWin 脚本）或托盘切换。Windows 会尝试常用安装目录，macOS 使用 `/Applications`，Linux 使用 `PATH`；安装位置不同时，在编辑区修改启动程序。
 
 Linux Wayland（KDE Plasma）由合成器负责全局快捷键：宿主把当前配置渲染成 KWin 脚本，写入 `~/.local/share/sean-toolbox/kwin/sean-toolbox-wayland.js` 并通过 KWin 的 D-Bus 接口加载。脚本按快捷键切换窗口；应用没有窗口时，脚本启动 `sean-toolbox-launch@<id>.service`，由宿主执行启动命令。宿主退出时卸载脚本。
 
 - 保存配置后，脚本会重写并重载；`sean-toolbox toggle <id>` 和托盘切换通过 KGlobalAccel 触发同一个脚本动作，与物理快捷键行为一致。
-- WezTerm 的 `F3` 由 quake 的 KWin 脚本持有；在此模式下把 WezTerm 配置的快捷键留空，否则两个动作会争用 `F3`。
+- WezTerm 的 `F3` 由 quake 的 KWin 脚本持有，默认配置已不绑定该键；手动设置 `F3` 会让两个动作争用同一键。
 - 非 KDE 的 Wayland 合成器仍只支持项目搜索和设置，窗口切换与全局快捷键不可用。
 
 “保存应用”成功后留在当前编辑区，继续调整无需重新选中。“测试已保存配置”使用最近一次成功保存的内容，编辑中的草稿仍会保留。只有当前系统支持、已启用且已有保存版本的应用才能测试；通用设置中关闭应用快捷键时也不可测试。列表搜索不会改变配置身份，删除与切换应用时的放弃修改确认会明确说明具体操作。
 
 ### WezTerm 下拉终端（Windows）
 
-Windows 新配置默认使用 `F3` 唤出独立的 WezTerm 下拉窗口，显示在鼠标所在显示器的顶部，占工作区全部宽度和一半高度。终端在前台时再按 `F3` 隐藏，再次唤出时继续同一个 shell；隐藏期间，命令和终端任务继续运行。
+Windows 新配置会启用独立的 WezTerm 下拉窗口，但默认不绑定快捷键。如有需要，在应用编辑区为它设置一个快捷键，或从托盘切换；窗口显示在鼠标所在显示器的顶部，占工作区全部宽度和一半高度。终端在前台时再按该快捷键隐藏，再次唤出时继续同一个 shell；隐藏期间，命令和终端任务继续运行。
 
 已有配置在应用编辑区选择 WezTerm，勾选“启用 WezTerm 独立下拉”，保存即可。快捷键、启动参数和工作目录沿用已保存的内容；安装位置不同时，选择本机的 `wezterm-gui.exe`。
 
