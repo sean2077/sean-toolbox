@@ -907,3 +907,43 @@ Skills 或配置。扩展高度截图检查完整路径的排版，不代表原�
 或 X11 桌面验收。滚轮回归通过软件窗口派发真实 Slint 输入事件，布局预览使用
 显式示例数据和任务目录中的 Noto Sans CJK SC 字体；完整平台检查以 PR 最新提交
 的 GitHub Actions 为准。未修改依赖、锁文件、版本号或发布流程。
+
+## 2026-11-20：KDE Wayland 二次窗口首次显示不映射
+
+环境为 Linux x86_64、KDE Plasma 6.6.7 / Wayland（KWin）、Rust 1.99.1、Slint 1.18.1、
+winit 0.30.13。对照版本是本机安装的 `v0.3.0-25-g18ac029-dirty`。
+
+### 现象与复现
+
+界面进程先显示启动器（`--page projects`）后，通过 UI socket 发送
+`{"page":"windows"}`（等价于托盘菜单或 `sean-toolbox show windows`）会返回
+`{"ok":true,"message":"shown"}`，但 KWin 的 `workspace.windowList()` 中没有任何
+`sean-toolbox-ui` 窗口；进程仍然存活。`settings`、`skills` 等页面结果相同。
+以 `--page settings` 启动、再首次显示启动器时，启动器可以正常出现。
+
+### 原因
+
+winit 0.30.13 的 Wayland `Window::set_visible` 是空实现（“Not possible on
+Wayland”）。Slint 的 winit 后端在启动时把尚未请求的窗口创建为不可见窗口，
+之后依赖 `set_visible(true)` 映射；Wayland 上该调用无效，窗口只能通过提交一帧
+才会被合成器映射。管理窗口首次显示后没有后续 resize/expose 事件，因此一直
+没有首帧；启动器则因为 `place_launcher` 随后调整位置和尺寸，收到了
+`RedrawRequested`，恰好掩盖了同一问题。
+
+### 修复与验证
+
+`Controller::show` 在 `ui.show()` 之后用零延迟定时器请求一次重绘，并在原生
+窗口已存在时重试聚焦；这与启动器已有的“首轮事件循环后再激活”处理一致。
+修改位于 `crates/toolbox-ui/src/main.rs`，不改变 Windows、X11 或 macOS 行为。
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| 基线复现 | 安装版单独运行 `--page projects`，IPC 切到 `windows` 后 KWin 窗口列表为空，进程存活 |
+| 修复版复现 | 同一脚本下切换 `windows` 得到“Sean Toolbox”窗口且为活动窗口；再切 `projects` 为管理窗口 + 启动器，再切 `settings` 正常 |
+| 反向启动顺序 | 以 `--page settings` 启动后首次显示 `projects`，启动器正常出现 |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace` | **282 通过、0 失败**，doc-tests 0 项 |
+
+本轮没有运行 Windows/macOS 原生桌面验收或 X11 原生窗口测试；修复为跨平台安全的
+重绘请求，但现象和人工验证仅覆盖 KDE Wayland。
