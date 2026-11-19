@@ -608,6 +608,13 @@ impl ApplicationHandler<Event> for App {
         let (hotkeys, warnings) = Hotkeys::new(&self.config, &self.executable);
         self.status.hotkeys = hotkeys.available();
         self.status.warnings.extend(warnings);
+        if hotkeys.is_wayland() && hotkeys.available() {
+            // The window worker may have reported X11 capabilities before the
+            // compositor script was loaded; the script owns window control now.
+            self.status.backend = "Linux / KWin (Wayland)".into();
+            self.status.window_control = true;
+            self.status.warnings.retain(|w| !w.starts_with("Windows:"));
+        }
         self.hotkeys = Some(hotkeys);
         self.create_tray();
         #[cfg(windows)]
