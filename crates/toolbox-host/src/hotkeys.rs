@@ -34,7 +34,7 @@ pub struct Prepared {
     desired: Bindings,
     added: Vec<HotKey>,
     #[cfg(target_os = "linux")]
-    wayland: Option<String>,
+    wayland: Option<crate::wayland::Update>,
 }
 
 impl Hotkeys {
@@ -162,10 +162,10 @@ impl Hotkeys {
             desired,
             added,
             #[cfg(target_os = "linux")]
-            wayland: self
-                .wayland
-                .as_ref()
-                .map(|_| crate::wayland::render(config)),
+            wayland: self.wayland.as_ref().map(|_| crate::wayland::Update {
+                script: crate::wayland::render(config),
+                bindings: crate::wayland::desired_bindings(config),
+            }),
         })
     }
 
@@ -190,8 +190,8 @@ impl Hotkeys {
             self.active = prepared.desired;
         }
         #[cfg(target_os = "linux")]
-        if let (Some(backend), Some(script)) = (self.wayland.as_mut(), prepared.wayland) {
-            warnings.extend(backend.sync_script(&script));
+        if let (Some(backend), Some(update)) = (self.wayland.as_mut(), prepared.wayland) {
+            warnings.extend(backend.sync_script(&update.script, &update.bindings));
         }
         warnings
     }
