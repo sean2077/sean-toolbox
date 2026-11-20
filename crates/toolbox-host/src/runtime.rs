@@ -571,19 +571,30 @@ impl App {
                 menu.append(&MenuItem::with_id(id, label, true, None))
                     .map_err(|e| e.to_string())?;
             }
-            #[cfg(target_os = "macos")]
-            let rgba = include_bytes!("../../../packaging/icons/tray-template-32.rgba").to_vec();
-            #[cfg(not(target_os = "macos"))]
-            let rgba = include_bytes!("../../../packaging/icons/tray-32.rgba").to_vec();
-            let icon = tray_icon::Icon::from_rgba(rgba, 32, 32).map_err(|e| e.to_string())?;
+            #[cfg(not(target_os = "linux"))]
+            let icon = {
+                #[cfg(target_os = "macos")]
+                let rgba =
+                    include_bytes!("../../../packaging/icons/tray-template-32.rgba").to_vec();
+                #[cfg(not(target_os = "macos"))]
+                let rgba = include_bytes!("../../../packaging/icons/tray-32.rgba").to_vec();
+                tray_icon::Icon::from_rgba(rgba, 32, 32).map_err(|e| e.to_string())?
+            };
             let builder = TrayIconBuilder::new()
                 .with_id("sean-toolbox")
+                .with_title("Sean Toolbox")
                 .with_menu(Box::new(menu))
                 .with_tooltip(messages::tray_tooltip().render(locale))
                 .with_menu_on_left_click(false);
+            // ksni only exports IconName when the icon is a theme name rather
+            // than an RGBA bitmap; Linux installs the same name as the desktop
+            // entry (packaging/sean-toolbox.svg).
+            #[cfg(target_os = "linux")]
+            let builder =
+                builder.with_native_icon(tray_icon::NativeIcon::from_name("sean-toolbox"));
             #[cfg(target_os = "macos")]
             let builder = builder.with_icon_templated(icon);
-            #[cfg(not(target_os = "macos"))]
+            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
             let builder = builder.with_icon(icon);
             builder.build().map_err(|e| e.to_string())
         };

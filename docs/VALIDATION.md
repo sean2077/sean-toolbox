@@ -985,3 +985,38 @@ KGlobalAccel 在动作首次注册时保存绑定；KWin 的 `registerShortcut` 
 | 安装版重启 | 新宿主启动无警告，托盘与快捷键状态正常 |
 
 验证仅覆盖 KDE Wayland；Windows、macOS 和 Linux X11 的快捷键路径未改动。
+
+## 2026-11-20：托盘 SNI 元数据与 Linux 失败自动重启
+
+日期：2026-11-20。环境：Kubuntu，KDE Plasma 6.6.7 / KWin 6.6.7（原生 Wayland），
+Rust 1.99.1。验证使用真实会话、安装版宿主和用户配置。
+
+### 现象
+
+系统托盘“条目”列表里的 Sean Toolbox 只有位图图标，SNI `Title` 和 `IconName` 为空；
+宿主在 15:18 正常退出后，XDG autostart 生成的 systemd 单元没有重启策略，托盘图标一直缺失。
+
+### 修复
+
+`crates/toolbox-host/src/runtime.rs` 给托盘设置 `with_title("Sean Toolbox")`；Linux 改用
+`with_native_icon(NativeIcon::from_name("sean-toolbox"))`，让 ksni 导出 `IconName`（图标由
+主题解析，安装步骤负责投放 `packaging/sean-toolbox.svg`）。Windows/macOS 的图标分支不变。
+
+`crates/toolbox-host/src/autostart.rs` 在 Linux 写 XDG autostart 时，同时写
+`~/.config/systemd/user/app-sean\x2dtoolbox@autostart.service.d/restart.conf`：
+`Restart=on-failure`、`RestartSec=3`，并执行 `systemctl --user daemon-reload`；内容未变时跳过重载，
+关闭开机启动时删除 drop-in。systemd 不可用时不阻止 XDG autostart。
+
+### 验证
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| SNI `Title` / `IconName` | `Sean Toolbox` / `sean-toolbox`，`Status=Active` |
+| systemd 有效策略 | `Restart=on-failure`、`RestartUSec=3s` |
+| `kill -9 <MainPID>` | 3 秒后 systemd 拉起新 PID，`NRestarts=1`，SNI 重新注册 |
+| 删除 drop-in 后启动宿主 | 宿主按 autostart 配置重新写入 `restart.conf`，策略恢复 |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace` | **288 通过、0 失败、1 ignored** |
+
+验证仅覆盖 Linux；Windows 和 macOS 的托盘实现未改，只共享 `with_title` 调用。
