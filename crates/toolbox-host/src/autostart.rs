@@ -88,6 +88,12 @@ fn platform_set(enabled: bool, executable: &Path) -> Result<(), String> {
 }
 
 #[cfg(not(any(windows, target_os = "macos")))]
+const RESTART_DROPIN_PATH: &str =
+    "systemd/user/app-sean\\x2dtoolbox@autostart.service.d/restart.conf";
+#[cfg(not(any(windows, target_os = "macos")))]
+const RESTART_DROPIN: &str = "[Service]\nRestart=on-failure\nRestartSec=3\n";
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn platform_set(enabled: bool, executable: &Path) -> Result<(), String> {
     use std::{env, path::PathBuf};
     let root = env::var_os("XDG_CONFIG_HOME")
@@ -96,8 +102,12 @@ fn platform_set(enabled: bool, executable: &Path) -> Result<(), String> {
         .or_else(|| env::var_os("HOME").map(|p| PathBuf::from(p).join(".config")))
         .ok_or("HOME is unavailable")?;
     let path = root.join("autostart/sean-toolbox.desktop");
+    let restart_dropin = root.join(RESTART_DROPIN_PATH);
     if !enabled {
-        return remove_if_exists(&path);
+        remove_if_exists(&path)?;
+        remove_restart_dropin(&restart_dropin)?;
+        reload_user_manager();
+        return Ok(());
     }
     let exe = executable
         .to_str()
@@ -117,7 +127,14 @@ fn platform_set(enabled: bool, executable: &Path) -> Result<(), String> {
         &format!(
             "[Desktop Entry]\nType=Application\nVersion=1.0\nName=Sean Toolbox\nComment=个人工具箱\nExec=\"{quoted}\" --background\nTerminal=false\nCategories=Utility;\n"
         ),
-    )
+    )?;
+    // The xdg-autostart generator owns the unit, so the restart policy comes
+    // from a drop-in. `\x2d` is systemd's escape for the hyphen in
+    // `sean-toolbox.desktop`.
+    if write_if_changed(&restart_dropin, RESTART_DROPIN)? {
+        reload_user_manager();
+    }
+    Ok(())
 }
 
 #[cfg(not(windows))]
@@ -140,4 +157,58 @@ fn write_entry(path: &Path, text: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     file.persist(path).map_err(|e| e.error.to_string())?;
     Ok(())
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn write_if_changed(path: &Path, text: &str) -> Result<bool, String> {
+    if matches!(std::fs::read_to_string(path), Ok(current) if current == text) {
+        return Ok(false);
+    }
+    write_entry(path, text)?;
+    Ok(true)
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
+fn remove_restart_dropin(path: &Path) -> Result<(), String> {
+    remove_if_exists(path)?;
+    if let Some(parent) = path.parent() {
+        match std::fs::remove_dir(parent) {
+            Ok(()) => {}
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
+                ) => {}
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    Ok(())
+}
+
+/// Best effort: non-systemd Linux desktops keep the XDG autostart entry.
+#[cfg(not(any(windows, target_os = "macos")))]
+fn reload_user_manager() {
+    let _ = std::process::Command::new("systemctl")
+        .args(["--user", "daemon-reload"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
+#[cfg(all(test, not(any(windows, target_os = "macos"))))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restart_dropin_is_written_once_and_removed_with_its_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(RESTART_DROPIN_PATH);
+        assert!(write_if_changed(&path, RESTART_DROPIN).unwrap());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), RESTART_DROPIN);
+        assert!(!write_if_changed(&path, RESTART_DROPIN).unwrap());
+        remove_restart_dropin(&path).unwrap();
+        assert!(!path.exists());
+        assert!(!path.parent().unwrap().exists());
+    }
 }
