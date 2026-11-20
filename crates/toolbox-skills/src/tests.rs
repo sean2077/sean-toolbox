@@ -1465,6 +1465,155 @@ fn linked_local_skills_deploy_links_without_copying_the_source() {
 
 #[cfg(unix)]
 #[test]
+fn linked_skill_with_a_missing_source_still_uninstalls() {
+    let mut fixture = Fixture::new();
+    let source = fixture.home.join("vault/ob");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: ob\ndescription: Linked\n---\n",
+    )
+    .unwrap();
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::ImportLocal {
+                path: source.to_string_lossy().into_owned(),
+                apps: vec![SkillApp::Claude, SkillApp::Codex],
+                link: true,
+            },
+            1,
+        )
+        .unwrap();
+    let claude_link = fixture.app(SkillApp::Claude, "ob");
+    let codex_link = fixture.app(SkillApp::Codex, "ob");
+    for destination in [&claude_link, &codex_link] {
+        assert!(
+            fs::symlink_metadata(destination)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+    }
+
+    fs::remove_dir_all(&source).unwrap();
+    // Both app links dangle now; the recorded target is the only ownership
+    // evidence left, and the uninstall must not fail on the missing source.
+    assert!(fs::symlink_metadata(&claude_link).is_ok());
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::Uninstall {
+                skill_id: "ob".into(),
+            },
+            2,
+        )
+        .unwrap();
+    assert!(fs::symlink_metadata(&claude_link).is_err());
+    assert!(fs::symlink_metadata(&codex_link).is_err());
+
+    fixture.reopen();
+    let snapshot = fixture.service().snapshot();
+    assert!(snapshot.installed.is_empty());
+    assert_eq!(snapshot.last_error, None);
+}
+
+#[cfg(unix)]
+#[test]
+fn linked_skill_with_a_missing_source_rejects_a_replaced_link() {
+    use std::os::unix::fs::symlink;
+    let mut fixture = Fixture::new();
+    let source = fixture.home.join("vault/ob");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: ob\ndescription: Linked\n---\n",
+    )
+    .unwrap();
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::ImportLocal {
+                path: source.to_string_lossy().into_owned(),
+                apps: vec![SkillApp::Claude],
+                link: true,
+            },
+            1,
+        )
+        .unwrap();
+    let destination = fixture.app(SkillApp::Claude, "ob");
+    let replacement = fixture.home.join("vault/other");
+    fs::create_dir_all(&replacement).unwrap();
+    fs::remove_dir_all(&source).unwrap();
+    fs::remove_file(&destination).unwrap();
+    symlink(&replacement, &destination).unwrap();
+
+    let error = fixture
+        .service()
+        .execute(
+            SkillsCommand::Uninstall {
+                skill_id: "ob".into(),
+            },
+            2,
+        )
+        .unwrap_err();
+    assert!(
+        error.contains("move or restore it before uninstalling"),
+        "{error}"
+    );
+    assert_eq!(fixture.service().snapshot().installed.len(), 1);
+    assert_eq!(fs::read_link(&destination).unwrap(), replacement);
+}
+
+#[cfg(unix)]
+#[test]
+fn linked_skill_with_a_missing_source_can_still_be_disabled() {
+    let mut fixture = Fixture::new();
+    let source = fixture.home.join("vault/ob");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: ob\ndescription: Linked\n---\n",
+    )
+    .unwrap();
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::ImportLocal {
+                path: source.to_string_lossy().into_owned(),
+                apps: vec![SkillApp::Claude, SkillApp::Codex],
+                link: true,
+            },
+            1,
+        )
+        .unwrap();
+    let claude_link = fixture.app(SkillApp::Claude, "ob");
+    let codex_link = fixture.app(SkillApp::Codex, "ob");
+    fs::remove_dir_all(&source).unwrap();
+
+    fixture
+        .service()
+        .execute(
+            SkillsCommand::SetEnabled {
+                skill_id: "ob".into(),
+                app: SkillApp::Claude,
+                enabled: false,
+            },
+            2,
+        )
+        .unwrap();
+    assert!(fs::symlink_metadata(&claude_link).is_err());
+    assert!(fs::symlink_metadata(&codex_link).is_ok());
+
+    fixture.reopen();
+    let snapshot = fixture.service().snapshot();
+    assert_eq!(snapshot.installed.len(), 1);
+    assert_eq!(snapshot.installed[0].apps, vec![SkillApp::Codex]);
+    assert_eq!(snapshot.last_error, None);
+}
+
+#[cfg(unix)]
+#[test]
 fn copying_a_symlinked_local_source_uses_its_real_target() {
     use std::os::unix::fs::symlink;
     let mut fixture = Fixture::new();
