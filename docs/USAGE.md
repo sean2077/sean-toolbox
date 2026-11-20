@@ -48,7 +48,7 @@
 
 Linux Wayland（KDE Plasma）由合成器负责全局快捷键：宿主把当前配置渲染成 KWin 脚本，写入 `~/.local/share/sean-toolbox/kwin/sean-toolbox-wayland.js` 并通过 KWin 的 D-Bus 接口加载。脚本按快捷键切换窗口；应用没有窗口时，脚本启动 `sean-toolbox-launch@<id>.service`，由宿主执行启动命令。宿主退出时卸载脚本。
 
-- 保存配置后，脚本会重写并重载；`sean-toolbox toggle <id>` 和托盘切换通过 KGlobalAccel 触发同一个脚本动作，与物理快捷键行为一致。
+- 保存配置后，脚本会重写并重载，宿主同时把新快捷键写入 KGlobalAccel（KWin 不会更新已注册动作的绑定）；`sean-toolbox toggle <id>` 和托盘切换通过 KGlobalAccel 触发同一个脚本动作，与物理快捷键行为一致。
 - WezTerm 的 `F3` 由 quake 的 KWin 脚本持有，默认配置已不绑定该键；手动设置 `F3` 会让两个动作争用同一键。
 - 非 KDE 的 Wayland 合成器仍只支持项目搜索和设置，窗口切换与全局快捷键不可用。
 

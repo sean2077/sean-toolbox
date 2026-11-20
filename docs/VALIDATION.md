@@ -947,3 +947,41 @@ Wayland”）。Slint 的 winit 后端在启动时把尚未请求的窗口创建
 
 本轮没有运行 Windows/macOS 原生桌面验收或 X11 原生窗口测试；修复为跨平台安全的
 重绘请求，但现象和人工验证仅覆盖 KDE Wayland。
+
+## 2026-11-20：KDE Wayland 快捷键保存后不生效
+
+日期：2026-11-20。环境：Kubuntu，KDE Plasma 6.6.7 / KWin 6.6.7（原生 Wayland），
+Rust 1.99.1。验证使用真实会话、安装版宿主和用户配置。
+
+### 现象
+
+在界面把“最近项目”快捷键从默认 `Ctrl+Alt+Space` 改为 `Alt+C` 并保存后，新键没有反应；
+`sean-toolbox status` 仍显示 `hotkeys: true` 且无警告，生成的 KWin 脚本也已包含 `Alt+C`。
+
+### 原因
+
+KGlobalAccel 在动作首次注册时保存绑定；KWin 的 `registerShortcut` 只在动作尚不存在时
+应用脚本给出的键，脚本重载不会改写已有绑定。宿主当时也没有调用 KGlobalAccel，
+`~/.config/kglobalshortcutsrc` 一直保留旧的 `Ctrl+Alt+Space`。
+
+### 修复
+
+`crates/toolbox-host/src/wayland.rs` 在脚本同步后读取 `allShortcutInfos`，按动作名匹配
+完整 actionId，对与配置不一致的绑定调用 `setForeignShortcut`；清空快捷键写入空列表。
+`desired_bindings` 与脚本渲染规则一致（启动器仅在非空时注册，应用配置始终保留动作）。
+`crates/toolbox-host/src/hotkeys.rs` 把同一组绑定随脚本一起提交。KWin 6.6 不提供
+`unregisterShortcut`，因此不走脚本内重注册。
+
+### 验证
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| 保存 `Alt+C` → `Alt+D` | KGlobalAccel 绑定变为 `134217796`（Alt+D），无警告 |
+| 保存 `Alt+D` → `Alt+C` | 绑定恢复 `134217795`（Alt+C） |
+| VS Code `F4` → `F6` → 空 → `F4` | 绑定依次为 `16777269`、空、`16777267` |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace` | **284 通过、0 失败、1 ignored** |
+| 安装版重启 | 新宿主启动无警告，托盘与快捷键状态正常 |
+
+验证仅覆盖 KDE Wayland；Windows、macOS 和 Linux X11 的快捷键路径未改动。

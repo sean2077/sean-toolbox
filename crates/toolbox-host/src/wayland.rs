@@ -12,12 +12,30 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use toolbox_core::{Config, Platform};
+use toolbox_core::{Config, HotkeySpec, Platform};
+use zbus::blocking::{Connection, Proxy};
 
 const SCRIPT_NAME: &str = "sean-toolbox-wayland";
 const SCRIPT: &str = include_str!("wayland/script.js");
 const LAUNCH_UNIT: &str = "sean-toolbox-launch@.service";
 const SHOW_UNIT: &str = "sean-toolbox-show@.service";
+const KWIN_COMPONENT: &str = "kwin";
+
+/// A shortcut the KWin script owns and the binding it expects in
+/// KGlobalAccel. KWin keeps the first binding registered for an action name,
+/// so a changed configuration has to update KGlobalAccel explicitly.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShortcutBinding {
+    pub action: String,
+    pub friendly: String,
+    pub keys: Vec<i32>,
+}
+
+/// An update the host prepares before committing a configuration change.
+pub struct Update {
+    pub script: String,
+    pub bindings: Vec<ShortcutBinding>,
+}
 
 pub struct KWinHotkeys {
     script_path: PathBuf,
@@ -72,28 +90,30 @@ impl KWinHotkeys {
     }
 
     /// Write the generated script and start units, then (re)load the KWin
-    /// script. Configuration changes replace the script atomically.
+    /// script. Configuration changes replace the script atomically and refresh
+    /// the KGlobalAccel bindings, which KWin does not update on its own.
     pub fn sync(&mut self, config: &Config) -> Vec<String> {
         let mut warnings = Vec::new();
         if let Err(error) = self.write_units() {
             warnings.push(format!("Wayland: {error}"));
         }
         let script = render(config);
-        match fs::read_to_string(&self.script_path) {
-            Ok(current) if current == script && self.loaded => return warnings,
-            Ok(_) | Err(_) => {}
+        let unchanged = matches!(fs::read_to_string(&self.script_path), Ok(current) if current == script)
+            && self.loaded;
+        if !unchanged {
+            if let Err(error) = self.write_script(&script) {
+                warnings.push(format!("Wayland: {error}"));
+                return warnings;
+            }
+            if let Err(error) = self.reload() {
+                warnings.push(format!("Wayland: {error}"));
+            }
         }
-        if let Err(error) = self.write_script(&script) {
-            warnings.push(format!("Wayland: {error}"));
-            return warnings;
-        }
-        if let Err(error) = self.reload() {
-            warnings.push(format!("Wayland: {error}"));
-        }
+        warnings.extend(self.sync_bindings(&desired_bindings(config)));
         warnings
     }
 
-    pub fn sync_script(&mut self, script: &str) -> Vec<String> {
+    pub fn sync_script(&mut self, script: &str, bindings: &[ShortcutBinding]) -> Vec<String> {
         let mut warnings = Vec::new();
         if let Err(error) = self.write_script(script) {
             warnings.push(format!("Wayland: {error}"));
@@ -102,7 +122,18 @@ impl KWinHotkeys {
         if let Err(error) = self.reload() {
             warnings.push(format!("Wayland: {error}"));
         }
+        warnings.extend(self.sync_bindings(bindings));
         warnings
+    }
+
+    /// KWin keeps the binding an action had when it was first registered, so
+    /// reloading the script never applies a changed shortcut. Update
+    /// KGlobalAccel directly and report when an action is missing.
+    fn sync_bindings(&self, bindings: &[ShortcutBinding]) -> Vec<String> {
+        match update_bindings(bindings) {
+            Ok(warnings) => warnings,
+            Err(error) => vec![format!("Wayland: {error}")],
+        }
     }
 
     /// Replay a profile shortcut through KGlobalAccel. The script owns the
@@ -292,6 +323,155 @@ fn action_title(profile_id: &str) -> String {
     format!("Sean Toolbox: {profile_id}")
 }
 
+/// The bindings the generated script owns. Mirrors `render`: the launcher is
+/// only registered with a non-empty shortcut; every enabled profile on this
+/// platform keeps an action even without a shortcut so a stale binding can be
+/// cleared.
+pub fn desired_bindings(config: &Config) -> Vec<ShortcutBinding> {
+    let mut bindings = Vec::new();
+    if !config.projects.hotkey.is_empty()
+        && let Some(keys) = qt_keys(&config.projects.hotkey)
+    {
+        bindings.push(ShortcutBinding {
+            action: action_title("projects"),
+            friendly: "Sean Toolbox: recent projects".into(),
+            keys,
+        });
+    }
+    if config.windows.enabled {
+        for profile in &config.windows.profiles {
+            if !profile.enabled || profile.platform != Platform::current() {
+                continue;
+            }
+            bindings.push(ShortcutBinding {
+                action: action_title(&profile.id),
+                friendly: format!("Sean Toolbox: {}", profile.name),
+                keys: qt_keys(&profile.hotkey).unwrap_or_default(),
+            });
+        }
+    }
+    bindings
+}
+
+/// Render a shortcut as a KGlobalAccel/Qt key sequence value. The KWin script
+/// passes the same text to `registerShortcut`, but KWin only applies it when
+/// the action is first created.
+fn qt_keys(text: &str) -> Option<Vec<i32>> {
+    if text.is_empty() {
+        return Some(Vec::new());
+    }
+    let key = HotkeySpec::parse(text).ok()?;
+    let code = match key.key.as_str() {
+        "SPACE" => 0x20,
+        "TAB" => 0x09,
+        "ENTER" => 0x0d,
+        "ESCAPE" => 0x1b,
+        name if name.len() == 1 => i32::from(name.as_bytes()[0]),
+        name => {
+            let number: i32 = name.strip_prefix('F')?.parse().ok()?;
+            if !(1..=24).contains(&number) {
+                return None;
+            }
+            0x0100_0030 + number - 1
+        }
+    };
+    let mut modifiers = 0;
+    if key.shift {
+        modifiers |= 0x0200_0000;
+    }
+    if key.ctrl {
+        modifiers |= 0x0400_0000;
+    }
+    if key.alt {
+        modifiers |= 0x0800_0000;
+    }
+    if key.super_key {
+        modifiers |= 0x1000_0000;
+    }
+    Some(vec![code | modifiers])
+}
+
+type ShortcutInfo = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    Vec<i32>,
+    Vec<i32>,
+);
+
+fn shortcut_infos(connection: &Connection) -> Result<Vec<ShortcutInfo>, String> {
+    let proxy = Proxy::new(
+        connection,
+        "org.kde.kglobalaccel",
+        "/component/kwin",
+        "org.kde.kglobalaccel.Component",
+    )
+    .map_err(|error| format!("Cannot reach KGlobalAccel: {error}"))?;
+    proxy
+        .call::<_, _, Vec<ShortcutInfo>>("allShortcutInfos", &())
+        .map_err(|error| format!("Cannot read KGlobalAccel shortcuts: {error}"))
+}
+
+fn update_bindings(bindings: &[ShortcutBinding]) -> Result<Vec<String>, String> {
+    if bindings.is_empty() {
+        return Ok(Vec::new());
+    }
+    let connection = Connection::session()
+        .map_err(|error| format!("Cannot connect to the session bus: {error}"))?;
+    let mut infos = shortcut_infos(&connection)?;
+    let missing = |infos: &[ShortcutInfo], binding: &ShortcutBinding| {
+        !infos
+            .iter()
+            .any(|info| info.2 == KWIN_COMPONENT && info.0 == binding.action)
+    };
+    if bindings.iter().any(|binding| missing(&infos, binding)) {
+        // KWin may still be executing the script; retry once before warning.
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        infos = shortcut_infos(&connection)?;
+    }
+    let global = Proxy::new(
+        &connection,
+        "org.kde.kglobalaccel",
+        "/kglobalaccel",
+        "org.kde.KGlobalAccel",
+    )
+    .map_err(|error| format!("Cannot reach KGlobalAccel: {error}"))?;
+    let mut warnings = Vec::new();
+    for binding in bindings {
+        let Some(info) = infos
+            .iter()
+            .find(|info| info.2 == KWIN_COMPONENT && info.0 == binding.action)
+        else {
+            warnings.push(format!(
+                "Wayland: shortcut {} is not registered",
+                binding.action
+            ));
+            continue;
+        };
+        if info.6 == binding.keys {
+            continue;
+        }
+        let action_id = vec![
+            info.2.clone(),
+            info.0.clone(),
+            info.3.clone(),
+            info.1.clone(),
+        ];
+        if let Err(error) =
+            global.call::<_, _, ()>("setForeignShortcut", &(action_id, binding.keys.clone()))
+        {
+            warnings.push(format!(
+                "Wayland: cannot set shortcut {}: {error}",
+                binding.action
+            ));
+        }
+    }
+    Ok(warnings)
+}
+
 fn qdbus_command() -> Result<&'static str, String> {
     for candidate in ["qdbus6", "qdbus"] {
         if env::var_os("PATH").is_some_and(|paths| {
@@ -386,6 +566,38 @@ mod tests {
     #[test]
     fn action_titles_are_stable_for_invoke() {
         assert_eq!(action_title("vscode"), "Sean Toolbox: vscode");
+    }
+
+    #[test]
+    fn qt_key_values_match_kglobalaccel() {
+        assert_eq!(qt_keys("Alt+C"), Some(vec![134_217_795]));
+        assert_eq!(qt_keys("F5"), Some(vec![16_777_268]));
+        assert_eq!(qt_keys("Ctrl+Alt+Space"), Some(vec![201_326_624]));
+        assert_eq!(qt_keys(""), Some(Vec::new()));
+        assert_eq!(qt_keys("Ctrl+Alt+Unknown"), None);
+    }
+
+    #[test]
+    fn desired_bindings_mirror_the_generated_script() {
+        let config = Config::default();
+        let bindings = desired_bindings(&config);
+        assert_eq!(bindings.len(), 4);
+        let launcher = bindings
+            .iter()
+            .find(|binding| binding.action == "Sean Toolbox: projects")
+            .unwrap();
+        assert_eq!(launcher.keys, vec![201_326_624]);
+        let terminal = bindings
+            .iter()
+            .find(|binding| binding.action == "Sean Toolbox: terminal")
+            .unwrap();
+        assert!(terminal.keys.is_empty());
+        let vscode = bindings
+            .iter()
+            .find(|binding| binding.action == "Sean Toolbox: vscode")
+            .unwrap();
+        assert_eq!(vscode.friendly, "Sean Toolbox: VS Code");
+        assert_eq!(vscode.keys, vec![16_777_267]);
     }
 
     #[test]
