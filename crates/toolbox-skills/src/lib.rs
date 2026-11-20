@@ -1080,13 +1080,18 @@ impl SkillsService {
         }
     }
 
-    fn linked_source(&self, entry: &ManagedSkill) -> Result<PathBuf, String> {
-        let target = entry
+    /// The recorded source path, whether or not it still exists.
+    fn linked_source_path(entry: &ManagedSkill) -> Result<PathBuf, String> {
+        entry
             .skill
             .target
             .as_deref()
-            .ok_or("Linked skill has no source directory")?;
-        let source = PathBuf::from(target);
+            .map(PathBuf::from)
+            .ok_or_else(|| "Linked skill has no source directory".into())
+    }
+
+    fn linked_source(&self, entry: &ManagedSkill) -> Result<PathBuf, String> {
+        let source = Self::linked_source_path(entry)?;
         if !source.is_dir() {
             return Err(format!(
                 "The linked source is missing: {}",
@@ -1300,8 +1305,17 @@ impl SkillsService {
         app: SkillApp,
         enabled: bool,
     ) -> Result<String, String> {
-        let source = self.linked_source(&entry)?;
-        self.verify_owned(&entry)?;
+        let source = Self::linked_source_path(&entry)?;
+        let source_exists = source.is_dir();
+        if enabled && !source_exists {
+            return Err(format!(
+                "The linked source is missing: {}",
+                source.display()
+            ));
+        }
+        if source_exists {
+            self.verify_owned(&entry)?;
+        }
         if !enabled && !entry.skill.apps.contains(&app) {
             return Ok("Skill is already disabled for this app".into());
         }
@@ -1328,9 +1342,13 @@ impl SkillsService {
         } else {
             match fs::symlink_metadata(&destination) {
                 Ok(_) => {
-                    if files::link_target(&destination)?.is_none()
-                        || !files::links_to(&destination, &source)?
-                    {
+                    let owned = files::link_target(&destination)?.is_some()
+                        && if source_exists {
+                            files::links_to(&destination, &source)?
+                        } else {
+                            link_points_to(&destination, &source)?
+                        };
+                    if !owned {
                         return Err(format!(
                             "The app link was replaced; restore it before disabling: {}",
                             destination.display()
@@ -1355,7 +1373,7 @@ impl SkillsService {
         if let Err(error) = self.save(next) {
             if enabled && created {
                 let _ = files::remove_link(&destination);
-            } else if !enabled {
+            } else if !enabled && source_exists {
                 let _ = files::link_dir(&source, &destination);
             }
             return Err(error);
@@ -1416,16 +1434,26 @@ impl SkillsService {
     }
 
     fn uninstall_link(&mut self, index: usize, entry: ManagedSkill) -> Result<String, String> {
-        let source = self.linked_source(&entry)?;
-        self.verify_owned(&entry)?;
+        let source = Self::linked_source_path(&entry)?;
+        // The source can disappear before the user uninstalls its links. The
+        // recorded target is then the only ownership evidence, so remove links
+        // that still point there instead of refusing the uninstall.
+        let source_exists = source.is_dir();
+        if source_exists {
+            self.verify_owned(&entry)?;
+        }
         let mut removed = Vec::new();
         for app in &entry.skill.apps {
             let destination = self.target(*app, &entry.skill.directory, false)?;
             match fs::symlink_metadata(&destination) {
                 Ok(_) => {
-                    if files::link_target(&destination)?.is_none()
-                        || !files::links_to(&destination, &source)?
-                    {
+                    let owned = files::link_target(&destination)?.is_some()
+                        && if source_exists {
+                            files::links_to(&destination, &source)?
+                        } else {
+                            link_points_to(&destination, &source)?
+                        };
+                    if !owned {
                         return Err(format!(
                             "The app link was replaced; move or restore it before uninstalling: {}",
                             destination.display()
