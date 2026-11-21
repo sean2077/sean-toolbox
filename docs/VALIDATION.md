@@ -1054,3 +1054,34 @@ Windows/macOS 的图标路径不变（EXE 资源与 ICNS）。
 
 验证仅覆盖 KDE Wayland；X11 使用同一 app id 作为 `WM_CLASS`，未在本机 X11 会话验证。
 Windows 与 macOS 未重新构建。
+
+## 2026-11-21 跨机剪贴板核心与宿主接线
+
+### 范围
+
+新增 `crates/toolbox-clipboard`：Noise NNpsk0 长连接、分块协议、200 ms 去抖与
+hash/origin 防循环、文件暂存与路径安全、CF_HTML、PNG/DIB 转换、Wayland
+`ext_data_control_manager_v1` 后端、Win32 `WM_CLIPBOARDUPDATE` 后端和
+`FakeBackend` 回环测试。`toolbox-core` 增加 `clipboard` 配置与
+`HostCommand::Clipboard(Status)`；`toolbox-host` 增加 `clipboard_worker` 和
+`sean-toolbox clipboard status|keygen`。
+
+### 自动检查
+
+| 检查 | 结果 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace` | 329 通过、0 失败、3 ignored |
+| `cargo check --target x86_64-pc-windows-msvc -p toolbox-clipboard` | 通过（仅编译检查，未链接/运行） |
+| `python scripts/collect_licenses.py` | 476 个包，无缺失许可文本 |
+
+3 个 ignored：两个剪贴板的真机只读探针/60 秒空闲测试，以及原有的平台限制测试。
+
+### 未执行的真机验收
+
+尚未在两台机器上部署并执行 GUI 验收：文字、HTML、截图、文件、敏感内容、
+1 分钟空闲 0 发送、睡眠唤醒重连和 Deskflow 切屏后粘贴。`wl-clipboard 2.2.1`
+不支持 `ext-data-control`，不能作为健康检查；后续用后端只读探针和 Klipper
+D-Bus，并请用户在 GUI 中实际 `Ctrl+C`/`Ctrl+V`。用户 GUI 清单由
+`chezmoi-ff` 统一执行后再补记本节。

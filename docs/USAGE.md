@@ -163,6 +163,52 @@ macOS 也支持上述快捷键对应的 `⌘` 组合键；悬停导航项可查�
 
 主动点击关闭按钮、选择“关闭界面”或按 `Esc` 关闭最后一个界面时，进程立即退出。另一界面仍可见、存在草稿、文件对话框或操作尚未完成时，会继续保留界面进程。关闭有修改的管理窗口时，会询问是否放弃修改。托盘和全局快捷键由常驻宿主继续处理。
 
+## 跨机剪贴板
+
+工具箱内置 u26 ↔ w11 的剪贴板同步，替代 SyncClipboard 和 KDE Connect 的剪贴板插件。只支持这两台固定机器，不做自动发现、云端或历史记录。
+
+### 角色与密钥
+
+- u26：`role=listen`，监听 `0.0.0.0:24802`。
+- w11：`role=connect`，`peer` 填 u26 的局域网地址 + `:24802`（当前为 `192.168.62.38:24802`）。
+- 协议使用 Noise NNpsk0；两端必须有相同的 32 字节预共享密钥。没有密钥或密钥不一致时只报告认证失败。
+
+生成密钥：
+
+```text
+sean-toolbox clipboard keygen
+```
+
+- Linux：`~/.config/sean-toolbox/clipboard.key`（0600）
+- Windows：`%LOCALAPPDATA%\SeanToolbox\clipboard.key`
+- 密钥不进 `config.json`，也不要出现在命令行参数里；拷贝时用 scp 传文件。
+
+### 配置
+
+在 `config.json` 增加：
+
+```json
+"clipboard": {
+  "enabled": true,
+  "role": "listen",
+  "listen": "0.0.0.0:24802",
+  "peer": "",
+  "max_transfer_bytes": 1073741824
+}
+```
+
+w11 把 `role` 改成 `connect`，填 `peer`。`max_transfer_bytes` 上限为 1 GiB。支持文本、HTML、PNG 图片和文件/目录；文字/HTML 单项 16 MiB，图片 64 MiB，文件总量取 `max_transfer_bytes`。本机历史继续用 Klipper；密码管理器标记的敏感内容不会同步。
+
+### 状态与网络
+
+```text
+sean-toolbox clipboard status
+```
+
+输出连接状态、最近收发类型/时间、收发计数和错误。u26 需要放行 `24802/tcp`，只允许私网来源（`scripts/kubuntu-setup.sh` 的 firewall 段已包含）；建议给 u26 做 DHCP 保留，地址变化后同步修改 w11 的 `peer`。
+
+同一时间只传一份内容，新的复制会取消旧传输。断线后指数退避重连；睡眠唤醒或对端重启后自动恢复。收到的文件缓存在 `$XDG_CACHE_HOME/sean-toolbox/clipboard`（Linux）或 `%LOCALAPPDATA%\sean-toolbox\clipboard`（Windows），保留最近 5 份或 7 天。
+
 ## 配置文件
 
 日常设置可直接在界面修改。配置文件位置如下，也可运行 `sean-toolbox config-path` 查看。

@@ -90,3 +90,13 @@ links into `target/THIRD_PARTY_LICENSES.txt`; release packaging includes that fi
 The inventory includes resolved build-time and other-target dependencies and
 retains their upstream notices. Major components include winit, global-hotkey, tray-icon, x11rb, windows-sys,
 rusqlite/SQLite, serde and rfd.
+
+## Clipboard dependencies
+
+The clipboard bridge adds `snow` (Apache-2.0 OR MIT), `sha2` (MIT OR Apache-2.0),
+`rand` (MIT OR Apache-2.0), `image` (MIT OR Apache-2.0), and the Smithay Wayland
+crates `wayland-client`, `wayland-protocols`, `wayland-backend` and
+`wayland-scanner` (MIT). Transitive RustCrypto crates `blake2` and
+`chacha20poly1305` are MIT OR Apache-2.0. No GPL dependency is introduced.
+`scripts/collect_licenses.py` records the complete texts in
+`target/THIRD_PARTY_LICENSES.txt`; release packaging copies that inventory.
