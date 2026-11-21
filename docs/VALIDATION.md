@@ -1072,16 +1072,28 @@ hash/origin 防循环、文件暂存与路径安全、CF_HTML、PNG/DIB 转换�
 | --- | --- |
 | `cargo fmt --all -- --check` | 通过 |
 | `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
-| `cargo test --locked --workspace` | 329 通过、0 失败、3 ignored |
+| `cargo test --locked --workspace` | 333 通过、0 失败、3 ignored |
 | `cargo check --target x86_64-pc-windows-msvc -p toolbox-clipboard` | 通过（仅编译检查，未链接/运行） |
 | `python scripts/collect_licenses.py` | 476 个包，无缺失许可文本 |
 
 3 个 ignored：两个剪贴板的真机只读探针/60 秒空闲测试，以及原有的平台限制测试。
+额外的 `idle_one_minute_has_zero_sends` 以 `--ignored` 单独运行通过（61.1 s）。
+
+### 真机部署与网络测试（2026-11-21）
+
+- u26 监听 `24802/tcp`，w11 宿主在 session 1；两端 `clipboard status` 均为
+  `connected=true`，TCP Established。
+- 最终构建空闲 60 s：u26 `sent_count` 1→1，w11 `received_count` 0→0，新增发送 0；
+  断网恢复后再次空闲 60 s 计数不变。
+- 用 UFW 临时 deny `24802/tcp` 并断开已建立连接，持续约 60 s；放开后
+  **27.6 s 自动重连**（连接端指数退避上限 30 s）。断连期间监听端和新连接替换
+  逻辑未影响其他会话；短超时单元测试覆盖静默 45 s 与新连接替换。
+- `wl-clipboard 2.2.1` 不支持 `ext-data-control`，不能作为健康检查；真机探针只在
+  严格外部 timeout 下运行。
 
 ### 未执行的真机验收
 
-尚未在两台机器上部署并执行 GUI 验收：文字、HTML、截图、文件、敏感内容、
-1 分钟空闲 0 发送、睡眠唤醒重连和 Deskflow 切屏后粘贴。`wl-clipboard 2.2.1`
-不支持 `ext-data-control`，不能作为健康检查；后续用后端只读探针和 Klipper
-D-Bus，并请用户在 GUI 中实际 `Ctrl+C`/`Ctrl+V`。用户 GUI 清单由
-`chezmoi-ff` 统一执行后再补记本节。
+GUI 应用内粘贴尚未执行：文字、HTML、截图、文件、敏感内容、>1 GiB 拒绝、
+Deskflow 切屏后粘贴和 Windows toast 外观。`wl-clipboard 2.2.1` 不能作为健康
+检查；请用户在 GUI 中实际 `Ctrl+C`/`Ctrl+V`。Windows toast 只做了交叉编译检查，
+未在桌面显示验证。
