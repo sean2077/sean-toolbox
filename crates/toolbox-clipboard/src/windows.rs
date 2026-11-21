@@ -538,12 +538,13 @@ fn render_format(hwnd: HWND, format: u32, inner: &Arc<Inner>) {
     let Some(offer) = inner.deferred.lock().unwrap().clone() else {
         return;
     };
-    // A paste comes from the foreground app. Background clipboard monitors
-    // (remote-desktop clipboard sync, dictionary pop-ups) render every new
-    // entry and would pull the payload on copy, so they get no data; the
-    // format stays delayed and the real paste renders it later.
+    // Some background clipboard monitors (NetEase UU Remote's clipboard
+    // sync) render every new entry, which would pull the payload on copy.
+    // They get no data and the format stays delayed for the real paste.
+    // Anything else is served: a paste may come from a helper process, such
+    // as the powershell.exe Claude Code starts to read the clipboard.
     let requester = clipboard_requester();
-    if !requester.foreground {
+    if requester.background {
         eprintln!(
             "Sean Toolbox clipboard render: ignored background request for format {format} from {}",
             requester.label
@@ -598,46 +599,42 @@ fn render_format(hwnd: HWND, format: u32, inner: &Arc<Inner>) {
     let _ = hwnd;
 }
 
+/// Executable names of background clipboard monitors that render every new
+/// entry; compared case-insensitively with the requester's file name.
+const BACKGROUND_READERS: &[&str] = &["gameviewer.exe"];
+
 struct Requester {
     label: String,
-    foreground: bool,
+    background: bool,
 }
 
 /// The process that currently has the clipboard open, i.e. the one whose
-/// `GetClipboardData` triggered `WM_RENDERFORMAT`, and whether it owns the
-/// foreground window. UWP apps run inside `ApplicationFrameHost`, so a
-/// foreground frame host counts for any requester.
+/// `GetClipboardData` triggered `WM_RENDERFORMAT`.
 fn clipboard_requester() -> Requester {
     use windows_sys::Win32::{
         System::DataExchange::GetOpenClipboardWindow,
-        UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId},
+        UI::WindowsAndMessaging::GetWindowThreadProcessId,
     };
     let window = unsafe { GetOpenClipboardWindow() };
     let mut pid = 0u32;
     if !window.is_null() {
         unsafe { GetWindowThreadProcessId(window, &mut pid) };
     }
-    let foreground = unsafe { GetForegroundWindow() };
-    let mut foreground_pid = 0u32;
-    if !foreground.is_null() {
-        unsafe { GetWindowThreadProcessId(foreground, &mut foreground_pid) };
-    }
-    let path = if pid == 0 { None } else { process_path(pid) };
-    let frame_host = process_path(foreground_pid).is_some_and(|path| {
-        path.to_ascii_lowercase()
-            .ends_with("\\applicationframehost.exe")
+    let path = process_path(pid);
+    let background = path.as_deref().is_some_and(|path| {
+        let name = path
+            .rsplit('\\')
+            .next()
+            .unwrap_or(path)
+            .to_ascii_lowercase();
+        BACKGROUND_READERS.contains(&name.as_str())
     });
     let label = match &path {
         Some(path) => format!("pid {pid} {path}"),
         None if pid == 0 => "unknown process".into(),
         None => format!("pid {pid}"),
     };
-    Requester {
-        label,
-        // An unidentified requester is allowed: failing a real paste is worse
-        // than an occasional early transfer.
-        foreground: pid == 0 || pid == foreground_pid || frame_host,
-    }
+    Requester { label, background }
 }
 
 fn process_path(pid: u32) -> Option<String> {

@@ -75,10 +75,10 @@ Never put the key or the Noise secret in `config.json` or a command line.
   while the source reads the payload; a large file selection can exceed the
   target application's clipboard timeout. The source must still hold the
   snapshot (last eight items) and be online when the peer pastes. On Windows
-  `WM_RENDERFORMAT` is only served when the process holding the clipboard owns
-  the foreground window (or the foreground window is `ApplicationFrameHost`);
-  background monitors such as NetEase UU Remote (`GameViewer.exe`) get no data
-  and the format stays delayed. Wayland does not expose the active client, so
+  `WM_RENDERFORMAT` is refused for the executables in `BACKGROUND_READERS`
+  (NetEase UU Remote, `GameViewer.exe`); they get no data and the format stays
+  delayed. Any other requester is served, because a paste can come from a
+  helper process (Claude Code reads the clipboard through `powershell.exe`). Wayland does not expose the active client, so
   Linux identifies the reader through the transfer pipe (`/proc/*/fd`) and
   refuses the processes in `BACKGROUND_READERS` (fcitx5's clipboard addon reads
   every selection even with `IgnorePasswordFromPasswordManager`). Klipper skips
