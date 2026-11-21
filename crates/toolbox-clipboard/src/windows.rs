@@ -223,12 +223,14 @@ fn run(inner: Arc<Inner>) -> Result<(), String> {
             && let Err(error) = write_files(hwnd, id, fetcher, &inner)
         {
             eprintln!("Sean Toolbox clipboard file entry: {error}");
+            write_failed(&inner);
         }
         let pending = inner.pending_write.lock().unwrap().take();
         if let Some(content) = pending
             && let Err(error) = write_clipboard(hwnd, &content, &inner)
         {
             eprintln!("Sean Toolbox clipboard write: {error}");
+            write_failed(&inner);
         }
         let mut message: MSG = unsafe { std::mem::zeroed() };
         while unsafe { PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, PM_REMOVE) } != 0 {
@@ -280,6 +282,12 @@ unsafe extern "system" fn wndproc(
         return 0;
     }
     unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
+}
+
+fn write_failed(inner: &Arc<Inner>) {
+    if let Some(events) = inner.events.lock().unwrap().as_ref() {
+        let _ = events.send(BackendEvent::WriteFailed);
+    }
 }
 
 fn notify(inner: &Arc<Inner>) {

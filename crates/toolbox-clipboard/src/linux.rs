@@ -580,6 +580,9 @@ fn run(inner: Arc<Inner>) -> Result<(), String> {
             && let Err(error) = state.set_file_selection(&qh, id, fetcher, &inner)
         {
             eprintln!("Sean Toolbox clipboard (Wayland): file selection: {error}");
+            if let Some(events) = inner.events.lock().unwrap().as_ref() {
+                let _ = events.send(BackendEvent::WriteFailed);
+            }
         }
         conn.flush().map_err(|error| error.to_string())?;
         if let Some(guard) = conn.prepare_read() {

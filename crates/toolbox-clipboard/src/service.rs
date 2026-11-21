@@ -587,6 +587,9 @@ impl Worker {
     fn handle(&mut self, event: Event) {
         match event {
             Event::Backend(BackendEvent::Changed) => self.local_change(),
+            Event::Backend(BackendEvent::WriteFailed) => {
+                self.fail("写入剪贴板失败：剪贴板被其他程序占用".into());
+            }
             Event::Backend(BackendEvent::Unavailable) => {
                 self.set_error("the clipboard backend stopped".into());
             }

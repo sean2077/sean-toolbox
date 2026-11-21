@@ -97,6 +97,9 @@ pub struct ReadContent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendEvent {
     Changed,
+    /// A queued write or file entry could not be put on the clipboard
+    /// (usually another program kept it open).
+    WriteFailed,
     Unavailable,
 }
 
