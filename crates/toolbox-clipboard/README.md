@@ -74,9 +74,12 @@ Never put the key or the Noise secret in `config.json` or a command line.
 - A deferred paste blocks
   while the source reads the payload; a large file selection can exceed the
   target application's clipboard timeout. The source must still hold the
-  snapshot (last eight items) and be online when the peer pastes. Other
-  clipboard monitors that ignore the history hints can still turn a deferred
-  item into an immediate transfer.
+  snapshot (last eight items) and be online when the peer pastes. On Windows
+  `WM_RENDERFORMAT` is only served when the process holding the clipboard owns
+  the foreground window (or the foreground window is `ApplicationFrameHost`);
+  background monitors such as NetEase UU Remote (`GameViewer.exe`) get no data
+  and the format stays delayed. On Linux, clipboard monitors that ignore
+  `x-kde-passwordManagerHint` can still pull a deferred item early.
 - The disconnect detector uses a 45 s application silence timeout (three 15 s
   heartbeats); TCP keepalive is not set separately.
 - Notifications use `org.freedesktop.Notifications` through zbus on Linux and

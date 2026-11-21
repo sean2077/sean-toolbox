@@ -351,13 +351,13 @@ fn is_sensitive() -> bool {
         return true;
     }
     let history = register(INCLUDE_HISTORY_FORMAT);
-    if history != 0 && unsafe { IsClipboardFormatAvailable(history) } != 0 {
-        if let Some(bytes) = clipboard_bytes(history) {
-            if bytes.len() >= 4 && u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) == 0
-            {
-                return true;
-            }
-        }
+    if history != 0
+        && unsafe { IsClipboardFormatAvailable(history) } != 0
+        && let Some(bytes) = clipboard_bytes(history)
+        && bytes.len() >= 4
+        && u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) == 0
+    {
+        return true;
     }
     false
 }
@@ -412,7 +412,7 @@ fn write_locked(content: &ClipboardContent) -> Result<(), String> {
         set_bytes(CF_HDROP as u32, &dropfiles(&content.files)?)?;
         let format = register(PREFERRED_DROP_EFFECT);
         if format != 0 {
-            set_bytes(format, &(DROPEFFECT_COPY as u32).to_le_bytes())?;
+            set_bytes(format, &DROPEFFECT_COPY.to_le_bytes())?;
         }
     }
     let origin = register(ORIGIN_WINDOWS_FORMAT);
@@ -478,7 +478,7 @@ fn write_deferred(hwnd: HWND, offer: &DeferredOffer, inner: &Arc<Inner>) -> Resu
             set_delayed(CF_HDROP as u32);
             let format = register(PREFERRED_DROP_EFFECT);
             if format != 0 {
-                set_bytes(format, &(DROPEFFECT_COPY as u32).to_le_bytes())?;
+                set_bytes(format, &DROPEFFECT_COPY.to_le_bytes())?;
             }
         }
         let origin = register(ORIGIN_WINDOWS_FORMAT);
@@ -538,11 +538,21 @@ fn render_format(hwnd: HWND, format: u32, inner: &Arc<Inner>) {
     let Some(offer) = inner.deferred.lock().unwrap().clone() else {
         return;
     };
-    // Record who asked: a paste comes from the target app, while a pull right
-    // after the copy means some clipboard monitor is rendering every entry.
+    // A paste comes from the foreground app. Background clipboard monitors
+    // (remote-desktop clipboard sync, dictionary pop-ups) render every new
+    // entry and would pull the payload on copy, so they get no data; the
+    // format stays delayed and the real paste renders it later.
+    let requester = clipboard_requester();
+    if !requester.foreground {
+        eprintln!(
+            "Sean Toolbox clipboard render: ignored background request for format {format} from {}",
+            requester.label
+        );
+        return;
+    }
     eprintln!(
-        "Sean Toolbox clipboard render: format {format} requested by {}",
-        clipboard_requester()
+        "Sean Toolbox clipboard render: format {format} for {}",
+        requester.label
     );
     let content = match ensure_fetched(inner, &offer) {
         Ok(content) => content,
@@ -588,32 +598,62 @@ fn render_format(hwnd: HWND, format: u32, inner: &Arc<Inner>) {
     let _ = hwnd;
 }
 
-/// Executable of the process that currently has the clipboard open, i.e. the
-/// one whose `GetClipboardData` triggered `WM_RENDERFORMAT`.
-fn clipboard_requester() -> String {
+struct Requester {
+    label: String,
+    foreground: bool,
+}
+
+/// The process that currently has the clipboard open, i.e. the one whose
+/// `GetClipboardData` triggered `WM_RENDERFORMAT`, and whether it owns the
+/// foreground window. UWP apps run inside `ApplicationFrameHost`, so a
+/// foreground frame host counts for any requester.
+fn clipboard_requester() -> Requester {
     use windows_sys::Win32::{
-        Foundation::CloseHandle,
-        System::{
-            DataExchange::GetOpenClipboardWindow,
-            Threading::{
-                OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
-                QueryFullProcessImageNameW,
-            },
-        },
-        UI::WindowsAndMessaging::GetWindowThreadProcessId,
+        System::DataExchange::GetOpenClipboardWindow,
+        UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId},
     };
     let window = unsafe { GetOpenClipboardWindow() };
-    if window.is_null() {
-        return "unknown (no clipboard window)".into();
-    }
     let mut pid = 0u32;
-    unsafe { GetWindowThreadProcessId(window, &mut pid) };
+    if !window.is_null() {
+        unsafe { GetWindowThreadProcessId(window, &mut pid) };
+    }
+    let foreground = unsafe { GetForegroundWindow() };
+    let mut foreground_pid = 0u32;
+    if !foreground.is_null() {
+        unsafe { GetWindowThreadProcessId(foreground, &mut foreground_pid) };
+    }
+    let path = if pid == 0 { None } else { process_path(pid) };
+    let frame_host = process_path(foreground_pid).is_some_and(|path| {
+        path.to_ascii_lowercase()
+            .ends_with("\\applicationframehost.exe")
+    });
+    let label = match &path {
+        Some(path) => format!("pid {pid} {path}"),
+        None if pid == 0 => "unknown process".into(),
+        None => format!("pid {pid}"),
+    };
+    Requester {
+        label,
+        // An unidentified requester is allowed: failing a real paste is worse
+        // than an occasional early transfer.
+        foreground: pid == 0 || pid == foreground_pid || frame_host,
+    }
+}
+
+fn process_path(pid: u32) -> Option<String> {
+    use windows_sys::Win32::{
+        Foundation::CloseHandle,
+        System::Threading::{
+            OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+            QueryFullProcessImageNameW,
+        },
+    };
     if pid == 0 {
-        return "unknown".into();
+        return None;
     }
     let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
     if process.is_null() {
-        return format!("pid {pid}");
+        return None;
     }
     let mut buffer = [0u16; 512];
     let mut len = buffer.len() as u32;
@@ -621,13 +661,7 @@ fn clipboard_requester() -> String {
         QueryFullProcessImageNameW(process, PROCESS_NAME_WIN32, buffer.as_mut_ptr(), &mut len)
     };
     unsafe { CloseHandle(process) };
-    if ok == 0 {
-        return format!("pid {pid}");
-    }
-    format!(
-        "pid {pid} {}",
-        String::from_utf16_lossy(&buffer[..len as usize])
-    )
+    (ok != 0).then(|| String::from_utf16_lossy(&buffer[..len as usize]))
 }
 
 fn utf16_bytes(text: &str) -> Vec<u8> {
@@ -677,8 +711,10 @@ fn clipboard_bytes(format: u32) -> Option<Vec<u8>> {
 
 fn decode_utf16(bytes: &[u8]) -> Option<String> {
     let units = bytes
-        .chunks_exact(2)
-        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| u16::from_le_bytes(*pair))
         .take_while(|unit| *unit != 0)
         .collect::<Vec<_>>();
     if units.is_empty() {
