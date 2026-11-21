@@ -1134,3 +1134,10 @@ Deskflow 切屏后粘贴和 Windows toast 外观。`wl-clipboard 2.2.1` 不能�
 - w11 → u26：会话 1 中 `Set-Clipboard` 后，u26 `deferred_count` +1、`received_count` 保持 0；日志 `ignored background request for text/plain;charset=utf-8 from pid ... fcitx5`。fcitx5 5.1.19 的剪贴板插件即使设置 `IgnorePasswordFromPasswordManager=True` 仍会读取文本，因此由后端名单拒绝。
 - 未覆盖：前台应用真实粘贴（飞书、Word、Dolphin、Claude Code）、图片与文件，需在桌面上人工验收。
 
+
+## 2026-11-21：跨机剪贴板协议 v3（文字/图片即推送、文件粘贴时传）
+
+- 版本：`feat/clipboard-sync` 192c6c3；u26 Kubuntu 26.04 / KWin 6.6.7（listen），w11 Windows 11（connect，宿主在交互会话 session 1）。
+- 命令行实测：u26 → w11 中文文字，w11 在交互会话用 `Get-Clipboard` 读取内容一致，约 50 ms（与读本机剪贴板相当）；w11 → u26 文字进入 Klipper。w11 `Set-Clipboard -Path` 复制目录 + 5 MB 文件后，u26 `transfer` 为空、`cache_bytes` 保持 0，粘贴前无传输。`clipboard clear-cache` 将 w11 缓存从 221 MB 清到 0。
+- 用户 GUI 验收通过：两向文字、飞书带格式文字、两向截图（含 Claude Code 粘贴）、小文件一次粘贴、100 MB 文件“第一次粘贴开始传输、通知完成后再粘贴”。
+- 测试期间 w11 的剪贴板曾被未知进程持续占用约数分钟（任何程序 `OpenClipboard` 均失败，退出工具箱后依旧），随后自行恢复；新版在写入失败时发通知并记录 `last_error`。
