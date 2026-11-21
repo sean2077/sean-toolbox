@@ -197,7 +197,7 @@ sean-toolbox clipboard keygen
 }
 ```
 
-w11 把 `role` 改成 `connect`，填 `peer`。`max_transfer_bytes` 上限为 1 GiB。支持文本、HTML、PNG 图片和文件/目录；文字/HTML 单项 16 MiB，图片 64 MiB，文件总量取 `max_transfer_bytes`。本机历史继续用 Klipper；密码管理器标记的敏感内容不会同步。
+w11 把 `role` 改成 `connect`，填 `peer`。`max_transfer_bytes` 上限为 1 GiB。支持文本、HTML、PNG 图片和文件/目录；文字/HTML 单项 16 MiB，图片 64 MiB，文件总量取 `max_transfer_bytes`。本机历史继续用 Klipper；密码管理器标记的敏感内容不会同步。超过上限、或文件传输开始/完成时会弹桌面通知。配置总是保存为 schema 2；旧 schema 1 会迁移，手工编辑时优先使用 schema 2。
 
 ### 状态与网络
 

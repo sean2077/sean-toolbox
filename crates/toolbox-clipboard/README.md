@@ -39,6 +39,20 @@ The 32-byte pre-shared key is a separate file:
 `sean-toolbox clipboard keygen` creates the file and never prints the key.
 Never put the key or the Noise secret in `config.json` or a command line.
 
+## Known limitations
+
+- Sending is synchronous. During a 1 GiB transfer the sender does not process
+  inbound frames; two simultaneous large sends can reach the 10 s write timeout.
+  A new local copy does not cancel an in-flight send yet.
+- The disconnect detector uses a 45 s application silence timeout (three 15 s
+  heartbeats); TCP keepalive is not set separately.
+- Notifications use `org.freedesktop.Notifications` through zbus on Linux and
+  `notify-rust` toasts on Windows. They cover limits and file transfer
+  start/finish only, not every clipboard item.
+- Schema 1 configs are accepted and migrated to schema 2; the UI always writes
+  schema 2. A schema 1 file may now also carry a `clipboard` section, but schema 2
+  is the canonical format.
+
 ## Testing
 
 Unit tests cover framing, Noise handshakes, CF_HTML offsets, PNG/DIB conversion,
