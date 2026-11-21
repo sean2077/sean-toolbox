@@ -31,7 +31,8 @@ use std::{
 pub const HEARTBEAT: Duration = Duration::from_secs(15);
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(4);
 const LOOP_DELAY: Duration = Duration::from_millis(20);
-const READ_TIMEOUT: Duration = Duration::from_millis(20);
+const READ_TIMEOUT: Duration = Duration::from_millis(10);
+const MAX_FRAMES_PER_PASS: usize = 256;
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
 const CACHE_KEEP: usize = 5;
 const CACHE_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
@@ -666,369 +667,393 @@ fn session(
                 status.last_error = Some("clipboard fetch timed out".into());
             });
         }
-        match net.try_frame() {
-            Ok(Some(frame)) => {
-                last_inbound = now;
-                let message = Message::from_frame(&frame).map_err(|error| error.to_string())?;
-                match message {
-                    Message::Hello { proto_version, .. } => {
-                        if proto_version != PROTO_VERSION {
-                            return Err(format!("protocol mismatch: {proto_version}"));
-                        }
-                        hello = true;
-                        connected.store(true, Ordering::Release);
-                        set_status(status, |status| {
-                            status.connected = true;
-                            status.last_error = None;
-                        });
-                    }
-                    Message::Offer {
-                        id,
-                        text,
-                        html,
-                        image,
-                        files,
-                    } => {
-                        if let Some(pending) = pending_fetch.take() {
-                            let _ = pending
-                                .reply
-                                .send(Err("interrupted by another clipboard item".into()));
+        // Drain every frame that has arrived: a fetch is several frames
+        // (Chunk/End per format), and handling one per pass added a full loop
+        // delay to each of them.
+        let mut drained = 0;
+        loop {
+            if drained >= MAX_FRAMES_PER_PASS {
+                break;
+            }
+            drained += 1;
+            match net.try_frame() {
+                Ok(Some(frame)) => {
+                    last_inbound = now;
+                    let message = Message::from_frame(&frame).map_err(|error| error.to_string())?;
+                    match message {
+                        Message::Hello { proto_version, .. } => {
+                            if proto_version != PROTO_VERSION {
+                                return Err(format!("protocol mismatch: {proto_version}"));
+                            }
+                            hello = true;
+                            connected.store(true, Ordering::Release);
                             set_status(status, |status| {
-                                status.pending_fetch = false;
+                                status.connected = true;
+                                status.last_error = None;
                             });
                         }
-                        if let Some(old) = receiving.take() {
-                            old.cancel();
-                        }
-                        let has_files = files.is_some();
-                        if has_files {
-                            notifier.notify("Sean Toolbox", "正在接收文件…");
-                        }
-                        let cancel_id = id.clone();
-                        match ReceiveState::create(
-                            &settings.cache_dir,
+                        Message::Offer {
                             id,
                             text,
                             html,
                             image,
                             files,
-                            settings.max_transfer_bytes,
-                        ) {
-                            Ok(next) => receiving = Some(next),
-                            Err(error) => {
+                        } => {
+                            if let Some(pending) = pending_fetch.take() {
+                                let _ = pending
+                                    .reply
+                                    .send(Err("interrupted by another clipboard item".into()));
+                                set_status(status, |status| {
+                                    status.pending_fetch = false;
+                                });
+                            }
+                            if let Some(old) = receiving.take() {
+                                old.cancel();
+                            }
+                            let has_files = files.is_some();
+                            if has_files {
+                                notifier.notify("Sean Toolbox", "正在接收文件…");
+                            }
+                            let cancel_id = id.clone();
+                            match ReceiveState::create(
+                                &settings.cache_dir,
+                                id,
+                                text,
+                                html,
+                                image,
+                                files,
+                                settings.max_transfer_bytes,
+                            ) {
+                                Ok(next) => receiving = Some(next),
+                                Err(error) => {
+                                    notifier.notify(
+                                        "Sean Toolbox",
+                                        &format!("接收剪贴板失败：{error}"),
+                                    );
+                                    set_status(status, |status| {
+                                        status.last_error = Some(error);
+                                    });
+                                    let _ = net.send(&Message::Cancel { id: cancel_id });
+                                }
+                            }
+                        }
+                        Message::Defer {
+                            id,
+                            text,
+                            html,
+                            image,
+                            files,
+                        } => {
+                            let offer = DeferredOffer {
+                                id: id.clone(),
+                                text,
+                                html,
+                                image,
+                                files,
+                            };
+                            if let Err(error) = offer.validate(settings.max_transfer_bytes) {
                                 notifier
                                     .notify("Sean Toolbox", &format!("接收剪贴板失败：{error}"));
                                 set_status(status, |status| {
                                     status.last_error = Some(error);
                                 });
-                                let _ = net.send(&Message::Cancel { id: cancel_id });
+                                continue;
                             }
-                        }
-                    }
-                    Message::Defer {
-                        id,
-                        text,
-                        html,
-                        image,
-                        files,
-                    } => {
-                        let offer = DeferredOffer {
-                            id: id.clone(),
-                            text,
-                            html,
-                            image,
-                            files,
-                        };
-                        if let Err(error) = offer.validate(settings.max_transfer_bytes) {
-                            notifier.notify("Sean Toolbox", &format!("接收剪贴板失败：{error}"));
-                            set_status(status, |status| {
-                                status.last_error = Some(error);
-                            });
-                            continue;
-                        }
-                        deferred_offers.insert(offer.clone());
-                        match backend.defer(&offer) {
-                            Ok(()) => {
-                                let kind = offer.kind();
-                                set_status(status, |status| {
-                                    status.last_deferred = Some(format!("{kind} {}", timestamp()));
-                                    status.deferred_count += 1;
-                                });
-                            }
-                            Err(error) => {
-                                // The destination cannot render lazily (for
-                                // example a backend without deferred support);
-                                // pull immediately so the clipboard still works.
-                                let has_files = offer.has_files();
-                                if has_files {
-                                    notifier.notify("Sean Toolbox", "正在接收文件…");
+                            deferred_offers.insert(offer.clone());
+                            match backend.defer(&offer) {
+                                Ok(()) => {
+                                    let kind = offer.kind();
+                                    set_status(status, |status| {
+                                        status.last_deferred =
+                                            Some(format!("{kind} {}", timestamp()));
+                                        status.deferred_count += 1;
+                                    });
                                 }
-                                match ReceiveState::create(
-                                    &settings.cache_dir,
-                                    offer.id.clone(),
-                                    offer.text.clone(),
-                                    offer.html.clone(),
-                                    offer.image.clone(),
-                                    offer.files.clone(),
-                                    settings.max_transfer_bytes,
-                                ) {
-                                    Ok(state) => {
-                                        if let Err(error) = net.send(&Message::Fetch {
-                                            id: offer.id.clone(),
-                                        }) {
-                                            let _ = net.send(&Message::Cancel { id });
-                                            return Err(error);
+                                Err(error) => {
+                                    // The destination cannot render lazily (for
+                                    // example a backend without deferred support);
+                                    // pull immediately so the clipboard still works.
+                                    let has_files = offer.has_files();
+                                    if has_files {
+                                        notifier.notify("Sean Toolbox", "正在接收文件…");
+                                    }
+                                    match ReceiveState::create(
+                                        &settings.cache_dir,
+                                        offer.id.clone(),
+                                        offer.text.clone(),
+                                        offer.html.clone(),
+                                        offer.image.clone(),
+                                        offer.files.clone(),
+                                        settings.max_transfer_bytes,
+                                    ) {
+                                        Ok(state) => {
+                                            if let Err(error) = net.send(&Message::Fetch {
+                                                id: offer.id.clone(),
+                                            }) {
+                                                let _ = net.send(&Message::Cancel { id });
+                                                return Err(error);
+                                            }
+                                            receiving = Some(state);
+                                            set_status(status, |status| {
+                                                status.last_error = Some(format!(
+                                                    "deferred clipboard unavailable: {error}"
+                                                ));
+                                            });
                                         }
-                                        receiving = Some(state);
-                                        set_status(status, |status| {
-                                            status.last_error = Some(format!(
-                                                "deferred clipboard unavailable: {error}"
-                                            ));
-                                        });
-                                    }
-                                    Err(error) => {
-                                        notifier.notify(
-                                            "Sean Toolbox",
-                                            &format!("接收剪贴板失败：{error}"),
-                                        );
-                                        set_status(status, |status| {
-                                            status.last_error = Some(error);
-                                        });
-                                        let _ = net.send(&Message::Cancel { id });
+                                        Err(error) => {
+                                            notifier.notify(
+                                                "Sean Toolbox",
+                                                &format!("接收剪贴板失败：{error}"),
+                                            );
+                                            set_status(status, |status| {
+                                                status.last_error = Some(error);
+                                            });
+                                            let _ = net.send(&Message::Cancel { id });
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                    Message::Fetch { id } => {
-                        let Some(entry) = deferred_store.get(&id) else {
-                            let _ = net.send(&Message::FetchFailed {
-                                id,
-                                message: "deferred clipboard item is no longer available".into(),
-                            });
-                            continue;
-                        };
-                        let has_files = entry.offer.has_files();
-                        if has_files {
-                            notifier.notify("Sean Toolbox", "正在发送文件…");
-                        }
-                        set_status(status, |status| {
-                            status.pending_fetch = true;
-                        });
-                        match send_blobs(&mut net, &id, &entry.content, &entry.offer) {
-                            Ok(()) => {
-                                if has_files {
-                                    notifier.notify("Sean Toolbox", "文件已发送");
-                                }
-                                set_status(status, |status| {
-                                    status.pending_fetch = false;
-                                    status.last_sent =
-                                        Some(format!("{} {}", entry.offer.kind(), timestamp()));
-                                    status.sent_count += 1;
+                        Message::Fetch { id } => {
+                            let Some(entry) = deferred_store.get(&id) else {
+                                let _ = net.send(&Message::FetchFailed {
+                                    id,
+                                    message: "deferred clipboard item is no longer available"
+                                        .into(),
                                 });
-                                // Serving a large fetch can take longer than
-                                // the normal silence window; the peer was
-                                // demonstrably alive while we were sending.
-                                last_inbound = Instant::now();
-                            }
-                            Err(SendContentError::Content(error)) => {
-                                set_status(status, |status| {
-                                    status.pending_fetch = false;
-                                    status.last_error = Some(error.clone());
-                                });
-                                let _ = net.send(&Message::FetchFailed { id, message: error });
-                            }
-                            Err(SendContentError::Network(error)) => return Err(error),
-                        }
-                    }
-                    Message::FetchFailed { id, message } => {
-                        if pending_fetch
-                            .as_ref()
-                            .is_some_and(|pending| pending.id == id)
-                        {
-                            let pending = pending_fetch.take().expect("pending fetch");
-                            if receiving.as_ref().is_some_and(|state| state.id == id)
-                                && let Some(state) = receiving.take()
-                            {
-                                state.cancel();
-                            }
-                            let _ = pending.reply.send(Err(message.clone()));
-                            notifier.notify("Sean Toolbox", "按需剪贴板传输失败");
-                            set_status(status, |status| {
-                                status.pending_fetch = false;
-                                status.last_error = Some(message);
-                            });
-                        }
-                    }
-                    Message::Chunk { id, kind, offset } => {
-                        let mut failure = None;
-                        if let Some(state) = receiving.as_mut()
-                            && state.id == id
-                            && !frame.data.is_empty()
-                            && let Err(error) = state.chunk(kind, offset, &frame.data)
-                        {
-                            failure = Some(error);
-                        }
-                        if failure.is_none()
-                            && let Some(pending) = pending_fetch.as_mut()
-                            && pending.id == id
-                        {
-                            let timeout = if deferred_offers
-                                .get(&id)
-                                .is_some_and(DeferredOffer::has_files)
-                            {
-                                DEFERRED_FILE_TIMEOUT
-                            } else {
-                                DEFERRED_TIMEOUT
+                                continue;
                             };
-                            pending.deadline = now + timeout;
-                        }
-                        if let Some(error) = failure {
-                            notifier.notify("Sean Toolbox", &format!("接收剪贴板失败：{error}"));
-                            set_status(status, |status| {
-                                status.last_error = Some(error);
-                            });
-                            if let Some(state) = receiving.take() {
-                                state.cancel();
+                            let has_files = entry.offer.has_files();
+                            if has_files {
+                                notifier.notify("Sean Toolbox", "正在发送文件…");
                             }
-                            let _ = net.send(&Message::Cancel { id });
-                        }
-                    }
-                    Message::End { id, kind } => {
-                        let mut failure = None;
-                        let mut complete = false;
-                        if let Some(state) = receiving.as_mut()
-                            && state.id == id
-                        {
-                            match state.end(kind) {
-                                Ok(()) => complete = state.complete(),
-                                Err(error) => failure = Some(error),
+                            set_status(status, |status| {
+                                status.pending_fetch = true;
+                            });
+                            match send_blobs(&mut net, &id, &entry.content, &entry.offer) {
+                                Ok(()) => {
+                                    if has_files {
+                                        notifier.notify("Sean Toolbox", "文件已发送");
+                                    }
+                                    set_status(status, |status| {
+                                        status.pending_fetch = false;
+                                        status.last_sent =
+                                            Some(format!("{} {}", entry.offer.kind(), timestamp()));
+                                        status.sent_count += 1;
+                                    });
+                                    // Serving a large fetch can take longer than
+                                    // the normal silence window; the peer was
+                                    // demonstrably alive while we were sending.
+                                    last_inbound = Instant::now();
+                                }
+                                Err(SendContentError::Content(error)) => {
+                                    set_status(status, |status| {
+                                        status.pending_fetch = false;
+                                        status.last_error = Some(error.clone());
+                                    });
+                                    let _ = net.send(&Message::FetchFailed { id, message: error });
+                                }
+                                Err(SendContentError::Network(error)) => return Err(error),
                             }
                         }
-                        if let Some(error) = failure {
-                            notifier.notify("Sean Toolbox", &format!("接收剪贴板失败：{error}"));
-                            set_status(status, |status| {
-                                status.last_error = Some(error.clone());
-                            });
+                        Message::FetchFailed { id, message } => {
                             if pending_fetch
                                 .as_ref()
                                 .is_some_and(|pending| pending.id == id)
                             {
                                 let pending = pending_fetch.take().expect("pending fetch");
-                                let _ = pending.reply.send(Err(error));
+                                if receiving.as_ref().is_some_and(|state| state.id == id)
+                                    && let Some(state) = receiving.take()
+                                {
+                                    state.cancel();
+                                }
+                                let _ = pending.reply.send(Err(message.clone()));
+                                notifier.notify("Sean Toolbox", "按需剪贴板传输失败");
+                                set_status(status, |status| {
+                                    status.pending_fetch = false;
+                                    status.last_error = Some(message);
+                                });
+                            }
+                        }
+                        Message::Chunk { id, kind, offset } => {
+                            let mut failure = None;
+                            if let Some(state) = receiving.as_mut()
+                                && state.id == id
+                                && !frame.data.is_empty()
+                                && let Err(error) = state.chunk(kind, offset, &frame.data)
+                            {
+                                failure = Some(error);
+                            }
+                            if failure.is_none()
+                                && let Some(pending) = pending_fetch.as_mut()
+                                && pending.id == id
+                            {
+                                let timeout = if deferred_offers
+                                    .get(&id)
+                                    .is_some_and(DeferredOffer::has_files)
+                                {
+                                    DEFERRED_FILE_TIMEOUT
+                                } else {
+                                    DEFERRED_TIMEOUT
+                                };
+                                pending.deadline = now + timeout;
+                            }
+                            if let Some(error) = failure {
+                                notifier
+                                    .notify("Sean Toolbox", &format!("接收剪贴板失败：{error}"));
+                                set_status(status, |status| {
+                                    status.last_error = Some(error);
+                                });
+                                if let Some(state) = receiving.take() {
+                                    state.cancel();
+                                }
+                                let _ = net.send(&Message::Cancel { id });
+                            }
+                        }
+                        Message::End { id, kind } => {
+                            let mut failure = None;
+                            let mut complete = false;
+                            if let Some(state) = receiving.as_mut()
+                                && state.id == id
+                            {
+                                match state.end(kind) {
+                                    Ok(()) => complete = state.complete(),
+                                    Err(error) => failure = Some(error),
+                                }
+                            }
+                            if let Some(error) = failure {
+                                notifier
+                                    .notify("Sean Toolbox", &format!("接收剪贴板失败：{error}"));
+                                set_status(status, |status| {
+                                    status.last_error = Some(error.clone());
+                                });
+                                if pending_fetch
+                                    .as_ref()
+                                    .is_some_and(|pending| pending.id == id)
+                                {
+                                    let pending = pending_fetch.take().expect("pending fetch");
+                                    let _ = pending.reply.send(Err(error));
+                                    set_status(status, |status| {
+                                        status.pending_fetch = false;
+                                    });
+                                }
+                                if let Some(state) = receiving.take() {
+                                    state.cancel();
+                                }
+                                let _ = net.send(&Message::Cancel { id });
+                            } else if complete {
+                                let state = receiving.take().expect("state still present");
+                                match state.finish() {
+                                    Ok(content) => {
+                                        if pending_fetch
+                                            .as_ref()
+                                            .is_some_and(|pending| pending.id == id)
+                                        {
+                                            let pending =
+                                                pending_fetch.take().expect("pending fetch");
+                                            let kind = content.kind();
+                                            let has_files = !content.files.is_empty();
+                                            guard.note_received(&content);
+                                            let delivered = pending.reply.send(Ok(content)).is_ok();
+                                            if has_files {
+                                                notifier.notify("Sean Toolbox", "文件已接收");
+                                            }
+                                            set_status(status, |status| {
+                                                status.pending_fetch = false;
+                                                status.last_received =
+                                                    Some(format!("{kind} {}", timestamp()));
+                                                status.received_count += 1;
+                                                if !delivered {
+                                                    status.last_error =
+                                                        Some("clipboard render timed out".into());
+                                                }
+                                            });
+                                            let _ = cleanup_cache(
+                                                &settings.cache_dir,
+                                                CACHE_KEEP,
+                                                CACHE_AGE,
+                                            );
+                                        } else if let Err(error) = backend.write(&content) {
+                                            notifier.notify(
+                                                "Sean Toolbox",
+                                                &format!("写入剪贴板失败：{error}"),
+                                            );
+                                            set_status(status, |status| {
+                                                status.last_error = Some(error);
+                                            });
+                                            let _ = net.send(&Message::Cancel { id });
+                                        } else {
+                                            if !content.files.is_empty() {
+                                                notifier.notify("Sean Toolbox", "文件已接收");
+                                            }
+                                            guard.note_received(&content);
+                                            set_status(status, |status| {
+                                                status.last_received = Some(format!(
+                                                    "{} {}",
+                                                    content.kind(),
+                                                    timestamp()
+                                                ));
+                                                status.received_count += 1;
+                                            });
+                                            let _ = cleanup_cache(
+                                                &settings.cache_dir,
+                                                CACHE_KEEP,
+                                                CACHE_AGE,
+                                            );
+                                        }
+                                    }
+                                    Err(error) => {
+                                        notifier.notify(
+                                            "Sean Toolbox",
+                                            &format!("接收文件失败：{error}"),
+                                        );
+                                        set_status(status, |status| {
+                                            status.last_error = Some(error.clone());
+                                        });
+                                        if pending_fetch
+                                            .as_ref()
+                                            .is_some_and(|pending| pending.id == id)
+                                        {
+                                            let pending =
+                                                pending_fetch.take().expect("pending fetch");
+                                            let _ = pending.reply.send(Err(error));
+                                            set_status(status, |status| {
+                                                status.pending_fetch = false;
+                                            });
+                                        }
+                                        let _ = net.send(&Message::Cancel { id });
+                                    }
+                                }
+                            }
+                        }
+                        Message::Cancel { id } => {
+                            if pending_fetch
+                                .as_ref()
+                                .is_some_and(|pending| pending.id == id)
+                            {
+                                let pending = pending_fetch.take().expect("pending fetch");
+                                let _ = pending
+                                    .reply
+                                    .send(Err("peer cancelled the clipboard transfer".into()));
                                 set_status(status, |status| {
                                     status.pending_fetch = false;
                                 });
                             }
-                            if let Some(state) = receiving.take() {
+                            if let Some(state) = receiving.take()
+                                && state.id == id
+                            {
                                 state.cancel();
                             }
-                            let _ = net.send(&Message::Cancel { id });
-                        } else if complete {
-                            let state = receiving.take().expect("state still present");
-                            match state.finish() {
-                                Ok(content) => {
-                                    if pending_fetch
-                                        .as_ref()
-                                        .is_some_and(|pending| pending.id == id)
-                                    {
-                                        let pending = pending_fetch.take().expect("pending fetch");
-                                        let kind = content.kind();
-                                        let has_files = !content.files.is_empty();
-                                        guard.note_received(&content);
-                                        let delivered = pending.reply.send(Ok(content)).is_ok();
-                                        if has_files {
-                                            notifier.notify("Sean Toolbox", "文件已接收");
-                                        }
-                                        set_status(status, |status| {
-                                            status.pending_fetch = false;
-                                            status.last_received =
-                                                Some(format!("{kind} {}", timestamp()));
-                                            status.received_count += 1;
-                                            if !delivered {
-                                                status.last_error =
-                                                    Some("clipboard render timed out".into());
-                                            }
-                                        });
-                                        let _ = cleanup_cache(
-                                            &settings.cache_dir,
-                                            CACHE_KEEP,
-                                            CACHE_AGE,
-                                        );
-                                    } else if let Err(error) = backend.write(&content) {
-                                        notifier.notify(
-                                            "Sean Toolbox",
-                                            &format!("写入剪贴板失败：{error}"),
-                                        );
-                                        set_status(status, |status| {
-                                            status.last_error = Some(error);
-                                        });
-                                        let _ = net.send(&Message::Cancel { id });
-                                    } else {
-                                        if !content.files.is_empty() {
-                                            notifier.notify("Sean Toolbox", "文件已接收");
-                                        }
-                                        guard.note_received(&content);
-                                        set_status(status, |status| {
-                                            status.last_received =
-                                                Some(format!("{} {}", content.kind(), timestamp()));
-                                            status.received_count += 1;
-                                        });
-                                        let _ = cleanup_cache(
-                                            &settings.cache_dir,
-                                            CACHE_KEEP,
-                                            CACHE_AGE,
-                                        );
-                                    }
-                                }
-                                Err(error) => {
-                                    notifier
-                                        .notify("Sean Toolbox", &format!("接收文件失败：{error}"));
-                                    set_status(status, |status| {
-                                        status.last_error = Some(error.clone());
-                                    });
-                                    if pending_fetch
-                                        .as_ref()
-                                        .is_some_and(|pending| pending.id == id)
-                                    {
-                                        let pending = pending_fetch.take().expect("pending fetch");
-                                        let _ = pending.reply.send(Err(error));
-                                        set_status(status, |status| {
-                                            status.pending_fetch = false;
-                                        });
-                                    }
-                                    let _ = net.send(&Message::Cancel { id });
-                                }
-                            }
                         }
-                    }
-                    Message::Cancel { id } => {
-                        if pending_fetch
-                            .as_ref()
-                            .is_some_and(|pending| pending.id == id)
-                        {
-                            let pending = pending_fetch.take().expect("pending fetch");
-                            let _ = pending
-                                .reply
-                                .send(Err("peer cancelled the clipboard transfer".into()));
-                            set_status(status, |status| {
-                                status.pending_fetch = false;
-                            });
+                        Message::Ping => {
+                            net.send(&Message::Pong)?;
                         }
-                        if let Some(state) = receiving.take()
-                            && state.id == id
-                        {
-                            state.cancel();
-                        }
+                        Message::Pong => {}
                     }
-                    Message::Ping => {
-                        net.send(&Message::Pong)?;
-                    }
-                    Message::Pong => {}
                 }
+                Ok(None) => break,
+                Err(error) => return Err(error),
             }
-            Ok(None) => {}
-            Err(error) => return Err(error),
         }
 
         if now.duration_since(last_inbound) >= settings.silence_timeout {
@@ -1122,7 +1147,8 @@ fn session(
                 Err(error) => return Err(format!("accept: {error}")),
             }
         }
-        thread::sleep(LOOP_DELAY);
+        // No extra sleep: `try_frame` already waits up to READ_TIMEOUT for
+        // inbound data, which bounds idle wakeups and keeps a paste fast.
     }
     if let Some(pending) = pending_fetch.take() {
         let _ = pending

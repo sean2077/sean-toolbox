@@ -37,8 +37,9 @@ use windows_sys::Win32::{
         Shell::{DROPFILES, DragQueryFileW, HDROP},
         WindowsAndMessaging::{
             CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, HWND_MESSAGE, MSG,
-            PM_REMOVE, PeekMessageW, RegisterClassW, TranslateMessage, UnregisterClassW,
-            WM_CLIPBOARDUPDATE, WM_RENDERALLFORMATS, WM_RENDERFORMAT, WNDCLASSW,
+            MsgWaitForMultipleObjects, PM_REMOVE, PeekMessageW, QS_ALLINPUT, RegisterClassW,
+            TranslateMessage, UnregisterClassW, WM_CLIPBOARDUPDATE, WM_RENDERALLFORMATS,
+            WM_RENDERFORMAT, WNDCLASSW,
         },
     },
 };
@@ -226,7 +227,11 @@ fn run(inner: Arc<Inner>) -> Result<(), String> {
                 }
             }
         }
-        unsafe { Sleep(20) };
+        // Wake as soon as a message arrives: WM_RENDERFORMAT is sent while the
+        // pasting application waits in GetClipboardData.
+        unsafe {
+            MsgWaitForMultipleObjects(0, std::ptr::null(), 0, 20, QS_ALLINPUT);
+        }
     }
     WINDOW_INNER.with(|slot| *slot.borrow_mut() = None);
     cleanup(hwnd, &class_name, hinstance);

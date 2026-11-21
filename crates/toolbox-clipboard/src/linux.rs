@@ -445,18 +445,32 @@ fn write_all_deadline(fd: RawFd, bytes: &[u8], deadline: Instant) -> Result<(), 
 /// Name the process holding the read end of a clipboard transfer pipe, i.e.
 /// the application that asked for the data. Only same-user processes are
 /// visible; this is a diagnostic and never blocks the transfer.
-fn pipe_reader(fd: RawFd) -> (String, String) {
-    let unknown = || ("?".to_owned(), "unknown".to_owned());
-    let Ok(target) = std::fs::read_link(format!("/proc/self/fd/{fd}")) else {
-        return unknown();
-    };
+fn pipe_target(fd: RawFd) -> std::io::Result<std::path::PathBuf> {
+    std::fs::read_link(format!("/proc/self/fd/{fd}"))
+}
+
+/// The listed background monitor holding the other end of `fd`, if any.
+fn background_reader(fd: RawFd) -> Option<(String, String)> {
+    let target = pipe_target(fd).ok()?;
+    let (pid, name) = pipe_reader(&target, |name| BACKGROUND_READERS.contains(&name))?;
+    Some((pid, name))
+}
+
+/// Find a same-user process (other than this one) whose name passes
+/// `wanted` and that holds `target`, the transfer pipe.
+fn pipe_reader(
+    target: &std::path::Path,
+    wanted: impl Fn(&str) -> bool,
+) -> Option<(String, String)> {
     let own = std::process::id().to_string();
-    let Ok(processes) = std::fs::read_dir("/proc") else {
-        return unknown();
-    };
-    for process in processes.flatten() {
+    for process in std::fs::read_dir("/proc").ok()?.flatten() {
         let pid = process.file_name().to_string_lossy().into_owned();
         if pid == own || !pid.bytes().all(|byte| byte.is_ascii_digit()) {
+            continue;
+        }
+        let name = std::fs::read_to_string(process.path().join("comm")).unwrap_or_default();
+        let name = name.trim();
+        if !wanted(name) {
             continue;
         }
         let Ok(fds) = std::fs::read_dir(process.path().join("fd")) else {
@@ -466,11 +480,10 @@ fn pipe_reader(fd: RawFd) -> (String, String) {
             .flatten()
             .any(|entry| std::fs::read_link(entry.path()).is_ok_and(|link| link == target))
         {
-            let name = std::fs::read_to_string(process.path().join("comm")).unwrap_or_default();
-            return (pid, name.trim().to_owned());
+            return Some((pid, name.to_owned()));
         }
     }
-    unknown()
+    None
 }
 
 fn parse_uri_list(bytes: &[u8]) -> Vec<std::path::PathBuf> {
@@ -871,8 +884,10 @@ impl Dispatch<ExtDataControlSourceV1, LazySourceData> for State {
                 let data = data.clone();
                 thread::spawn(move || {
                     if mime_type != ORIGIN_MIME && mime_type != PASSWORD_HINT_MIME {
-                        let (pid, name) = pipe_reader(fd.as_raw_fd());
-                        if BACKGROUND_READERS.contains(&name.as_str()) {
+                        // Only the listed monitors are checked before serving;
+                        // naming an arbitrary reader means scanning all of
+                        // /proc, so that runs beside the transfer for the log.
+                        if let Some((pid, name)) = background_reader(fd.as_raw_fd()) {
                             // Closing the pipe hands the monitor an empty
                             // read; the entry stays deferred for the paste.
                             eprintln!(
@@ -880,9 +895,16 @@ impl Dispatch<ExtDataControlSourceV1, LazySourceData> for State {
                             );
                             return;
                         }
-                        eprintln!(
-                            "Sean Toolbox clipboard (Wayland): {mime_type} for pid {pid} {name}"
-                        );
+                        if let Ok(target) = pipe_target(fd.as_raw_fd()) {
+                            let mime_type = mime_type.clone();
+                            thread::spawn(move || {
+                                let (pid, name) = pipe_reader(&target, |_| true)
+                                    .unwrap_or_else(|| ("?".into(), "unknown".into()));
+                                eprintln!(
+                                    "Sean Toolbox clipboard (Wayland): {mime_type} for pid {pid} {name}"
+                                );
+                            });
+                        }
                     }
                     if let Some(bytes) = data.bytes_for(&mime_type) {
                         let _ = write_all_deadline(
