@@ -7,6 +7,33 @@ platform backend; `protocol` defines length-prefixed control messages and
 32 KiB blob chunks; `sync` supplies the 200 ms debounce and echo guards;
 `transfer` expands file selections, validates paths and stages received files.
 
+## Transfer timing
+
+`ClipboardSyncConfig.mode` selects how a local copy reaches the peer:
+
+- `on_paste` (default): the source sends `Defer` with only `BlobMeta`/`Manifest` metadata
+  and keeps the snapshot in a bounded store (eight items). The peer installs a
+  deferred clipboard entry and sends `Fetch` when an application pastes; the
+  source answers with the same `Chunk`/`End` frames under the announced id.
+- `eager`: `Offer` followed by chunks, as soon as the 200 ms debounce elapses.
+
+Protocol version 2 adds `Defer`, `Fetch` and `FetchFailed`. A `Defer` whose id
+is unknown or whose files changed after the copy is answered with
+`FetchFailed`, and the paste shows no data.
+
+On Windows the destination registers the offered formats with
+`SetClipboardData(format, NULL)` and answers `WM_RENDERFORMAT` by fetching the
+payload. Files are staged in the cache before `CF_HDROP` is returned. The
+message-only window stays the clipboard owner, so the origin marker remains
+present and the render does not echo back. `WM_RENDERALLFORMATS` is ignored:
+an unrendered entry is dropped when the host exits instead of stalling exit.
+
+On Wayland the destination installs an `ext_data_control_source_v1` whose
+`send` requests fetch the payload on a worker thread; concurrent MIME requests
+share one fetch. Deferred entries carry `x-kde-passwordManagerHint=secret`
+(Wayland) and `CanIncludeInClipboardHistory=0`/`CanUploadToCloudClipboard=0`
+(Windows) so Klipper and Win+V history do not pull them right after the copy.
+
 ## Content
 
 | Kind | Wire payload | Linux Wayland | Windows |
@@ -44,6 +71,12 @@ Never put the key or the Noise secret in `config.json` or a command line.
 - Sending is synchronous. During a 1 GiB transfer the sender does not process
   inbound frames; two simultaneous large sends can reach the 10 s write timeout.
   A new local copy does not cancel an in-flight send yet.
+- A deferred paste blocks
+  while the source reads the payload; a large file selection can exceed the
+  target application's clipboard timeout. The source must still hold the
+  snapshot (last eight items) and be online when the peer pastes. Other
+  clipboard monitors that ignore the history hints can still turn a deferred
+  item into an immediate transfer.
 - The disconnect detector uses a 45 s application silence timeout (three 15 s
   heartbeats); TCP keepalive is not set separately.
 - Notifications use `org.freedesktop.Notifications` through zbus on Linux and

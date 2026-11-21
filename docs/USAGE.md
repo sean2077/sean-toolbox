@@ -191,11 +191,19 @@ sean-toolbox clipboard keygen
 "clipboard": {
   "enabled": true,
   "role": "listen",
+  "mode": "on_paste",
   "listen": "0.0.0.0:24802",
   "peer": "",
   "max_transfer_bytes": 1073741824
 }
 ```
+
+`mode` 决定复制后的传输时机，配在**复制来源**那一端：
+
+- `on_paste`（默认）：复制时只发送类型、大小和哈希等元数据；对端真正粘贴时才通过同一条加密连接取回内容。Windows 用延迟渲染（`WM_RENDERFORMAT`），Linux Wayland 用按需应答的 data-control source，两端作为目标端都支持。粘贴大文件时，对端的粘贴会等文件传完；源端离线、退出或已淘汰该条目（只保留最近 8 项）时，粘贴得不到内容。
+- `eager`：复制后立即把内容推到对端，对端粘贴时数据已经在本机，离线也能粘贴。
+
+按需条目不会进入 Klipper 或 Win+V 历史：剪贴板历史工具会立即读取每个新条目，若不排除，复制后就会触发传输。两端必须使用支持协议 v2 的同一版本。界面中的“跨机剪贴板”页可以查看连接状态、最近收发/待传输项，并修改上述字段。
 
 w11 把 `role` 改成 `connect`，填 `peer`。`max_transfer_bytes` 上限为 1 GiB。支持文本、HTML、PNG 图片和文件/目录；文字/HTML 单项 16 MiB，图片 64 MiB，文件总量取 `max_transfer_bytes`。本机历史继续用 Klipper；密码管理器标记的敏感内容不会同步。超过上限、或文件传输开始/完成时会弹桌面通知。配置总是保存为 schema 2；旧 schema 1 会迁移，手工编辑时优先使用 schema 2。
 

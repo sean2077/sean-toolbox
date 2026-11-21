@@ -4,8 +4,11 @@
 //! watch and replace the selection without stealing focus. The protocol runs on
 //! its own thread; the service only sees a cached snapshot and a write queue.
 
-use crate::backend::{Backend, BackendEvent, ORIGIN_MIME, ReadContent};
-use crate::model::{ClipboardContent, blob_meta};
+use crate::backend::{
+    Backend, BackendEvent, DEFERRED_FILE_TIMEOUT, DEFERRED_TIMEOUT, Fetcher, ORIGIN_MIME,
+    ReadContent,
+};
+use crate::model::{ClipboardContent, DeferredOffer, blob_meta};
 use std::{
     collections::HashMap,
     os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd, RawFd},
@@ -33,6 +36,7 @@ use wayland_protocols::ext::data_control::v1::client::{
 
 const READ_DEADLINE: Duration = Duration::from_secs(2);
 const MAX_READ_BYTES: usize = 64 * 1024 * 1024;
+const PASSWORD_HINT_MIME: &str = "x-kde-passwordManagerHint";
 
 pub fn backend() -> Result<Box<dyn Backend>, String> {
     Ok(Box::new(LinuxBackend::new()))
@@ -46,6 +50,8 @@ pub struct LinuxBackend {
 struct Inner {
     latest: Mutex<Option<ReadContent>>,
     pending_write: Mutex<Option<ClipboardContent>>,
+    pending_defer: Mutex<Option<DeferredOffer>>,
+    fetcher: Mutex<Option<Fetcher>>,
     events: Mutex<Option<Sender<BackendEvent>>>,
     stop: AtomicBool,
 }
@@ -56,6 +62,8 @@ impl LinuxBackend {
             inner: Arc::new(Inner {
                 latest: Mutex::new(None),
                 pending_write: Mutex::new(None),
+                pending_defer: Mutex::new(None),
+                fetcher: Mutex::new(None),
                 events: Mutex::new(None),
                 stop: AtomicBool::new(false),
             }),
@@ -112,6 +120,15 @@ impl Backend for LinuxBackend {
         *self.inner.pending_write.lock().unwrap() = Some(content.clone());
         Ok(())
     }
+
+    fn set_fetcher(&mut self, fetcher: Fetcher) {
+        *self.inner.fetcher.lock().unwrap() = Some(fetcher);
+    }
+
+    fn defer(&mut self, offer: &DeferredOffer) -> Result<(), String> {
+        *self.inner.pending_defer.lock().unwrap() = Some(offer.clone());
+        Ok(())
+    }
 }
 
 #[derive(Default)]
@@ -155,6 +172,43 @@ impl State {
             remote_origin: true,
             sensitive: false,
         });
+        Ok(())
+    }
+
+    fn set_deferred_selection(
+        &mut self,
+        qh: &QueueHandle<Self>,
+        offer: &DeferredOffer,
+        inner: &Arc<Inner>,
+    ) -> Result<(), String> {
+        let manager = self
+            .manager
+            .as_ref()
+            .ok_or("data-control manager missing")?;
+        let device = self.device.as_ref().ok_or("data-control device missing")?;
+        if let Some(old) = self.source.take() {
+            old.destroy();
+        }
+        let fetcher = inner
+            .fetcher
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or("clipboard fetcher is not installed")?;
+        let data = LazySourceData::new(offer.clone(), fetcher);
+        let mimes = data.mimes.clone();
+        let source = manager.create_data_source(qh, data);
+        for mime in mimes {
+            source.offer(mime);
+        }
+        device.set_selection(Some(&source));
+        self.source = Some(source);
+        *inner.latest.lock().unwrap() = Some(ReadContent {
+            content: ClipboardContent::default(),
+            remote_origin: true,
+            sensitive: false,
+        });
+        notify(inner);
         Ok(())
     }
 
@@ -450,6 +504,88 @@ impl SourceData {
     }
 }
 
+/// A Wayland data source whose payload is fetched from the peer when an
+/// application actually reads the selection. `SourceData` is built once after
+/// the fetch and reused for every requested MIME type.
+#[derive(Clone)]
+struct LazySourceData {
+    offer: DeferredOffer,
+    fetcher: Fetcher,
+    payload: Arc<Mutex<Option<Arc<SourceData>>>>,
+    mimes: Vec<String>,
+}
+
+impl LazySourceData {
+    fn new(offer: DeferredOffer, fetcher: Fetcher) -> Self {
+        let mut mimes = Vec::new();
+        if offer.text.is_some() {
+            for mime in [
+                "text/plain;charset=utf-8",
+                "text/plain",
+                "UTF8_STRING",
+                "STRING",
+                "TEXT",
+            ] {
+                mimes.push(mime.to_owned());
+            }
+        }
+        if offer.html.is_some() {
+            mimes.push("text/html".into());
+        }
+        if offer.image.is_some() {
+            mimes.push("image/png".into());
+        }
+        if offer.files.is_some() {
+            mimes.push("text/uri-list".into());
+            mimes.push("x-special/gnome-copied-files".into());
+        }
+        mimes.push(ORIGIN_MIME.into());
+        // Clipboard managers (Klipper) read every new selection, which would
+        // pull the payload right after the copy. They skip secret entries.
+        mimes.push(PASSWORD_HINT_MIME.into());
+        Self {
+            offer,
+            fetcher,
+            payload: Arc::new(Mutex::new(None)),
+            mimes,
+        }
+    }
+
+    fn bytes_for(&self, mime: &str) -> Option<Vec<u8>> {
+        if mime == ORIGIN_MIME {
+            return Some(blob_meta(self.offer.id.as_bytes()).hash.into_bytes());
+        }
+        if mime == PASSWORD_HINT_MIME {
+            return Some(b"secret".to_vec());
+        }
+        self.payload()?.mimes.get(mime).cloned()
+    }
+
+    fn payload(&self) -> Option<Arc<SourceData>> {
+        // Hold the lock across the fetch: an application usually asks for
+        // several MIME types at once, and they must share one transfer.
+        let mut slot = self.payload.lock().unwrap();
+        if let Some(payload) = slot.clone() {
+            return Some(payload);
+        }
+        let timeout = if self.offer.has_files() {
+            DEFERRED_FILE_TIMEOUT
+        } else {
+            DEFERRED_TIMEOUT
+        };
+        let content = match self.fetcher.fetch(&self.offer.id, timeout) {
+            Ok(content) => content,
+            Err(error) => {
+                eprintln!("Sean Toolbox clipboard (Wayland): fetch failed: {error}");
+                return None;
+            }
+        };
+        let payload = Arc::new(SourceData::new(&content));
+        *slot = Some(payload.clone());
+        Some(payload)
+    }
+}
+
 fn run(inner: Arc<Inner>) -> Result<(), String> {
     let conn = Connection::connect_to_env().map_err(|error| error.to_string())?;
     let mut queue = conn.new_event_queue();
@@ -480,6 +616,12 @@ fn run(inner: Arc<Inner>) -> Result<(), String> {
         let pending = inner.pending_write.lock().unwrap().take();
         if let Some(content) = pending {
             state.set_selection(&qh, &content, &inner)?;
+        }
+        let deferred = inner.pending_defer.lock().unwrap().take();
+        if let Some(offer) = deferred
+            && let Err(error) = state.set_deferred_selection(&qh, &offer, &inner)
+        {
+            eprintln!("Sean Toolbox clipboard (Wayland): deferred selection: {error}");
         }
         conn.flush().map_err(|error| error.to_string())?;
         if let Some(guard) = conn.prepare_read() {
@@ -661,6 +803,46 @@ impl Dispatch<ExtDataControlSourceV1, SourceData> for State {
                         );
                     });
                 }
+            }
+            ext_data_control_source_v1::Event::Cancelled => {
+                let id = source.id().protocol_id();
+                if state
+                    .source
+                    .as_ref()
+                    .is_some_and(|current| current.id().protocol_id() == id)
+                {
+                    state.source = None;
+                }
+                source.destroy();
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Dispatch<ExtDataControlSourceV1, LazySourceData> for State {
+    fn event(
+        state: &mut Self,
+        source: &ExtDataControlSourceV1,
+        event: ext_data_control_source_v1::Event,
+        data: &LazySourceData,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        match event {
+            ext_data_control_source_v1::Event::Send { mime_type, fd } => {
+                // The first paste fetches the payload from the peer, which can
+                // take seconds for files; never block the Wayland thread.
+                let data = data.clone();
+                thread::spawn(move || {
+                    if let Some(bytes) = data.bytes_for(&mime_type) {
+                        let _ = write_all_deadline(
+                            fd.as_raw_fd(),
+                            &bytes,
+                            Instant::now() + Duration::from_secs(5),
+                        );
+                    }
+                });
             }
             ext_data_control_source_v1::Event::Cancelled => {
                 let id = source.id().protocol_id();

@@ -170,6 +170,8 @@ Skills 的网络和文件操作在宿主的独立 worker 串行执行，桌面�
 
 `protocol.rs` 的帧上限为 60 KiB（Noise 传输消息上限 65535 字节），因此文字/HTML/图片/文件都按 32 KiB 分块。`sync.rs` 的 `LoopGuard` 负责 200 ms 去抖、最后收发指纹和 echo 抑制；任何周期性内容发送都属于回归。`transfer.rs` 在接收侧先写临时目录，完成后再改名，并校验相对路径（拒绝 `..`、绝对路径、盘符、UNC 和 Windows 保留名）。
 
+`clipboard.mode=on_paste` 使用协议 v2 的 `Defer`/`Fetch`/`FetchFailed`：源端只发送元数据，并把快照保留在最近 8 项的 `DeferredStore` 中；目标端收到 `Defer` 后调用 `Backend::defer`。Windows 后端用 `SetClipboardData(format, NULL)` 注册延迟格式，在 `WM_RENDERFORMAT` 中阻塞等待 `Fetcher` 取回内容，再设置 `CF_UNICODETEXT`/`HTML Format`/`PNG`/`CF_DIB`/`CF_HDROP`；Linux 目标端用 `LazySourceData` 作为 data-control source，在工作线程里响应 `send` 时取回内容，同一条目的多个 MIME 共用一次取回；`Backend::defer` 失败时服务才退化为立即 `Fetch`。`Fetcher` 通过宿主线程的请求通道工作，不能跨线程直接读写 Noise 会话。
+
 密钥由 `sean-toolbox clipboard keygen` 单独写入 `clipboard.key`，不进入 `config.json`。`docs/USAGE.md` 的“跨机剪贴板”是用户配置入口；真机验收记录写入 `docs/VALIDATION.md`。
 
 ## 国际化与翻译维护

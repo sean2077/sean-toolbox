@@ -4,11 +4,15 @@
 //! CF_UNICODETEXT, CF_HTML, PNG/CF_DIB and CF_HDROP; writes set the matching
 //! formats plus the `SeanToolbox.ClipOrigin` marker for loop suppression.
 
-use crate::backend::{Backend, BackendEvent, ORIGIN_WINDOWS_FORMAT, ReadContent};
+use crate::backend::{
+    Backend, BackendEvent, DEFERRED_FILE_TIMEOUT, DEFERRED_TIMEOUT, Fetcher, ORIGIN_WINDOWS_FORMAT,
+    ReadContent,
+};
 use crate::cf_html;
 use crate::image_codec::{dib_to_png, png_to_dib};
-use crate::model::ClipboardContent;
+use crate::model::{ClipboardContent, DeferredOffer};
 use std::{
+    cell::RefCell,
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -34,7 +38,7 @@ use windows_sys::Win32::{
         WindowsAndMessaging::{
             CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, HWND_MESSAGE, MSG,
             PM_REMOVE, PeekMessageW, RegisterClassW, TranslateMessage, UnregisterClassW,
-            WM_CLIPBOARDUPDATE, WNDCLASSW,
+            WM_CLIPBOARDUPDATE, WM_RENDERALLFORMATS, WM_RENDERFORMAT, WNDCLASSW,
         },
     },
 };
@@ -45,6 +49,13 @@ const PREFERRED_DROP_EFFECT: &str = "Preferred DropEffect";
 const EXCLUDE_FORMAT: &str = "ExcludeClipboardContentFromMonitorProcessing";
 const INCLUDE_HISTORY_FORMAT: &str = "CanIncludeInClipboardHistory";
 const VIEWER_IGNORE_FORMAT: &str = "Clipboard Viewer Ignore";
+const CLOUD_UPLOAD_FORMAT: &str = "CanUploadToCloudClipboard";
+
+thread_local! {
+    // `WM_RENDERFORMAT` is sent directly to the clipboard owner's window
+    // procedure, so the procedure needs the backend state for this thread.
+    static WINDOW_INNER: RefCell<Option<Arc<Inner>>> = const { RefCell::new(None) };
+}
 
 pub fn backend() -> Result<Box<dyn Backend>, String> {
     Ok(Box::new(WindowsBackend::new()))
@@ -58,6 +69,10 @@ pub struct WindowsBackend {
 struct Inner {
     latest: Mutex<Option<ReadContent>>,
     pending_write: Mutex<Option<ClipboardContent>>,
+    pending_defer: Mutex<Option<DeferredOffer>>,
+    deferred: Mutex<Option<DeferredOffer>>,
+    fetched: Mutex<Option<(String, Arc<ClipboardContent>)>>,
+    fetcher: Mutex<Option<Fetcher>>,
     events: Mutex<Option<Sender<BackendEvent>>>,
     stop: AtomicBool,
 }
@@ -68,6 +83,10 @@ impl WindowsBackend {
             inner: Arc::new(Inner {
                 latest: Mutex::new(None),
                 pending_write: Mutex::new(None),
+                pending_defer: Mutex::new(None),
+                deferred: Mutex::new(None),
+                fetched: Mutex::new(None),
+                fetcher: Mutex::new(None),
                 events: Mutex::new(None),
                 stop: AtomicBool::new(false),
             }),
@@ -124,6 +143,15 @@ impl Backend for WindowsBackend {
         *self.inner.pending_write.lock().unwrap() = Some(content.clone());
         Ok(())
     }
+
+    fn set_fetcher(&mut self, fetcher: Fetcher) {
+        *self.inner.fetcher.lock().unwrap() = Some(fetcher);
+    }
+
+    fn defer(&mut self, offer: &DeferredOffer) -> Result<(), String> {
+        *self.inner.pending_defer.lock().unwrap() = Some(offer.clone());
+        Ok(())
+    }
 }
 
 fn run(inner: Arc<Inner>) -> Result<(), String> {
@@ -168,11 +196,19 @@ fn run(inner: Arc<Inner>) -> Result<(), String> {
         }
         return Err("CreateWindowExW failed".into());
     }
+    WINDOW_INNER.with(|slot| *slot.borrow_mut() = Some(inner.clone()));
     if unsafe { AddClipboardFormatListener(hwnd) } == 0 {
+        WINDOW_INNER.with(|slot| *slot.borrow_mut() = None);
         cleanup(hwnd, &class_name, hinstance);
         return Err("AddClipboardFormatListener failed".into());
     }
     while !inner.stop.load(Ordering::Acquire) {
+        let pending_defer = inner.pending_defer.lock().unwrap().take();
+        if let Some(offer) = pending_defer
+            && let Err(error) = write_deferred(hwnd, &offer, &inner)
+        {
+            eprintln!("Sean Toolbox clipboard deferred write: {error}");
+        }
         let pending = inner.pending_write.lock().unwrap().take();
         if let Some(content) = pending
             && let Err(error) = write_clipboard(hwnd, &content, &inner)
@@ -192,6 +228,7 @@ fn run(inner: Arc<Inner>) -> Result<(), String> {
         }
         unsafe { Sleep(20) };
     }
+    WINDOW_INNER.with(|slot| *slot.borrow_mut() = None);
     cleanup(hwnd, &class_name, hinstance);
     Ok(())
 }
@@ -210,6 +247,18 @@ unsafe extern "system" fn wndproc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    if message == WM_RENDERFORMAT || message == WM_RENDERALLFORMATS {
+        let inner = WINDOW_INNER.with(|slot| slot.borrow().clone());
+        if let Some(inner) = inner {
+            // WM_RENDERALLFORMATS only arrives when the host exits while it
+            // still owns a deferred entry. Fetching everything then would
+            // stall shutdown; the unrendered entry simply disappears.
+            if message == WM_RENDERFORMAT {
+                render_format(hwnd, wparam as u32, &inner);
+            }
+        }
+        return 0;
+    }
     unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
 }
 
@@ -237,6 +286,10 @@ fn read_clipboard(hwnd: HWND, inner: &Arc<Inner>) {
     let read = read_locked();
     unsafe { CloseClipboard() };
     if let Some(read) = read {
+        if !read.remote_origin {
+            *inner.deferred.lock().unwrap() = None;
+            *inner.fetched.lock().unwrap() = None;
+        }
         *inner.latest.lock().unwrap() = Some(read);
         notify(inner);
     }
@@ -320,6 +373,8 @@ fn write_clipboard(
     let result = write_locked(content);
     unsafe { CloseClipboard() };
     if result.is_ok() {
+        *inner.deferred.lock().unwrap() = None;
+        *inner.fetched.lock().unwrap() = None;
         *inner.latest.lock().unwrap() = Some(ReadContent {
             content: content.clone(),
             remote_origin: true,
@@ -335,12 +390,7 @@ fn write_locked(content: &ClipboardContent) -> Result<(), String> {
         return Err("EmptyClipboard failed".into());
     }
     if let Some(text) = &content.text {
-        let mut bytes = Vec::with_capacity(text.len() * 2 + 2);
-        for unit in text.encode_utf16() {
-            bytes.extend_from_slice(&unit.to_le_bytes());
-        }
-        bytes.extend_from_slice(&0u16.to_le_bytes());
-        set_bytes(CF_UNICODETEXT as u32, &bytes)?;
+        set_bytes(CF_UNICODETEXT as u32, &utf16_bytes(text))?;
     }
     if let Some(html) = &content.html {
         let format = register(HTML_FORMAT);
@@ -387,6 +437,158 @@ fn set_bytes(format: u32, bytes: &[u8]) -> Result<(), String> {
         return Err("SetClipboardData failed".into());
     }
     Ok(())
+}
+
+/// Publish formats with a NULL handle. The system keeps the clipboard owner
+/// alive and sends `WM_RENDERFORMAT` when an application pastes.
+fn set_delayed(format: u32) {
+    // Delayed rendering returns NULL even on success, so the return value is
+    // not an error indicator here.
+    unsafe {
+        SetClipboardData(format, std::ptr::null_mut());
+    }
+}
+
+fn write_deferred(hwnd: HWND, offer: &DeferredOffer, inner: &Arc<Inner>) -> Result<(), String> {
+    if !open_clipboard(hwnd) {
+        return Err("OpenClipboard failed after 10 retries".into());
+    }
+    let result = (|| -> Result<(), String> {
+        if unsafe { EmptyClipboard() } == 0 {
+            return Err("EmptyClipboard failed".into());
+        }
+        if offer.text.is_some() {
+            set_delayed(CF_UNICODETEXT as u32);
+        }
+        if offer.html.is_some() {
+            let format = register(HTML_FORMAT);
+            if format == 0 {
+                return Err("cannot register HTML Format".into());
+            }
+            set_delayed(format);
+        }
+        if offer.image.is_some() {
+            let format = register(PNG_FORMAT);
+            if format != 0 {
+                set_delayed(format);
+            }
+            set_delayed(CF_DIB as u32);
+        }
+        if offer.files.is_some() {
+            set_delayed(CF_HDROP as u32);
+            let format = register(PREFERRED_DROP_EFFECT);
+            if format != 0 {
+                set_bytes(format, &(DROPEFFECT_COPY as u32).to_le_bytes())?;
+            }
+        }
+        let origin = register(ORIGIN_WINDOWS_FORMAT);
+        if origin != 0 {
+            set_bytes(origin, &utf16_bytes("deferred"))?;
+        }
+        // Win+V history and cloud clipboard render every new entry right
+        // away, which would pull the payload on copy instead of on paste.
+        for name in [INCLUDE_HISTORY_FORMAT, CLOUD_UPLOAD_FORMAT] {
+            let format = register(name);
+            if format != 0 {
+                set_bytes(format, &0u32.to_le_bytes())?;
+            }
+        }
+        Ok(())
+    })();
+    unsafe { CloseClipboard() };
+    if result.is_ok() {
+        *inner.deferred.lock().unwrap() = Some(offer.clone());
+        *inner.fetched.lock().unwrap() = None;
+        *inner.latest.lock().unwrap() = Some(ReadContent {
+            content: ClipboardContent::default(),
+            remote_origin: true,
+            sensitive: false,
+        });
+        notify(inner);
+    }
+    result
+}
+
+fn ensure_fetched(
+    inner: &Arc<Inner>,
+    offer: &DeferredOffer,
+) -> Result<Arc<ClipboardContent>, String> {
+    if let Some((id, content)) = inner.fetched.lock().unwrap().as_ref()
+        && id == &offer.id
+    {
+        return Ok(content.clone());
+    }
+    let fetcher = inner
+        .fetcher
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or("clipboard fetcher is not installed")?;
+    let timeout = if offer.has_files() {
+        DEFERRED_FILE_TIMEOUT
+    } else {
+        DEFERRED_TIMEOUT
+    };
+    let content = Arc::new(fetcher.fetch(&offer.id, timeout)?);
+    *inner.fetched.lock().unwrap() = Some((offer.id.clone(), content.clone()));
+    Ok(content)
+}
+
+fn render_format(hwnd: HWND, format: u32, inner: &Arc<Inner>) {
+    let Some(offer) = inner.deferred.lock().unwrap().clone() else {
+        return;
+    };
+    let content = match ensure_fetched(inner, &offer) {
+        Ok(content) => content,
+        Err(error) => {
+            eprintln!("Sean Toolbox clipboard render: {error}");
+            return;
+        }
+    };
+    let html_format = register(HTML_FORMAT);
+    let png_format = register(PNG_FORMAT);
+    let result = if format == CF_UNICODETEXT as u32 {
+        match &content.text {
+            Some(text) => set_bytes(format, &utf16_bytes(text)),
+            None => Ok(()),
+        }
+    } else if html_format != 0 && format == html_format {
+        match &content.html {
+            Some(html) => set_bytes(format, &cf_html::build(html)),
+            None => Ok(()),
+        }
+    } else if png_format != 0 && format == png_format {
+        match &content.image {
+            Some(image) => set_bytes(format, image),
+            None => Ok(()),
+        }
+    } else if format == CF_DIB as u32 {
+        match content.image.as_ref().and_then(|image| png_to_dib(image)) {
+            Some(dib) => set_bytes(format, &dib),
+            None => Ok(()),
+        }
+    } else if format == CF_HDROP as u32 {
+        if content.files.is_empty() {
+            Ok(())
+        } else {
+            dropfiles(&content.files).and_then(|bytes| set_bytes(format, &bytes))
+        }
+    } else {
+        Ok(())
+    };
+    if let Err(error) = result {
+        eprintln!("Sean Toolbox clipboard render format {format}: {error}");
+    }
+    let _ = hwnd;
+}
+
+fn utf16_bytes(text: &str) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(text.len() * 2 + 2);
+    for unit in text.encode_utf16() {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+    bytes.extend_from_slice(&0u16.to_le_bytes());
+    bytes
 }
 
 fn global_from_bytes(bytes: &[u8]) -> Result<HGLOBAL, String> {

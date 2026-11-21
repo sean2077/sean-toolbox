@@ -272,11 +272,22 @@ pub enum ClipboardRole {
     Connect,
 }
 
+/// `eager` transfers a local copy immediately; `on_paste` sends only metadata
+/// and lets the peer fetch the payload when it actually pastes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClipboardMode {
+    Eager,
+    #[default]
+    OnPaste,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ClipboardSyncConfig {
     pub enabled: bool,
     pub role: ClipboardRole,
+    pub mode: ClipboardMode,
     pub listen: String,
     pub peer: String,
     pub max_transfer_bytes: u64,
@@ -287,6 +298,7 @@ impl Default for ClipboardSyncConfig {
         Self {
             enabled: false,
             role: ClipboardRole::Listen,
+            mode: ClipboardMode::OnPaste,
             listen: "0.0.0.0:24802".into(),
             peer: String::new(),
             max_transfer_bytes: 1024 * 1024 * 1024,
@@ -958,9 +970,16 @@ mod tests {
         let parsed: Config = serde_json::from_str(r#"{"schema_version":2}"#).unwrap();
         assert_eq!(parsed.clipboard, ClipboardSyncConfig::default());
         assert!(!parsed.clipboard.enabled);
+        assert_eq!(parsed.clipboard.mode, ClipboardMode::OnPaste);
         let encoded = serde_json::to_string(&parsed).unwrap();
         assert!(encoded.contains(r#""clipboard""#));
         assert_eq!(serde_json::from_str::<Config>(&encoded).unwrap(), parsed);
+
+        let mut eager = parsed;
+        eager.clipboard.mode = ClipboardMode::Eager;
+        let encoded = serde_json::to_string(&eager).unwrap();
+        assert!(encoded.contains(r#""mode":"eager""#));
+        assert_eq!(serde_json::from_str::<Config>(&encoded).unwrap(), eager);
     }
 
     #[test]
@@ -995,6 +1014,7 @@ mod tests {
         assert_eq!(parsed.schema_version, 2);
         assert!(parsed.clipboard.enabled);
         assert_eq!(parsed.clipboard.role, ClipboardRole::Connect);
+        assert_eq!(parsed.clipboard.mode, ClipboardMode::OnPaste);
         assert_eq!(serde_json::to_value(&parsed).unwrap()["schema_version"], 2);
     }
 }

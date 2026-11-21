@@ -149,6 +149,26 @@ export component AppWindow inherits Window {
     in-out property <bool> setting-windows;
     in-out property <string> setting-idle: "0";
     in-out property <string> setting-code-path;
+    in-out property <bool> setting-clipboard-enabled: false;
+    in-out property <int> setting-clipboard-role: 0;
+    in-out property <int> setting-clipboard-mode: 0;
+    in-out property <string> setting-clipboard-listen;
+    in-out property <string> setting-clipboard-peer;
+    in-out property <string> setting-clipboard-limit: "1024";
+    in-out property <string> clipboard-error;
+    in-out property <bool> clipboard-loaded: false;
+    in-out property <bool> clipboard-connected: false;
+    in-out property <string> clipboard-role-label;
+    in-out property <string> clipboard-mode-label;
+    in-out property <string> clipboard-peer-label;
+    in-out property <string> clipboard-last-sent;
+    in-out property <string> clipboard-last-received;
+    in-out property <string> clipboard-last-deferred;
+    in-out property <string> clipboard-sent-count;
+    in-out property <string> clipboard-received-count;
+    in-out property <string> clipboard-deferred-count;
+    in-out property <bool> clipboard-pending: false;
+    in-out property <string> clipboard-status-error;
     in-out property <string> settings-query;
     in-out property <string> setting-hotkey-error;
     in-out property <string> setting-idle-error;
@@ -234,8 +254,8 @@ export component AppWindow inherits Window {
     private property <bool> show-configuration: root.settings-searching ? root.text-matches(root.settings-query, @tr("ui.settings.search_configuration" => "Configuration import export backup reload JSON INI")) : root.settings-category == 4;
     callback reset-settings;
     private property <bool> blocked: root.confirm-visible || root.import-visible || root.dialog-busy;
-    private property <string> page-title: root.page == 0 ? (SharedMessages.recent-projects) : root.page == 1 ? (@tr("ui.navigation.windows" => "Window switcher")) : root.page == 2 ? (SharedMessages.settings) : root.page == 4 ? (SharedMessages.skills) : (@tr("ui.navigation.status" => "Status & about"));
-    private property <string> page-description: root.page == 0 ? (@tr("ui.page.projects_description" => "Pick up where you left off in VS Code.")) : root.page == 1 ? (@tr("ui.page.windows_description" => "Your everyday apps, one shortcut away.")) : root.page == 2 ? (@tr("ui.page.settings_description" => "Make the toolbox work your way.")) : root.page == 4 ? (@tr("ui.page.skills_description" => "Manage skills across your agents and keep them up to date.")) : (@tr("ui.page.status_description" => "Check what is available on this device."));
+    private property <string> page-title: root.page == 0 ? (SharedMessages.recent-projects) : root.page == 1 ? (@tr("ui.navigation.windows" => "Window switcher")) : root.page == 2 ? (SharedMessages.settings) : root.page == 4 ? (SharedMessages.skills) : root.page == 5 ? (@tr("ui.navigation.clipboard" => "Cross-machine clipboard")) : (@tr("ui.navigation.status" => "Status & about"));
+    private property <string> page-description: root.page == 0 ? (@tr("ui.page.projects_description" => "Pick up where you left off in VS Code.")) : root.page == 1 ? (@tr("ui.page.windows_description" => "Your everyday apps, one shortcut away.")) : root.page == 2 ? (@tr("ui.page.settings_description" => "Make the toolbox work your way.")) : root.page == 4 ? (@tr("ui.page.skills_description" => "Manage skills across your agents and keep them up to date.")) : root.page == 5 ? (@tr("ui.page.clipboard_description" => "Copy on one PC, paste on the other. Choose whether payloads travel immediately or only when you paste.")) : (@tr("ui.page.status_description" => "Check what is available on this device."));
 
     public function focus-page() {
         if root.confirm-visible { confirm-cancel.focus(); }
@@ -343,6 +363,7 @@ export component AppWindow inherits Window {
                 if event.text == "3" { root.navigate(2); return accept; }
                 if event.text == "4" { root.navigate(3); return accept; }
                 if event.text == "5" { root.navigate(4); return accept; }
+                if event.text == "6" { root.navigate(5); return accept; }
             }
             if root.page == 0 && (search.has-focus || project-keys.has-focus) && !root.blocked {
                 if event.text == Key.DownArrow { root.move-project(1); return accept; }
@@ -380,6 +401,7 @@ export component AppWindow inherits Window {
                     NavButton { text: SharedMessages.recent-projects; shortcut: "1"; compact: root.compact-navigation; icon: @image-url("icons/folder.svg"); selected: root.page == 0; clicked => { root.navigate(0); } }
                     NavButton { text: @tr("ui.navigation.windows" => "Window switcher"); shortcut: "2"; compact: root.compact-navigation; icon: @image-url("icons/windows.svg"); selected: root.page == 1; dirty: root.profile-dirty; clicked => { root.navigate(1); } }
                     NavButton { text: SharedMessages.skills; shortcut: "5"; compact: root.compact-navigation; icon: @image-url("icons/code.svg"); selected: root.page == 4; clicked => { root.navigate(4); } }
+                    NavButton { text: @tr("ui.navigation.clipboard" => "Cross-machine clipboard"); shortcut: "6"; compact: root.compact-navigation; icon: @image-url("icons/clipboard.svg"); selected: root.page == 5; clicked => { root.navigate(5); } }
                     Rectangle { vertical-stretch: 1; }
                     SectionLabel { visible: !root.compact-navigation; text: @tr("ui.main.preferences" => "PREFERENCES"); height: 22px; }
                     NavButton { text: SharedMessages.settings; shortcut: "3"; compact: root.compact-navigation; icon: @image-url("icons/settings.svg"); selected: root.page == 2; dirty: root.settings-dirty; clicked => { root.navigate(2); } }
@@ -973,6 +995,145 @@ export component AppWindow inherits Window {
                             wide-layout: root.wide-skills-layout;
                             visible: root.page == 4;
                             enabled: root.loaded && !root.blocked;
+                        }
+                        VerticalLayout {
+                            visible: root.page == 5;
+                            spacing: 14px;
+                            HorizontalLayout {
+                                height: 34px; spacing: 10px;
+                                SectionLabel { text: @tr("ui.clipboard.connection_section" => "CONNECTION"); }
+                                Caption { text: root.clipboard-connected ? (@tr("ui.clipboard.connected" => "Connected")) : (@tr("ui.clipboard.disconnected" => "Disconnected")); color: root.clipboard-connected ? Theme.success : Theme.muted; }
+                                Rectangle { horizontal-stretch: 1; }
+                                ActionButton { text: @tr("ui.clipboard.refresh" => "Refresh"); with-icon: true; icon: @image-url("icons/refresh.svg"); enabled: !root.diagnostic-loading; clicked => { root.refresh-status(); } }
+                                ActionButton { text: root.saving ? (@tr("ui.status.saving" => "Saving…")) : (@tr("ui.clipboard.save" => "Save clipboard settings")); primary: true; enabled: root.loaded && root.settings-dirty && !root.saving; clicked => { root.save-settings(); } }
+                            }
+                            ScrollView {
+                                vertical-stretch: 1;
+                                horizontal-scrollbar-policy: always-off;
+                                VerticalLayout {
+                                    padding-right: 8px; spacing: 12px;
+                                    if !root.clipboard-loaded: Caption { text: @tr("ui.clipboard.checking_status" => "Checking clipboard status…"); }
+                                    Card {
+                                        VerticalLayout {
+                                            spacing: 0px;
+                                            SettingRow {
+                                                title: @tr("ui.clipboard.connection_title" => "Clipboard bridge");
+                                                description: root.clipboard-peer-label;
+                                                control-width: 180px;
+                                                HorizontalLayout {
+                                                    spacing: 8px;
+                                                    Rectangle { width: 8px; height: 8px; border-radius: 4px; background: root.clipboard-connected ? Theme.success : Theme.muted; }
+                                                    Text { text: root.clipboard-connected ? (@tr("ui.clipboard.connected" => "Connected")) : (@tr("ui.clipboard.disconnected" => "Disconnected")); color: Theme.secondary; font-size: 13px; vertical-alignment: center; }
+                                                }
+                                            }
+                                            Divider {}
+                                            SettingRow {
+                                                title: @tr("ui.clipboard.role_title" => "Role");
+                                                description: root.clipboard-mode-label;
+                                                Text { text: root.clipboard-role-label; color: Theme.secondary; font-size: 13px; }
+                                            }
+                                            Divider {}
+                                            SettingRow {
+                                                title: @tr("ui.clipboard.last_deferred" => "Latest deferred item");
+                                                description: @tr("ui.clipboard.last_deferred_hint" => "Metadata announced on the last copy.");
+                                                Text { text: root.clipboard-last-deferred == "" ? (@tr("ui.clipboard.none" => "None")) : root.clipboard-last-deferred; color: Theme.secondary; font-size: 13px; }
+                                            }
+                                            Divider {}
+                                            SettingRow {
+                                                title: @tr("ui.clipboard.last_sent" => "Last sent");
+                                                Text { text: root.clipboard-last-sent == "" ? (@tr("ui.clipboard.none" => "None")) : root.clipboard-last-sent; color: Theme.secondary; font-size: 13px; }
+                                            }
+                                            Divider {}
+                                            SettingRow {
+                                                title: @tr("ui.clipboard.last_received" => "Last received");
+                                                Text { text: root.clipboard-last-received == "" ? (@tr("ui.clipboard.none" => "None")) : root.clipboard-last-received; color: Theme.secondary; font-size: 13px; }
+                                            }
+                                            Divider {}
+                                            SettingRow {
+                                                title: @tr("ui.clipboard.counters" => "Transfers");
+                                                description: root.clipboard-pending ? (@tr("ui.clipboard.fetching" => "Fetching the payload for a paste…")) : (@tr("ui.clipboard.counters_hint" => "sent / received / deferred"));
+                                                Text { text: root.clipboard-sent-count + " / " + root.clipboard-received-count + " / " + root.clipboard-deferred-count; color: Theme.secondary; font-size: 13px; }
+                                            }
+                                        }
+                                    }
+                                    if root.clipboard-status-error != "": Card {
+                                        background: Theme.danger-soft; border-color: Theme.danger-border;
+                                        VerticalLayout {
+                                            padding: 18px; spacing: 10px;
+                                            FieldLabel { text: @tr("ui.clipboard.last_error" => "Last clipboard error"); color: Theme.danger; }
+                                            Caption { text: root.clipboard-status-error; color: Theme.danger; }
+                                        }
+                                    }
+                                    Card {
+                                        VerticalLayout {
+                                            spacing: 0px;
+                                            SettingRow {
+                                                title: @tr("ui.clipboard.enable_title" => "Enable cross-machine clipboard");
+                                                description: @tr("ui.clipboard.enable_hint" => "Uses an encrypted Noise connection. The key file is separate from config.json and is never shown here.");
+                                                Switch { checked <=> root.setting-clipboard-enabled; accessible-label: @tr("ui.clipboard.enable_title" => "Enable cross-machine clipboard"); enabled: root.loaded && !root.saving; toggled => { root.settings-changed(); } }
+                                            }
+                                            Divider {}
+                                            VerticalLayout {
+                                                padding: 14px; spacing: 8px;
+                                                FieldLabel { text: @tr("ui.clipboard.role_field" => "Role"); }
+                                                Caption { text: @tr("ui.clipboard.role_hint" => "Listen waits for the other PC. Connect dials the listening PC."); }
+                                                ComboBox {
+                                                    width: 260px;
+                                                    model: [@tr("ui.clipboard.role_listen" => "Listen (server)"), @tr("ui.clipboard.role_connect" => "Connect (client)")];
+                                                    current-index <=> root.setting-clipboard-role;
+                                                    accessible-label: @tr("ui.clipboard.role_field" => "Role");
+                                                    enabled: root.loaded && !root.saving;
+                                                    selected => { root.settings-changed(); }
+                                                }
+                                            }
+                                            Divider {}
+                                            VerticalLayout {
+                                                padding: 14px; spacing: 8px;
+                                                FieldLabel { text: @tr("ui.clipboard.mode_field" => "Transfer timing"); }
+                                                Caption { text: root.setting-clipboard-mode == 1 ? (@tr("ui.clipboard.mode_on_paste_hint" => "Only metadata is sent on copy. The other PC fetches the payload when you paste; a large file makes the paste wait.")) : (@tr("ui.clipboard.mode_eager_hint" => "Content is transferred immediately after you copy, so the other PC can paste offline.")); }
+                                                ComboBox {
+                                                    width: 260px;
+                                                    model: [@tr("ui.clipboard.mode_eager" => "Immediately on copy"), @tr("ui.clipboard.mode_on_paste" => "Only when the peer pastes")];
+                                                    current-index <=> root.setting-clipboard-mode;
+                                                    accessible-label: @tr("ui.clipboard.mode_field" => "Transfer timing");
+                                                    enabled: root.loaded && !root.saving;
+                                                    selected => { root.settings-changed(); }
+                                                }
+                                            }
+                                            Divider {}
+                                            VerticalLayout {
+                                                padding: 14px; spacing: 8px;
+                                                FieldLabel { text: @tr("ui.clipboard.listen_field" => "Listen address"); }
+                                                LineEdit { height: 34px; text <=> root.setting-clipboard-listen; placeholder-text: "0.0.0.0:24802"; accessible-label: @tr("ui.clipboard.listen_field" => "Listen address"); enabled: root.loaded && !root.saving; edited => { root.settings-changed(); } }
+                                            }
+                                            Divider {}
+                                            VerticalLayout {
+                                                padding: 14px; spacing: 8px;
+                                                FieldLabel { text: @tr("ui.clipboard.peer_field" => "Peer address"); }
+                                                LineEdit { height: 34px; text <=> root.setting-clipboard-peer; placeholder-text: "192.168.1.10:24802"; accessible-label: @tr("ui.clipboard.peer_field" => "Peer address"); enabled: root.loaded && !root.saving; edited => { root.settings-changed(); } }
+                                            }
+                                            Divider {}
+                                            SettingRow {
+                                                title: @tr("ui.clipboard.limit_title" => "Maximum transfer");
+                                                description: @tr("ui.clipboard.limit_hint" => "Applies to file selections; text and image limits are fixed.");
+                                                HorizontalLayout {
+                                                    spacing: 6px;
+                                                    LineEdit { height: 34px; width: 110px; text <=> root.setting-clipboard-limit; input-type: number; accessible-label: @tr("ui.clipboard.limit_title" => "Maximum transfer"); enabled: root.loaded && !root.saving; edited => { root.settings-changed(); } }
+                                                    Text { text: "MiB"; color: Theme.secondary; font-size: 13px; vertical-alignment: center; }
+                                                }
+                                            }
+                                            if root.clipboard-error != "": VerticalLayout { padding-left: 14px; padding-right: 14px; padding-bottom: 12px; Caption { text: root.clipboard-error; color: Theme.danger; } }
+                                        }
+                                    }
+                                    HorizontalLayout {
+                                        height: 40px; spacing: 10px;
+                                        VerticalLayout { width: 6px; alignment: center; Rectangle { height: 6px; border-radius: 3px; background: root.settings-dirty ? Theme.warning : Theme.success; } }
+                                        Caption { text: root.settings-dirty ? (@tr("ui.main.you_have_unsaved_changes" => "You have unsaved changes")) : (@tr("ui.main.all_changes_saved" => "All changes saved")); horizontal-stretch: 1; }
+                                        ActionButton { text: @tr("ui.action.discard" => "Discard"); subtle: true; enabled: root.settings-dirty && !root.saving; clicked => { root.reset-settings(); } }
+                                        ActionButton { text: root.saving ? (@tr("ui.status.saving" => "Saving…")) : (@tr("ui.main.save_settings" => "Save settings")); enabled: root.loaded && root.settings-dirty && !root.saving; primary: true; clicked => { root.save-settings(); } }
+                                    }
+                                }
+                            }
                         }
                         VerticalLayout {
                             visible: root.page == 3;

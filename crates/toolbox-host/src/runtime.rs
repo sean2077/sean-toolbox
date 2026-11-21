@@ -712,6 +712,7 @@ impl ApplicationHandler<Event> for App {
                     "settings" => UiPage::Settings,
                     "diagnostics" => UiPage::Diagnostics,
                     "skills" => UiPage::Skills,
+                    "clipboard" => UiPage::Clipboard,
                     "quit" => {
                         event_loop.exit();
                         return;

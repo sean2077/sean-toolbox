@@ -1097,3 +1097,32 @@ GUI 应用内粘贴尚未执行：文字、HTML、截图、文件、敏感内容
 Deskflow 切屏后粘贴和 Windows toast 外观。`wl-clipboard 2.2.1` 不能作为健康
 检查；请用户在 GUI 中实际 `Ctrl+C`/`Ctrl+V`。Windows toast 只做了交叉编译检查，
 未在桌面显示验证。
+
+### 按需粘贴与界面功能区（2026-11-21）
+
+- 协议升为 v2：新增 `Defer`、`Fetch`、`FetchFailed`；`clipboard.mode` 支持
+  `eager`（默认）和 `on_paste`。源端保留最近 8 项快照，目标端在粘贴时按 id
+  取回；文件在 `Fetch` 完成前先落到接收缓存。
+- Windows 目标端新增延迟渲染：`SetClipboardData(format, NULL)` +
+  `WM_RENDERFORMAT`，支持 `CF_UNICODETEXT`、`HTML Format`、`PNG`、`CF_DIB`、
+  `CF_HDROP`。`Fetcher` 只通过服务线程的请求通道访问 Noise 会话。
+- 新增跨机剪贴板页面（导航快捷键 `6`）：连接状态、最近发送/接收/待传输、
+  传输计数、启用/角色/模式/地址/上限设置，保存复用设置页的草稿与校验。
+- 测试与检查：
+
+| 检查 | 结果 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test -p toolbox-clipboard` | 42 通过、0 失败、2 ignored |
+| 新增 `on_paste_mode_transfers_only_when_the_peer_fetches` | 通过（源端 Defer 后目标端无写入；`Fetch` 返回内容；二次粘贴仍可取回） |
+| `cargo check --workspace` | 通过 |
+| `cargo check -p toolbox-clipboard --target x86_64-pc-windows-msvc` | 通过（仅编译检查，未链接/运行） |
+| `python scripts/translations.py check` | 通过（新增中文条目已补齐） |
+
+### 按需粘贴未执行的真机验收
+
+需要用户在 u26 GUI 复制、w11 GUI 粘贴来验证：文字、HTML、截图、文件和目录；
+确认复制后 w11 没有立即收到内容，首次粘贴才传输；源端离线/淘汰条目时粘贴失败
+且不崩溃；大文件粘贴的等待行为；Windows 剪贴板历史/管理器的提前请求是否会把
+延迟项变成即时传输。Linux 作为目标端仍是即时拉取回退，不属于本次验收。

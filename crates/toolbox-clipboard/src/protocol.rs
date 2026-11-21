@@ -4,7 +4,7 @@ use crate::frame::{Frame, FrameError};
 use crate::model::{BlobMeta, Manifest};
 use serde::{Deserialize, Serialize};
 
-pub const PROTO_VERSION: u16 = 1;
+pub const PROTO_VERSION: u16 = 2;
 pub const MAX_MANIFEST_ENTRIES: usize = 4096;
 pub const MAX_PATH_BYTES: usize = 1024;
 
@@ -30,6 +30,25 @@ pub enum Message {
         html: Option<BlobMeta>,
         image: Option<BlobMeta>,
         files: Option<Manifest>,
+    },
+    /// Announce a clipboard item without transferring its payload. The
+    /// receiver installs deferred clipboard formats and sends `Fetch` when an
+    /// application pastes.
+    Defer {
+        id: String,
+        text: Option<BlobMeta>,
+        html: Option<BlobMeta>,
+        image: Option<BlobMeta>,
+        files: Option<Manifest>,
+    },
+    /// Ask the source for every payload belonging to a deferred item.
+    Fetch {
+        id: String,
+    },
+    /// The source cannot serve a fetch (unknown id, changed files, …).
+    FetchFailed {
+        id: String,
+        message: String,
     },
     /// A binary chunk follows in the frame payload. `offset` is the absolute
     /// offset in the concatenated payload for this kind; for files it is the
@@ -136,6 +155,21 @@ mod tests {
                 html: None,
                 image: None,
                 files: None,
+            },
+            Message::Defer {
+                id: "def".into(),
+                text: Some(BlobMeta {
+                    size: 3,
+                    hash: "00".into(),
+                }),
+                html: None,
+                image: None,
+                files: None,
+            },
+            Message::Fetch { id: "def".into() },
+            Message::FetchFailed {
+                id: "def".into(),
+                message: "source is offline".into(),
             },
             Message::Chunk {
                 id: "abc".into(),

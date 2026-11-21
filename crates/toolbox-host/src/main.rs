@@ -140,6 +140,7 @@ fn parse_page(page: &str) -> Result<UiPage, String> {
         "settings" => Ok(UiPage::Settings),
         "diagnostics" => Ok(UiPage::Diagnostics),
         "skills" => Ok(UiPage::Skills),
+        "clipboard" => Ok(UiPage::Clipboard),
         _ => Err(format!("Unknown page: {page}")),
     }
 }

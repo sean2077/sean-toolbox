@@ -28,8 +28,8 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use toolbox_core::{
-    AppProfile, Config, HostStatus, HotkeySpec, LaunchCommand, Platform, QuakeConfig, Response,
-    ShortcutCaptureAction, ThemePreference, UiPage,
+    AppProfile, ClipboardMode, ClipboardStatus, Config, HostStatus, HotkeySpec, LaunchCommand,
+    Platform, QuakeConfig, Response, ShortcutCaptureAction, ThemePreference, UiPage,
 };
 use toolbox_i18n::{Locale, Message, messages};
 use worker::{DialogKind, Event, SaveKind, Work};
@@ -229,6 +229,7 @@ struct State {
     rendered_generation: u64,
     host_pid: u32,
     host_status: Option<HostStatus>,
+    clipboard_status: Option<ClipboardStatus>,
     last_error: UiText,
     status_text: Option<UiText>,
     confirmation_text: Option<(Message, Message)>,
@@ -719,7 +720,7 @@ impl Controller {
         ui.invoke_focus_page();
         if changed && target == 0 && ui.get_loaded() {
             self.refresh_projects();
-        } else if changed && target == 3 {
+        } else if changed && (target == 3 || target == page_index(UiPage::Clipboard)) {
             self.refresh_status();
         } else if changed && target == page_index(UiPage::Skills) {
             self.render_skills();
@@ -821,6 +822,27 @@ impl Controller {
         ui.set_setting_projects(config.projects.enabled);
         ui.set_setting_windows(config.windows.enabled);
         ui.set_setting_idle(config.ui.idle_seconds.to_string().into());
+        ui.set_setting_clipboard_enabled(config.clipboard.enabled);
+        ui.set_setting_clipboard_role(
+            if matches!(config.clipboard.role, toolbox_core::ClipboardRole::Connect) {
+                1
+            } else {
+                0
+            },
+        );
+        ui.set_setting_clipboard_mode(if matches!(config.clipboard.mode, ClipboardMode::OnPaste) {
+            1
+        } else {
+            0
+        });
+        ui.set_setting_clipboard_listen(config.clipboard.listen.clone().into());
+        ui.set_setting_clipboard_peer(config.clipboard.peer.clone().into());
+        ui.set_setting_clipboard_limit(
+            (config.clipboard.max_transfer_bytes / (1024 * 1024))
+                .to_string()
+                .into(),
+        );
+        ui.set_clipboard_error("".into());
         ui.set_setting_code_path(
             config
                 .projects
@@ -1063,6 +1085,25 @@ impl Controller {
             .trim()
             .parse::<u32>()
             .is_ok_and(|value| value <= 3600);
+        let clipboard_limit = ui
+            .get_setting_clipboard_limit()
+            .trim()
+            .parse::<u64>()
+            .is_ok_and(|value| (1..=1024).contains(&value));
+        let clipboard_address = !ui.get_setting_clipboard_enabled()
+            || if ui.get_setting_clipboard_role() == 1 {
+                ui.get_setting_clipboard_peer().contains(':')
+            } else {
+                ui.get_setting_clipboard_listen().contains(':')
+            };
+        let clipboard_error = if !clipboard_limit {
+            "Maximum transfer must be between 1 and 1024 MiB."
+        } else if !clipboard_address {
+            "Enter a host:port address for the selected clipboard role."
+        } else {
+            ""
+        };
+        ui.set_clipboard_error(clipboard_error.into());
         ui.set_setting_hotkey_error(
             shortcut
                 .as_ref()
@@ -1078,7 +1119,7 @@ impl Controller {
             }
             .into(),
         );
-        shortcut.is_none() && idle_valid
+        shortcut.is_none() && idle_valid && clipboard_limit && clipboard_address
     }
 
     fn start_shortcut_capture(&self, target: i32) {
@@ -1420,6 +1461,25 @@ impl Controller {
             .map_err(|_| UiText::from(messages::invalid_idle_timeout()))?;
         let code = ui.get_setting_code_path().trim().to_owned();
         config.projects.vscode_path = (!code.is_empty()).then_some(code);
+        config.clipboard.enabled = ui.get_setting_clipboard_enabled();
+        config.clipboard.role = if ui.get_setting_clipboard_role() == 1 {
+            toolbox_core::ClipboardRole::Connect
+        } else {
+            toolbox_core::ClipboardRole::Listen
+        };
+        config.clipboard.mode = if ui.get_setting_clipboard_mode() == 1 {
+            ClipboardMode::OnPaste
+        } else {
+            ClipboardMode::Eager
+        };
+        config.clipboard.listen = ui.get_setting_clipboard_listen().trim().to_owned();
+        config.clipboard.peer = ui.get_setting_clipboard_peer().trim().to_owned();
+        let limit_mib = ui
+            .get_setting_clipboard_limit()
+            .trim()
+            .parse::<u64>()
+            .map_err(|_| UiText::from("Maximum transfer must be a whole number of MiB."))?;
+        config.clipboard.max_transfer_bytes = limit_mib.saturating_mul(1024 * 1024);
         config.check()?;
         Ok(config)
     }
@@ -1453,9 +1513,15 @@ impl Controller {
 
     fn save_settings(&self) {
         if !self.validate_settings() {
-            self.ui().invoke_focus_settings_problem(i32::from(
-                self.ui().get_setting_hotkey_error().is_empty(),
-            ));
+            let ui = self.ui();
+            let hotkey = !ui.get_setting_hotkey_error().is_empty();
+            let idle = !ui.get_setting_idle_error().is_empty();
+            if hotkey || idle {
+                ui.invoke_focus_settings_problem(if hotkey { 0 } else { 1 });
+            }
+            if !ui.get_clipboard_error().is_empty() {
+                ui.set_settings_error(ui.get_clipboard_error());
+            }
             return;
         }
         match self.settings_config() {
@@ -2200,6 +2266,43 @@ impl Controller {
         self.sync_diagnostics();
     }
 
+    fn receive_clipboard_status(&self, status: ClipboardStatus) {
+        let ui = self.ui();
+        ui.set_clipboard_loaded(true);
+        ui.set_clipboard_connected(status.connected);
+        ui.set_clipboard_role_label(
+            match status.role.as_str() {
+                "connect" => "Connect (client)",
+                _ => "Listen (server)",
+            }
+            .into(),
+        );
+        ui.set_clipboard_mode_label(
+            match status.mode.as_str() {
+                "on_paste" => "Only when the peer pastes",
+                _ => "Immediately on copy",
+            }
+            .into(),
+        );
+        ui.set_clipboard_peer_label(
+            if status.peer.is_empty() {
+                "No peer address".to_owned()
+            } else {
+                status.peer.clone()
+            }
+            .into(),
+        );
+        ui.set_clipboard_last_sent(status.last_sent.clone().unwrap_or_default().into());
+        ui.set_clipboard_last_received(status.last_received.clone().unwrap_or_default().into());
+        ui.set_clipboard_last_deferred(status.last_deferred.clone().unwrap_or_default().into());
+        ui.set_clipboard_sent_count(status.sent_count.to_string().into());
+        ui.set_clipboard_received_count(status.received_count.to_string().into());
+        ui.set_clipboard_deferred_count(status.deferred_count.to_string().into());
+        ui.set_clipboard_pending(status.pending_fetch);
+        ui.set_clipboard_status_error(status.last_error.clone().unwrap_or_default().into());
+        self.state.borrow_mut().clipboard_status = Some(status);
+    }
+
     fn sync_diagnostics(&self) {
         let ui = self.ui();
         let state = self.state.borrow();
@@ -2262,6 +2365,9 @@ impl Controller {
             }
             Event::Loaded { response, force } => match response {
                 Ok(response) => {
+                    if let Some(clipboard) = response.clipboard.clone() {
+                        self.receive_clipboard_status(clipboard);
+                    }
                     if let Some(status) = response.status {
                         self.receive_status(status);
                     }
@@ -2314,6 +2420,9 @@ impl Controller {
                 ui.set_saving(false);
                 match response {
                     Ok(response) => {
+                        if let Some(clipboard) = response.clipboard.clone() {
+                            self.receive_clipboard_status(clipboard);
+                        }
                         {
                             let mut state = self.state.borrow_mut();
                             state.config = response.config.unwrap_or(config);
@@ -2439,6 +2548,9 @@ impl Controller {
                 ui.set_diagnostic_loading(false);
                 match result {
                     Ok(response) => {
+                        if let Some(clipboard) = response.clipboard {
+                            self.receive_clipboard_status(clipboard);
+                        }
                         if let Some(status) = response.status {
                             self.receive_status(status);
                         } else {
@@ -2542,6 +2654,7 @@ fn arguments() -> Result<(UiPage, String), String> {
                     Some("settings") => UiPage::Settings,
                     Some("diagnostics") => UiPage::Diagnostics,
                     Some("skills") => UiPage::Skills,
+                    Some("clipboard") => UiPage::Clipboard,
                     _ => {
                         return Err(
                             "--page expects projects/windows/settings/diagnostics/skills".into(),
@@ -2621,6 +2734,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             rendered_generation: 0,
             host_pid: 0,
             host_status: None,
+            clipboard_status: None,
             last_error: UiText::default(),
             status_text: None,
             confirmation_text: None,
@@ -2807,6 +2921,7 @@ mod tests {
                     rendered_generation: 0,
                     host_pid: 0,
                     host_status: None,
+                    clipboard_status: None,
                     last_error: UiText::default(),
                     status_text: None,
                     confirmation_text: None,
