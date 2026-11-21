@@ -314,11 +314,13 @@ fn session(
     stop: &Arc<AtomicBool>,
     guard: &mut LoopGuard,
 ) -> Result<(), String> {
-    stream
-        .set_read_timeout(Some(READ_TIMEOUT))
-        .map_err(|error| error.to_string())?;
+    // The Noise handshake can take longer than a clipboard poll interval on a
+    // LAN or after a Windows sleep; give it its own generous read timeout.
     stream
         .set_write_timeout(Some(Duration::from_secs(10)))
+        .map_err(|error| error.to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(10)))
         .map_err(|error| error.to_string())?;
     let mut stream = stream;
     let session = if initiator {
@@ -327,6 +329,9 @@ fn session(
         Session::responder(&mut stream, key)
     }
     .map_err(|error| format!("Noise handshake: {error}"))?;
+    stream
+        .set_read_timeout(Some(READ_TIMEOUT))
+        .map_err(|error| error.to_string())?;
     let mut net = NetStream::new(stream, session);
     net.send(&Message::Hello {
         proto_version: PROTO_VERSION,
