@@ -78,8 +78,12 @@ Never put the key or the Noise secret in `config.json` or a command line.
   `WM_RENDERFORMAT` is only served when the process holding the clipboard owns
   the foreground window (or the foreground window is `ApplicationFrameHost`);
   background monitors such as NetEase UU Remote (`GameViewer.exe`) get no data
-  and the format stays delayed. On Linux, clipboard monitors that ignore
-  `x-kde-passwordManagerHint` can still pull a deferred item early.
+  and the format stays delayed. Wayland does not expose the active client, so
+  Linux identifies the reader through the transfer pipe (`/proc/*/fd`) and
+  refuses the processes in `BACKGROUND_READERS` (fcitx5's clipboard addon reads
+  every selection even with `IgnorePasswordFromPasswordManager`). Klipper skips
+  entries marked `x-kde-passwordManagerHint=secret`. Other Linux monitors can
+  still pull a deferred item early; every request is logged with its reader.
 - The disconnect detector uses a 45 s application silence timeout (three 15 s
   heartbeats); TCP keepalive is not set separately.
 - Notifications use `org.freedesktop.Notifications` through zbus on Linux and

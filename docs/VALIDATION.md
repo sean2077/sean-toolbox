@@ -1126,3 +1126,11 @@ Deskflow 切屏后粘贴和 Windows toast 外观。`wl-clipboard 2.2.1` 不能�
 确认复制后 w11 没有立即收到内容，首次粘贴才传输；源端离线/淘汰条目时粘贴失败
 且不崩溃；大文件粘贴的等待行为；Windows 剪贴板历史/管理器的提前请求是否会把
 延迟项变成即时传输。Linux 作为目标端仍是即时拉取回退，不属于本次验收。
+
+## 2026-11-21：跨机剪贴板按需传输（u26 Kubuntu 26.04 / KWin 6.6.7 ↔ w11 Windows 11）
+
+- 版本：`feat/clipboard-sync`，两端 `clipboard.mode=on_paste`，协议 v2，w11 宿主在交互会话（session 1）。
+- u26 → w11：Klipper D-Bus 写入文本后，w11 `deferred_count` +1、`received_count` 不变；w11 日志 `ignored background request for format 13 from ... GameViewer.exe`（网易 UU 远程的剪贴板监视），u26 无新增发送。
+- w11 → u26：会话 1 中 `Set-Clipboard` 后，u26 `deferred_count` +1、`received_count` 保持 0；日志 `ignored background request for text/plain;charset=utf-8 from pid ... fcitx5`。fcitx5 5.1.19 的剪贴板插件即使设置 `IgnorePasswordFromPasswordManager=True` 仍会读取文本，因此由后端名单拒绝。
+- 未覆盖：前台应用真实粘贴（飞书、Word、Dolphin、Claude Code）、图片与文件，需在桌面上人工验收。
+

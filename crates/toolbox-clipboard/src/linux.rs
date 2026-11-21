@@ -37,6 +37,10 @@ use wayland_protocols::ext::data_control::v1::client::{
 const READ_DEADLINE: Duration = Duration::from_secs(2);
 const MAX_READ_BYTES: usize = 64 * 1024 * 1024;
 const PASSWORD_HINT_MIME: &str = "x-kde-passwordManagerHint";
+/// Clipboard monitors that read every new selection in the background and do
+/// not honor the password-manager hint. fcitx5's clipboard addon would pull a
+/// deferred item right after the copy. Klipper skips hinted entries itself.
+const BACKGROUND_READERS: &[&str] = &["fcitx5"];
 
 pub fn backend() -> Result<Box<dyn Backend>, String> {
     Ok(Box::new(LinuxBackend::new()))
@@ -438,6 +442,37 @@ fn write_all_deadline(fd: RawFd, bytes: &[u8], deadline: Instant) -> Result<(), 
     Ok(())
 }
 
+/// Name the process holding the read end of a clipboard transfer pipe, i.e.
+/// the application that asked for the data. Only same-user processes are
+/// visible; this is a diagnostic and never blocks the transfer.
+fn pipe_reader(fd: RawFd) -> (String, String) {
+    let unknown = || ("?".to_owned(), "unknown".to_owned());
+    let Ok(target) = std::fs::read_link(format!("/proc/self/fd/{fd}")) else {
+        return unknown();
+    };
+    let own = std::process::id().to_string();
+    let Ok(processes) = std::fs::read_dir("/proc") else {
+        return unknown();
+    };
+    for process in processes.flatten() {
+        let pid = process.file_name().to_string_lossy().into_owned();
+        if pid == own || !pid.bytes().all(|byte| byte.is_ascii_digit()) {
+            continue;
+        }
+        let Ok(fds) = std::fs::read_dir(process.path().join("fd")) else {
+            continue;
+        };
+        if fds
+            .flatten()
+            .any(|entry| std::fs::read_link(entry.path()).is_ok_and(|link| link == target))
+        {
+            let name = std::fs::read_to_string(process.path().join("comm")).unwrap_or_default();
+            return (pid, name.trim().to_owned());
+        }
+    }
+    unknown()
+}
+
 fn parse_uri_list(bytes: &[u8]) -> Vec<std::path::PathBuf> {
     String::from_utf8_lossy(bytes)
         .lines()
@@ -835,6 +870,20 @@ impl Dispatch<ExtDataControlSourceV1, LazySourceData> for State {
                 // take seconds for files; never block the Wayland thread.
                 let data = data.clone();
                 thread::spawn(move || {
+                    if mime_type != ORIGIN_MIME && mime_type != PASSWORD_HINT_MIME {
+                        let (pid, name) = pipe_reader(fd.as_raw_fd());
+                        if BACKGROUND_READERS.contains(&name.as_str()) {
+                            // Closing the pipe hands the monitor an empty
+                            // read; the entry stays deferred for the paste.
+                            eprintln!(
+                                "Sean Toolbox clipboard (Wayland): ignored background request for {mime_type} from pid {pid} {name}"
+                            );
+                            return;
+                        }
+                        eprintln!(
+                            "Sean Toolbox clipboard (Wayland): {mime_type} for pid {pid} {name}"
+                        );
+                    }
                     if let Some(bytes) = data.bytes_for(&mime_type) {
                         let _ = write_all_deadline(
                             fd.as_raw_fd(),
