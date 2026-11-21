@@ -18,7 +18,7 @@ pub mod transfer;
 #[cfg(windows)]
 pub mod windows;
 
-pub use backend::{Backend, BackendEvent, ReadContent};
+pub use backend::{Backend, BackendEvent, FetchError, Fetcher, ReadContent};
 pub use model::{BlobMeta, ClipboardContent, DEFAULT_MAX_TRANSFER_BYTES, FileEntry, Manifest};
 pub use protocol::{BlobKind, Message, PROTO_VERSION};
-pub use service::{Handle, Role, Settings, Status, default_cache_dir, start};
+pub use service::{Handle, Role, Settings, Status, Transfer, default_cache_dir, start};

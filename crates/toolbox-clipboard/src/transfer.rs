@@ -228,38 +228,128 @@ pub fn cache_root() -> PathBuf {
 
 /// Keep the newest `keep` transfer directories and remove anything older than
 /// `max_age`. Called at startup and after a completed receive.
-pub fn cleanup_cache(root: &Path, keep: usize, max_age: Duration) -> Result<(), TransferError> {
-    let entries = match fs::read_dir(root) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => return Err(error.into()),
-    };
-    let mut items = Vec::new();
+/// Receive cache limits. Files only pass through the cache on their way to the
+/// paste target, but a path pasted into a terminal or Claude Code may be read
+/// later, so items live for a day unless the total grows past the cap.
+pub const CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+pub const CACHE_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// Apply the cache limits and return the bytes left in `root`.
+///
+/// * Interrupted staging directories (`*.tmp`) are removed, except `active`.
+/// * Items older than `max_age` are removed, except `keep` (the item on the
+///   clipboard right now).
+/// * The oldest items are removed while the total exceeds `max_bytes`; `keep`
+///   is removed last and only if it alone exceeds the cap.
+pub fn cleanup_cache(
+    root: &Path,
+    max_bytes: u64,
+    max_age: Duration,
+    keep: Option<&Path>,
+    active: Option<&Path>,
+) -> u64 {
     let now = SystemTime::now();
-    for entry in entries {
-        let entry = entry?;
-        if !entry.file_type()?.is_dir() {
+    let mut items = Vec::new();
+    let mut active_bytes = 0;
+    for (path, modified) in cache_entries(root) {
+        if Some(path.as_path()) == active {
+            active_bytes = tree_size(&path);
             continue;
         }
-        let modified = entry.metadata()?.modified().unwrap_or(now);
-        let age = now.duration_since(modified).unwrap_or_default();
-        items.push((modified, age, entry.path()));
+        let is_temp = path.extension().is_some_and(|extension| extension == "tmp");
+        let kept = Some(path.as_path()) == keep;
+        let expired = now.duration_since(modified).unwrap_or_default() > max_age;
+        if is_temp || (expired && !kept) {
+            let _ = fs::remove_dir_all(&path);
+            continue;
+        }
+        items.push((kept, modified, tree_size(&path), path));
     }
-    items.sort_by_key(|(modified, _, _)| *modified);
-    let excess = items.len().saturating_sub(keep);
-    for (index, (_, age, path)) in items.into_iter().enumerate() {
-        if index < excess || age > max_age {
-            let _ = fs::remove_dir_all(path);
+    // Oldest first, the kept item last.
+    items.sort_by_key(|(kept, modified, _, _)| (*kept, *modified));
+    let mut total = active_bytes + items.iter().map(|(_, _, size, _)| size).sum::<u64>();
+    for (_, _, size, path) in &items {
+        if total <= max_bytes {
+            break;
+        }
+        if fs::remove_dir_all(path).is_ok() {
+            total -= size;
         }
     }
-    Ok(())
+    total
 }
 
-/// Writes chunks into a staged directory and atomically promotes it on finish.
+/// Remove every cached item except the one still being received.
+pub fn clear_cache(root: &Path, active: Option<&Path>) -> u64 {
+    let mut left = 0;
+    for (path, _) in cache_entries(root) {
+        if Some(path.as_path()) == active {
+            left += tree_size(&path);
+        } else {
+            let _ = fs::remove_dir_all(&path);
+        }
+    }
+    left
+}
+
+fn cache_entries(root: &Path) -> Vec<(PathBuf, SystemTime)> {
+    let Ok(entries) = fs::read_dir(root) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .map(|entry| {
+            let modified = entry
+                .metadata()
+                .and_then(|metadata| metadata.modified())
+                .unwrap_or_else(|_| SystemTime::now());
+            (entry.path(), modified)
+        })
+        .collect()
+}
+
+/// Total size of regular files below `path`, without following symlinks.
+pub fn tree_size(path: &Path) -> u64 {
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return 0;
+    };
+    if metadata.is_file() {
+        return metadata.len();
+    }
+    if !metadata.is_dir() {
+        return 0;
+    }
+    fs::read_dir(path)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| tree_size(&entry.path()))
+                .sum()
+        })
+        .unwrap_or(0)
+}
+
+/// Top-level names of a manifest: the files and folders the user selected.
+pub fn top_level_names(manifest: &Manifest) -> Vec<String> {
+    let mut names = Vec::new();
+    for entry in &manifest.entries {
+        let name = entry.path.split('/').next().unwrap_or_default().to_owned();
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names
+}
+
+/// Writes chunks into a staging directory and renames it into place when the
+/// last chunk arrives. Files are opened one at a time, so a large folder does
+/// not exhaust file descriptors.
 pub struct FileSink {
     temp: PathBuf,
     final_path: PathBuf,
-    files: Vec<(PathBuf, File, u64)>,
+    paths: Vec<PathBuf>,
+    open: Option<(usize, File)>,
 }
 
 impl FileSink {
@@ -270,20 +360,22 @@ impl FileSink {
         let temp = root.join(format!("{id}.tmp"));
         let _ = fs::remove_dir_all(&temp);
         fs::create_dir_all(&temp)?;
-        let mut files = Vec::with_capacity(manifest.entries.len());
-        for entry in &manifest.entries {
-            let path = safe_join(&temp, &entry.path)?;
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            let file = File::create(&path)?;
-            files.push((path, file, entry.size));
-        }
+        let paths = manifest
+            .entries
+            .iter()
+            .map(|entry| safe_join(&temp, &entry.path))
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             temp,
             final_path,
-            files,
+            paths,
+            open: None,
         })
+    }
+
+    /// The staging directory, for cache cleanup.
+    pub fn temp_dir(&self) -> &Path {
+        &self.temp
     }
 
     pub fn write_chunk(
@@ -295,29 +387,51 @@ impl FileSink {
         let (index, within) = manifest
             .locate(offset)
             .ok_or_else(|| TransferError::Invalid("chunk offset outside manifest".into()))?;
-        let (_, file, size) = self
-            .files
-            .get_mut(index)
-            .ok_or_else(|| TransferError::Invalid("file index outside manifest".into()))?;
-        if within + data.len() as u64 > *size {
+        let size = manifest.entries[index].size;
+        if within + data.len() as u64 > size {
             return Err(TransferError::Invalid("chunk exceeds file size".into()));
         }
+        if self.open.as_ref().is_none_or(|(open, _)| *open != index) {
+            let path = &self.paths[index];
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let file = fs::OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .write(true)
+                .open(path)?;
+            self.open = Some((index, file));
+        }
+        let (_, file) = self.open.as_mut().expect("opened above");
         file.seek(SeekFrom::Start(within))?;
         file.write_all(data)?;
         Ok(())
     }
 
-    pub fn finish(mut self) -> Result<PathBuf, TransferError> {
-        for (_, file, _) in &mut self.files {
+    /// Create any file that received no chunk (empty files), then move the
+    /// staging directory into place and return the selected top-level paths.
+    pub fn finish(mut self, manifest: &Manifest) -> Result<Vec<PathBuf>, TransferError> {
+        if let Some((_, mut file)) = self.open.take() {
             file.flush()?;
         }
-        drop(self.files);
+        for path in &self.paths {
+            if !path.exists() {
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                File::create(path)?;
+            }
+        }
         fs::rename(&self.temp, &self.final_path)?;
-        Ok(self.final_path)
+        Ok(top_level_names(manifest)
+            .into_iter()
+            .map(|name| self.final_path.join(name))
+            .collect())
     }
 
-    pub fn cancel(self) {
-        drop(self.files);
+    pub fn cancel(mut self) {
+        self.open.take();
         let _ = fs::remove_dir_all(&self.temp);
     }
 }
@@ -371,8 +485,9 @@ mod tests {
         };
         let mut sink = FileSink::create(dir.path(), "id1", &manifest).unwrap();
         sink.write_chunk(&manifest, 0, b"abc").unwrap();
-        let path = sink.finish().unwrap();
-        assert_eq!(fs::read(path.join("a.txt")).unwrap(), b"abc");
+        let paths = sink.finish(&manifest).unwrap();
+        assert_eq!(paths.len(), 1);
+        assert_eq!(fs::read(&paths[0]).unwrap(), b"abc");
     }
 
     #[test]
@@ -396,5 +511,81 @@ mod tests {
         let path = dir.path().join("a.txt");
         fs::write(&path, b"x").unwrap();
         assert_eq!(unique_path(&path), dir.path().join("a.1.txt"));
+    }
+
+    #[test]
+    fn sink_creates_empty_files_and_returns_top_level_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = Manifest {
+            entries: vec![
+                FileEntry {
+                    path: "目录/a".into(),
+                    size: 2,
+                },
+                FileEntry {
+                    path: "目录/empty".into(),
+                    size: 0,
+                },
+                FileEntry {
+                    path: "b".into(),
+                    size: 1,
+                },
+            ],
+            total_size: 3,
+        };
+        let mut sink = FileSink::create(dir.path(), "id3", &manifest).unwrap();
+        sink.write_chunk(&manifest, 0, b"xy").unwrap();
+        sink.write_chunk(&manifest, 2, b"z").unwrap();
+        let paths = sink.finish(&manifest).unwrap();
+        let root = dir.path().join("id3");
+        assert_eq!(paths, vec![root.join("目录"), root.join("b")]);
+        assert_eq!(fs::read(root.join("目录/empty")).unwrap(), b"");
+    }
+
+    fn item(root: &Path, name: &str, bytes: usize, age: Duration) -> PathBuf {
+        let path = root.join(name);
+        fs::create_dir_all(&path).unwrap();
+        fs::write(path.join("data"), vec![0u8; bytes]).unwrap();
+        let time = SystemTime::now() - age;
+        let mut options = fs::OpenOptions::new();
+        options.read(true);
+        // A directory handle on Windows needs FILE_FLAG_BACKUP_SEMANTICS and
+        // write access to change its timestamps.
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            options.write(true).custom_flags(0x0200_0000);
+        }
+        options.open(&path).unwrap().set_modified(time).unwrap();
+        path
+    }
+
+    #[test]
+    fn cleanup_enforces_age_and_total_but_keeps_the_current_item() {
+        let dir = tempfile::tempdir().unwrap();
+        let hour = Duration::from_secs(3600);
+        let old = item(dir.path(), "old", 10, 30 * hour);
+        let current_old = item(dir.path(), "current", 10, 30 * hour);
+        let a = item(dir.path(), "a", 40, 3 * hour);
+        let b = item(dir.path(), "b", 40, 2 * hour);
+        let c = item(dir.path(), "c", 40, hour);
+        let temp = item(dir.path(), "stale.tmp", 5, hour);
+        let left = cleanup_cache(dir.path(), 100, 24 * hour, Some(&current_old), None);
+        assert!(!old.exists(), "expired item");
+        assert!(!temp.exists(), "interrupted staging");
+        assert!(current_old.exists(), "the clipboard item is kept");
+        assert!(!a.exists(), "oldest item evicted for the cap");
+        assert!(b.exists() && c.exists());
+        assert_eq!(left, 90);
+    }
+
+    #[test]
+    fn clear_keeps_only_the_active_transfer() {
+        let dir = tempfile::tempdir().unwrap();
+        let hour = Duration::from_secs(3600);
+        let done = item(dir.path(), "done", 10, hour);
+        let active = item(dir.path(), "busy.tmp", 7, Duration::ZERO);
+        assert_eq!(clear_cache(dir.path(), Some(&active)), 7);
+        assert!(!done.exists() && active.exists());
     }
 }

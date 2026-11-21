@@ -87,11 +87,12 @@ fn start() -> Result<(), String> {
         Some("skills") if args.len() <= 3 => parse_skills_command(&args[1..])?,
         Some("clipboard") if args.len() == 2 => match args[1].as_str() {
             "status" => HostCommand::Clipboard(ClipboardCommand::Status),
+            "clear-cache" => HostCommand::Clipboard(ClipboardCommand::ClearCache),
             "keygen" => {
                 generate_clipboard_key()?;
                 return Ok(());
             }
-            _ => return Err("Usage: sean-toolbox clipboard status|keygen".into()),
+            _ => return Err("Usage: sean-toolbox clipboard status|clear-cache|keygen".into()),
         },
         Some("quit") if args.len() == 1 => HostCommand::Quit,
         _ => return Err("Unknown arguments. Run sean-toolbox --help".into()),

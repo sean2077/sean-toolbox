@@ -3,12 +3,14 @@
 //! KWin exposes the data-control protocol to regular clients, so the backend can
 //! watch and replace the selection without stealing focus. The protocol runs on
 //! its own thread; the service only sees a cached snapshot and a write queue.
+//! A wake pipe interrupts the thread's `poll` when a write is queued.
+//!
+//! Text, HTML and images received from the peer are served from memory. Files
+//! announced by the peer become a source whose file list is fetched from the
+//! service when an application reads it (see [`FileSourceData`]).
 
-use crate::backend::{
-    Backend, BackendEvent, DEFERRED_FILE_TIMEOUT, DEFERRED_TIMEOUT, Fetcher, ORIGIN_MIME,
-    ReadContent,
-};
-use crate::model::{ClipboardContent, DeferredOffer, blob_meta};
+use crate::backend::{Backend, BackendEvent, Fetcher, ORIGIN_MIME, PASTE_WAIT, ReadContent};
+use crate::model::{ClipboardContent, blob_meta};
 use std::{
     collections::HashMap,
     os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd, RawFd},
@@ -37,10 +39,7 @@ use wayland_protocols::ext::data_control::v1::client::{
 const READ_DEADLINE: Duration = Duration::from_secs(2);
 const MAX_READ_BYTES: usize = 64 * 1024 * 1024;
 const PASSWORD_HINT_MIME: &str = "x-kde-passwordManagerHint";
-/// Clipboard monitors that read every new selection in the background and do
-/// not honor the password-manager hint. fcitx5's clipboard addon would pull a
-/// deferred item right after the copy. Klipper skips hinted entries itself.
-const BACKGROUND_READERS: &[&str] = &["fcitx5"];
+const FILE_MIMES: [&str; 2] = ["text/uri-list", "x-special/gnome-copied-files"];
 
 pub fn backend() -> Result<Box<dyn Backend>, String> {
     Ok(Box::new(LinuxBackend::new()))
@@ -54,22 +53,36 @@ pub struct LinuxBackend {
 struct Inner {
     latest: Mutex<Option<ReadContent>>,
     pending_write: Mutex<Option<ClipboardContent>>,
-    pending_defer: Mutex<Option<DeferredOffer>>,
-    fetcher: Mutex<Option<Fetcher>>,
+    pending_files: Mutex<Option<(String, Fetcher)>>,
     events: Mutex<Option<Sender<BackendEvent>>>,
     stop: AtomicBool,
+    wake: [OwnedFd; 2],
+}
+
+impl Inner {
+    fn wake(&self) {
+        let byte = 1u8;
+        unsafe {
+            libc::write(self.wake[1].as_raw_fd(), (&raw const byte).cast(), 1);
+        }
+    }
 }
 
 impl LinuxBackend {
     pub fn new() -> Self {
+        let mut fds = [0i32; 2];
+        let created =
+            unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC | libc::O_NONBLOCK) } == 0;
+        assert!(created, "pipe2: {}", std::io::Error::last_os_error());
+        let wake = unsafe { [OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])] };
         Self {
             inner: Arc::new(Inner {
                 latest: Mutex::new(None),
                 pending_write: Mutex::new(None),
-                pending_defer: Mutex::new(None),
-                fetcher: Mutex::new(None),
+                pending_files: Mutex::new(None),
                 events: Mutex::new(None),
                 stop: AtomicBool::new(false),
+                wake,
             }),
             started: false,
         }
@@ -85,6 +98,7 @@ impl Default for LinuxBackend {
 impl Drop for LinuxBackend {
     fn drop(&mut self) {
         self.inner.stop.store(true, Ordering::Release);
+        self.inner.wake();
     }
 }
 
@@ -122,15 +136,13 @@ impl Backend for LinuxBackend {
 
     fn write(&mut self, content: &ClipboardContent) -> Result<(), String> {
         *self.inner.pending_write.lock().unwrap() = Some(content.clone());
+        self.inner.wake();
         Ok(())
     }
 
-    fn set_fetcher(&mut self, fetcher: Fetcher) {
-        *self.inner.fetcher.lock().unwrap() = Some(fetcher);
-    }
-
-    fn defer(&mut self, offer: &DeferredOffer) -> Result<(), String> {
-        *self.inner.pending_defer.lock().unwrap() = Some(offer.clone());
+    fn offer_files(&mut self, id: &str, fetcher: Fetcher) -> Result<(), String> {
+        *self.inner.pending_files.lock().unwrap() = Some((id.to_owned(), fetcher));
+        self.inner.wake();
         Ok(())
     }
 }
@@ -179,10 +191,11 @@ impl State {
         Ok(())
     }
 
-    fn set_deferred_selection(
+    fn set_file_selection(
         &mut self,
         qh: &QueueHandle<Self>,
-        offer: &DeferredOffer,
+        id: String,
+        fetcher: Fetcher,
         inner: &Arc<Inner>,
     ) -> Result<(), String> {
         let manager = self
@@ -193,17 +206,12 @@ impl State {
         if let Some(old) = self.source.take() {
             old.destroy();
         }
-        let fetcher = inner
-            .fetcher
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or("clipboard fetcher is not installed")?;
-        let data = LazySourceData::new(offer.clone(), fetcher);
-        let mimes = data.mimes.clone();
-        let source = manager.create_data_source(qh, data);
-        for mime in mimes {
-            source.offer(mime);
+        let source = manager.create_data_source(qh, FileSourceData { id, fetcher });
+        for mime in FILE_MIMES
+            .into_iter()
+            .chain([ORIGIN_MIME, PASSWORD_HINT_MIME])
+        {
+            source.offer(mime.to_owned());
         }
         device.set_selection(Some(&source));
         self.source = Some(source);
@@ -212,7 +220,6 @@ impl State {
             remote_origin: true,
             sensitive: false,
         });
-        notify(inner);
         Ok(())
     }
 
@@ -442,50 +449,6 @@ fn write_all_deadline(fd: RawFd, bytes: &[u8], deadline: Instant) -> Result<(), 
     Ok(())
 }
 
-/// Name the process holding the read end of a clipboard transfer pipe, i.e.
-/// the application that asked for the data. Only same-user processes are
-/// visible; this is a diagnostic and never blocks the transfer.
-fn pipe_target(fd: RawFd) -> std::io::Result<std::path::PathBuf> {
-    std::fs::read_link(format!("/proc/self/fd/{fd}"))
-}
-
-/// The listed background monitor holding the other end of `fd`, if any.
-fn background_reader(fd: RawFd) -> Option<(String, String)> {
-    let target = pipe_target(fd).ok()?;
-    let (pid, name) = pipe_reader(&target, |name| BACKGROUND_READERS.contains(&name))?;
-    Some((pid, name))
-}
-
-/// Find a same-user process (other than this one) whose name passes
-/// `wanted` and that holds `target`, the transfer pipe.
-fn pipe_reader(
-    target: &std::path::Path,
-    wanted: impl Fn(&str) -> bool,
-) -> Option<(String, String)> {
-    let own = std::process::id().to_string();
-    for process in std::fs::read_dir("/proc").ok()?.flatten() {
-        let pid = process.file_name().to_string_lossy().into_owned();
-        if pid == own || !pid.bytes().all(|byte| byte.is_ascii_digit()) {
-            continue;
-        }
-        let name = std::fs::read_to_string(process.path().join("comm")).unwrap_or_default();
-        let name = name.trim();
-        if !wanted(name) {
-            continue;
-        }
-        let Ok(fds) = std::fs::read_dir(process.path().join("fd")) else {
-            continue;
-        };
-        if fds
-            .flatten()
-            .any(|entry| std::fs::read_link(entry.path()).is_ok_and(|link| link == target))
-        {
-            return Some((pid, name.to_owned()));
-        }
-    }
-    None
-}
-
 fn parse_uri_list(bytes: &[u8]) -> Vec<std::path::PathBuf> {
     String::from_utf8_lossy(bytes)
         .lines()
@@ -529,19 +492,6 @@ impl SourceData {
         if let Some(image) = &content.image {
             mimes.insert("image/png".into(), image.clone());
         }
-        if !content.files.is_empty() {
-            let uris = content
-                .files
-                .iter()
-                .filter_map(|path| url::Url::from_file_path(path).ok())
-                .map(|url| url.to_string())
-                .collect::<Vec<_>>()
-                .join("\r\n");
-            let uri_list = format!("{uris}\r\n");
-            mimes.insert("text/uri-list".into(), uri_list.clone().into_bytes());
-            let gnome = format!("copy\n{uris}");
-            mimes.insert("x-special/gnome-copied-files".into(), gnome.into_bytes());
-        }
         mimes.insert(
             ORIGIN_MIME.into(),
             blob_meta(content.fingerprint().as_bytes())
@@ -552,86 +502,46 @@ impl SourceData {
     }
 }
 
-/// A Wayland data source whose payload is fetched from the peer when an
-/// application actually reads the selection. `SourceData` is built once after
-/// the fetch and reused for every requested MIME type.
+/// A source for files announced by the peer. Reading `text/uri-list` (what
+/// Dolphin does on paste) asks the service for the staged files. The service
+/// answers within [`PASTE_WAIT`] — before Qt's one-second pipe timeout — or
+/// the read gets no data while the transfer continues.
+///
+/// The entry carries `x-kde-passwordManagerHint=secret` so Klipper, which reads
+/// every new selection, does not request the file list and start the transfer
+/// right after the copy.
 #[derive(Clone)]
-struct LazySourceData {
-    offer: DeferredOffer,
+struct FileSourceData {
+    id: String,
     fetcher: Fetcher,
-    payload: Arc<Mutex<Option<Arc<SourceData>>>>,
-    mimes: Vec<String>,
 }
 
-impl LazySourceData {
-    fn new(offer: DeferredOffer, fetcher: Fetcher) -> Self {
-        let mut mimes = Vec::new();
-        if offer.text.is_some() {
-            for mime in [
-                "text/plain;charset=utf-8",
-                "text/plain",
-                "UTF8_STRING",
-                "STRING",
-                "TEXT",
-            ] {
-                mimes.push(mime.to_owned());
-            }
-        }
-        if offer.html.is_some() {
-            mimes.push("text/html".into());
-        }
-        if offer.image.is_some() {
-            mimes.push("image/png".into());
-        }
-        if offer.files.is_some() {
-            mimes.push("text/uri-list".into());
-            mimes.push("x-special/gnome-copied-files".into());
-        }
-        mimes.push(ORIGIN_MIME.into());
-        // Clipboard managers (Klipper) read every new selection, which would
-        // pull the payload right after the copy. They skip secret entries.
-        mimes.push(PASSWORD_HINT_MIME.into());
-        Self {
-            offer,
-            fetcher,
-            payload: Arc::new(Mutex::new(None)),
-            mimes,
-        }
-    }
-
+impl FileSourceData {
     fn bytes_for(&self, mime: &str) -> Option<Vec<u8>> {
-        if mime == ORIGIN_MIME {
-            return Some(blob_meta(self.offer.id.as_bytes()).hash.into_bytes());
-        }
-        if mime == PASSWORD_HINT_MIME {
-            return Some(b"secret".to_vec());
-        }
-        self.payload()?.mimes.get(mime).cloned()
-    }
-
-    fn payload(&self) -> Option<Arc<SourceData>> {
-        // Hold the lock across the fetch: an application usually asks for
-        // several MIME types at once, and they must share one transfer.
-        let mut slot = self.payload.lock().unwrap();
-        if let Some(payload) = slot.clone() {
-            return Some(payload);
-        }
-        let timeout = if self.offer.has_files() {
-            DEFERRED_FILE_TIMEOUT
-        } else {
-            DEFERRED_TIMEOUT
-        };
-        let content = match self.fetcher.fetch(&self.offer.id, timeout) {
-            Ok(content) => content,
-            Err(error) => {
-                eprintln!("Sean Toolbox clipboard (Wayland): fetch failed: {error}");
-                return None;
+        match mime {
+            ORIGIN_MIME => Some(blob_meta(self.id.as_bytes()).hash.into_bytes()),
+            PASSWORD_HINT_MIME => Some(b"secret".to_vec()),
+            "text/uri-list" | "x-special/gnome-copied-files" => {
+                let paths = self.fetcher.fetch(&self.id, PASTE_WAIT).ok()?;
+                let uris = uri_lines(&paths);
+                Some(if mime == "text/uri-list" {
+                    format!("{uris}\r\n").into_bytes()
+                } else {
+                    format!("copy\n{uris}").into_bytes()
+                })
             }
-        };
-        let payload = Arc::new(SourceData::new(&content));
-        *slot = Some(payload.clone());
-        Some(payload)
+            _ => None,
+        }
     }
+}
+
+fn uri_lines(paths: &[std::path::PathBuf]) -> String {
+    paths
+        .iter()
+        .filter_map(|path| url::Url::from_file_path(path).ok())
+        .map(|url| url.to_string())
+        .collect::<Vec<_>>()
+        .join("\r\n")
 }
 
 fn run(inner: Arc<Inner>) -> Result<(), String> {
@@ -665,22 +575,45 @@ fn run(inner: Arc<Inner>) -> Result<(), String> {
         if let Some(content) = pending {
             state.set_selection(&qh, &content, &inner)?;
         }
-        let deferred = inner.pending_defer.lock().unwrap().take();
-        if let Some(offer) = deferred
-            && let Err(error) = state.set_deferred_selection(&qh, &offer, &inner)
+        let files = inner.pending_files.lock().unwrap().take();
+        if let Some((id, fetcher)) = files
+            && let Err(error) = state.set_file_selection(&qh, id, fetcher, &inner)
         {
-            eprintln!("Sean Toolbox clipboard (Wayland): deferred selection: {error}");
+            eprintln!("Sean Toolbox clipboard (Wayland): file selection: {error}");
         }
         conn.flush().map_err(|error| error.to_string())?;
         if let Some(guard) = conn.prepare_read() {
-            let mut pollfd = libc::pollfd {
-                fd: guard.connection_fd().as_raw_fd(),
-                events: libc::POLLIN,
-                revents: 0,
-            };
-            let ready = unsafe { libc::poll(&mut pollfd, 1, 20) };
-            if ready > 0 && pollfd.revents & libc::POLLIN != 0 {
+            // Sleep until Wayland events, a queued write (wake pipe) or the
+            // pending selection read is due.
+            let timeout = state.read_at.map_or(-1, |at| {
+                at.saturating_duration_since(Instant::now()).as_millis() as i32
+            });
+            let mut fds = [
+                libc::pollfd {
+                    fd: guard.connection_fd().as_raw_fd(),
+                    events: libc::POLLIN,
+                    revents: 0,
+                },
+                libc::pollfd {
+                    fd: inner.wake[0].as_raw_fd(),
+                    events: libc::POLLIN,
+                    revents: 0,
+                },
+            ];
+            let ready = unsafe { libc::poll(fds.as_mut_ptr(), 2, timeout) };
+            if ready > 0 && fds[0].revents & libc::POLLIN != 0 {
                 let _ = guard.read();
+            }
+            if fds[1].revents & libc::POLLIN != 0 {
+                let mut drain = [0u8; 64];
+                while unsafe {
+                    libc::read(
+                        inner.wake[0].as_raw_fd(),
+                        drain.as_mut_ptr().cast(),
+                        drain.len(),
+                    )
+                } > 0
+                {}
             }
         }
         queue
@@ -868,44 +801,21 @@ impl Dispatch<ExtDataControlSourceV1, SourceData> for State {
     }
 }
 
-impl Dispatch<ExtDataControlSourceV1, LazySourceData> for State {
+impl Dispatch<ExtDataControlSourceV1, FileSourceData> for State {
     fn event(
         state: &mut Self,
         source: &ExtDataControlSourceV1,
         event: ext_data_control_source_v1::Event,
-        data: &LazySourceData,
+        data: &FileSourceData,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
         match event {
             ext_data_control_source_v1::Event::Send { mime_type, fd } => {
-                // The first paste fetches the payload from the peer, which can
-                // take seconds for files; never block the Wayland thread.
+                // The file list may wait for the transfer; never block the
+                // Wayland thread.
                 let data = data.clone();
                 thread::spawn(move || {
-                    if mime_type != ORIGIN_MIME && mime_type != PASSWORD_HINT_MIME {
-                        // Only the listed monitors are checked before serving;
-                        // naming an arbitrary reader means scanning all of
-                        // /proc, so that runs beside the transfer for the log.
-                        if let Some((pid, name)) = background_reader(fd.as_raw_fd()) {
-                            // Closing the pipe hands the monitor an empty
-                            // read; the entry stays deferred for the paste.
-                            eprintln!(
-                                "Sean Toolbox clipboard (Wayland): ignored background request for {mime_type} from pid {pid} {name}"
-                            );
-                            return;
-                        }
-                        if let Ok(target) = pipe_target(fd.as_raw_fd()) {
-                            let mime_type = mime_type.clone();
-                            thread::spawn(move || {
-                                let (pid, name) = pipe_reader(&target, |_| true)
-                                    .unwrap_or_else(|| ("?".into(), "unknown".into()));
-                                eprintln!(
-                                    "Sean Toolbox clipboard (Wayland): {mime_type} for pid {pid} {name}"
-                                );
-                            });
-                        }
-                    }
                     if let Some(bytes) = data.bytes_for(&mime_type) {
                         let _ = write_all_deadline(
                             fd.as_raw_fd(),
@@ -988,8 +898,6 @@ mod tests {
             "TEXT",
             "text/html",
             "image/png",
-            "text/uri-list",
-            "x-special/gnome-copied-files",
             ORIGIN_MIME,
         ] {
             assert!(data.mimes.contains_key(mime), "{mime}");

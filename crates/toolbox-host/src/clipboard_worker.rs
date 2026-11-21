@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use toolbox_clipboard::{Handle, Role, Settings, Status};
-use toolbox_core::{ClipboardMode, ClipboardStatus, ClipboardSyncConfig};
+use toolbox_core::{ClipboardStatus, ClipboardSyncConfig, ClipboardTransfer};
 
 pub struct ClipboardWorker {
     config_path: PathBuf,
@@ -50,7 +50,6 @@ impl ClipboardWorker {
             key_path: self.config_path.with_file_name("clipboard.key"),
             cache_dir: toolbox_clipboard::default_cache_dir(),
             host_name: host_name(),
-            defer_on_paste: matches!(config.mode, ClipboardMode::OnPaste),
             silence_timeout: std::time::Duration::from_secs(45),
         };
         match toolbox_clipboard::start(settings) {
@@ -80,10 +79,6 @@ impl ClipboardWorker {
                     toolbox_core::ClipboardRole::Listen => "listen".into(),
                     toolbox_core::ClipboardRole::Connect => "connect".into(),
                 },
-                mode: match config.mode {
-                    ClipboardMode::Eager => "eager".into(),
-                    ClipboardMode::OnPaste => "on_paste".into(),
-                },
                 peer: if matches!(config.role, toolbox_core::ClipboardRole::Listen) {
                     config.listen.clone()
                 } else {
@@ -95,18 +90,34 @@ impl ClipboardWorker {
         Some(ClipboardStatus {
             enabled: status.enabled,
             role: status.role,
-            mode: status.mode,
             connected: status.connected,
             peer: status.peer,
             last_sent: status.last_sent,
             last_received: status.last_received,
-            last_deferred: status.last_deferred,
             sent_count: status.sent_count,
             received_count: status.received_count,
-            deferred_count: status.deferred_count,
-            pending_fetch: status.pending_fetch,
+            transfer: status.transfer.map(|transfer| ClipboardTransfer {
+                receiving: transfer.receiving,
+                done: transfer.done,
+                total: transfer.total,
+            }),
+            cache_bytes: status.cache_bytes,
             last_error: status.last_error.or_else(|| self.last_error.clone()),
         })
+    }
+
+    /// Delete received files. Without a running bridge the cache directory is
+    /// cleared directly.
+    pub fn clear_cache(&self) {
+        match &self.handle {
+            Some(handle) => handle.clear_cache(),
+            None => {
+                toolbox_clipboard::transfer::clear_cache(
+                    &toolbox_clipboard::default_cache_dir(),
+                    None,
+                );
+            }
+        }
     }
 
     pub fn take_warnings(&mut self) -> Vec<String> {

@@ -4,7 +4,7 @@ use crate::frame::{Frame, FrameError};
 use crate::model::{BlobMeta, Manifest};
 use serde::{Deserialize, Serialize};
 
-pub const PROTO_VERSION: u16 = 2;
+pub const PROTO_VERSION: u16 = 3;
 pub const MAX_MANIFEST_ENTRIES: usize = 4096;
 pub const MAX_PATH_BYTES: usize = 1024;
 
@@ -24,28 +24,25 @@ pub enum Message {
         proto_version: u16,
         host_name: String,
     },
+    /// Text, HTML and/or an image. `Chunk`/`End` frames with the same id
+    /// follow immediately.
     Offer {
         id: String,
         text: Option<BlobMeta>,
         html: Option<BlobMeta>,
         image: Option<BlobMeta>,
-        files: Option<Manifest>,
     },
-    /// Announce a clipboard item without transferring its payload. The
-    /// receiver installs deferred clipboard formats and sends `Fetch` when an
-    /// application pastes.
-    Defer {
+    /// Files copied on the sender. Only the manifest travels; the receiver
+    /// sends `Fetch` when an application pastes.
+    FileOffer {
         id: String,
-        text: Option<BlobMeta>,
-        html: Option<BlobMeta>,
-        image: Option<BlobMeta>,
-        files: Option<Manifest>,
+        files: Manifest,
     },
-    /// Ask the source for every payload belonging to a deferred item.
+    /// Ask the sender for the files of a `FileOffer`.
     Fetch {
         id: String,
     },
-    /// The source cannot serve a fetch (unknown id, changed files, …).
+    /// The sender cannot serve a fetch (newer copy, source files changed, …).
     FetchFailed {
         id: String,
         message: String,
@@ -65,8 +62,8 @@ pub enum Message {
     Cancel {
         id: String,
     },
+    /// Sent every heartbeat; any inbound frame keeps the connection alive.
     Ping,
-    Pong,
 }
 
 impl Message {
@@ -154,17 +151,16 @@ mod tests {
                 }),
                 html: None,
                 image: None,
-                files: None,
             },
-            Message::Defer {
+            Message::FileOffer {
                 id: "def".into(),
-                text: Some(BlobMeta {
-                    size: 3,
-                    hash: "00".into(),
-                }),
-                html: None,
-                image: None,
-                files: None,
+                files: Manifest {
+                    entries: vec![FileEntry {
+                        path: "a".into(),
+                        size: 1,
+                    }],
+                    total_size: 1,
+                },
             },
             Message::Fetch { id: "def".into() },
             Message::FetchFailed {
@@ -182,7 +178,6 @@ mod tests {
             },
             Message::Cancel { id: "abc".into() },
             Message::Ping,
-            Message::Pong,
         ];
         for message in messages {
             let frame = message.frame().unwrap();

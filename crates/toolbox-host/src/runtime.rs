@@ -509,6 +509,10 @@ impl App {
             },
             HostCommand::Clipboard(command) => match command {
                 ClipboardCommand::Status => self.response("Clipboard status", false),
+                ClipboardCommand::ClearCache => {
+                    self.clipboard.clear_cache();
+                    self.response("Clipboard cache cleared", false)
+                }
             },
             HostCommand::Skills(command) => match self.skills.submit(command) {
                 Ok(snapshot) => Response {

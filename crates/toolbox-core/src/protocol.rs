@@ -56,6 +56,8 @@ pub enum ShortcutCaptureAction {
 #[serde(rename_all = "snake_case")]
 pub enum ClipboardCommand {
     Status,
+    /// Delete received files, except a transfer that is still running.
+    ClearCache,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,17 +65,24 @@ pub enum ClipboardCommand {
 pub struct ClipboardStatus {
     pub enabled: bool,
     pub role: String,
-    pub mode: String,
     pub connected: bool,
     pub peer: String,
     pub last_sent: Option<String>,
     pub last_received: Option<String>,
-    pub last_deferred: Option<String>,
     pub sent_count: u64,
     pub received_count: u64,
-    pub deferred_count: u64,
-    pub pending_fetch: bool,
+    /// A file transfer in progress.
+    pub transfer: Option<ClipboardTransfer>,
+    /// Bytes in the receive cache.
+    pub cache_bytes: u64,
     pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClipboardTransfer {
+    pub receiving: bool,
+    pub done: u64,
+    pub total: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

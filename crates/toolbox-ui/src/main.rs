@@ -28,8 +28,8 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use toolbox_core::{
-    AppProfile, ClipboardMode, ClipboardStatus, Config, HostStatus, HotkeySpec, LaunchCommand,
-    Platform, QuakeConfig, Response, ShortcutCaptureAction, ThemePreference, UiPage,
+    AppProfile, ClipboardStatus, Config, HostStatus, HotkeySpec, LaunchCommand, Platform,
+    QuakeConfig, Response, ShortcutCaptureAction, ThemePreference, UiPage,
 };
 use toolbox_i18n::{Locale, Message, messages};
 use worker::{DialogKind, Event, SaveKind, Work};
@@ -830,11 +830,6 @@ impl Controller {
                 0
             },
         );
-        ui.set_setting_clipboard_mode(if matches!(config.clipboard.mode, ClipboardMode::OnPaste) {
-            1
-        } else {
-            0
-        });
         ui.set_setting_clipboard_listen(config.clipboard.listen.clone().into());
         ui.set_setting_clipboard_peer(config.clipboard.peer.clone().into());
         ui.set_setting_clipboard_limit(
@@ -1466,11 +1461,6 @@ impl Controller {
             toolbox_core::ClipboardRole::Connect
         } else {
             toolbox_core::ClipboardRole::Listen
-        };
-        config.clipboard.mode = if ui.get_setting_clipboard_mode() == 1 {
-            ClipboardMode::OnPaste
-        } else {
-            ClipboardMode::Eager
         };
         config.clipboard.listen = ui.get_setting_clipboard_listen().trim().to_owned();
         config.clipboard.peer = ui.get_setting_clipboard_peer().trim().to_owned();
@@ -2248,6 +2238,14 @@ impl Controller {
         }
     }
 
+    fn clear_clipboard_cache(&self) {
+        if self.ui().get_diagnostic_loading() {
+            return;
+        }
+        self.ui().set_diagnostic_loading(true);
+        self.send(Work::ClearClipboardCache);
+    }
+
     fn refresh_status(&self) {
         if self.ui().get_diagnostic_loading() {
             return;
@@ -2277,13 +2275,6 @@ impl Controller {
             }
             .into(),
         );
-        ui.set_clipboard_mode_label(
-            match status.mode.as_str() {
-                "on_paste" => "Only when the peer pastes",
-                _ => "Immediately on copy",
-            }
-            .into(),
-        );
         ui.set_clipboard_peer_label(
             if status.peer.is_empty() {
                 "No peer address".to_owned()
@@ -2294,11 +2285,27 @@ impl Controller {
         );
         ui.set_clipboard_last_sent(status.last_sent.clone().unwrap_or_default().into());
         ui.set_clipboard_last_received(status.last_received.clone().unwrap_or_default().into());
-        ui.set_clipboard_last_deferred(status.last_deferred.clone().unwrap_or_default().into());
         ui.set_clipboard_sent_count(status.sent_count.to_string().into());
         ui.set_clipboard_received_count(status.received_count.to_string().into());
-        ui.set_clipboard_deferred_count(status.deferred_count.to_string().into());
-        ui.set_clipboard_pending(status.pending_fetch);
+        ui.set_clipboard_transfer_active(status.transfer.is_some());
+        ui.set_clipboard_transfer_receiving(status.transfer.is_some_and(|t| t.receiving));
+        ui.set_clipboard_transfer_progress(
+            status
+                .transfer
+                .map(|transfer| {
+                    let percent = (transfer.done * 100)
+                        .checked_div(transfer.total)
+                        .unwrap_or(100);
+                    format!(
+                        "{percent}% · {} / {}",
+                        format_bytes(transfer.done),
+                        format_bytes(transfer.total)
+                    )
+                })
+                .unwrap_or_default()
+                .into(),
+        );
+        ui.set_clipboard_cache_size(format_bytes(status.cache_bytes).into());
         ui.set_clipboard_status_error(status.last_error.clone().unwrap_or_default().into());
         self.state.borrow_mut().clipboard_status = Some(status);
     }
@@ -2417,6 +2424,7 @@ impl Controller {
                 config,
                 kind,
             } => {
+                let config = *config;
                 ui.set_saving(false);
                 match response {
                     Ok(response) => {
@@ -2779,6 +2787,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.on_apply_import(|replace| with_controller(|c| c.apply_import(replace)));
     ui.on_cancel_import(|| with_controller(Controller::cancel_import));
     ui.on_refresh_status(|| with_controller(Controller::refresh_status));
+    ui.on_clear_clipboard_cache(|| with_controller(Controller::clear_clipboard_cache));
     ui.on_confirm_action(|yes| with_controller(|c| c.confirm(yes)));
     ui.on_open_link(|index| with_controller(|c| c.send(Work::Link(index))));
     skills::connect_callbacks(&ui);
@@ -2857,6 +2866,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let _ = cleanup.join();
     Ok(())
+}
+
+/// Human-readable byte count for clipboard transfers and the receive cache.
+fn format_bytes(bytes: u64) -> String {
+    const MIB: f64 = 1024.0 * 1024.0;
+    let value = bytes as f64;
+    if value >= 1024.0 * MIB {
+        format!("{:.1} GB", value / (1024.0 * MIB))
+    } else if value >= MIB {
+        format!("{:.1} MB", value / MIB)
+    } else if bytes == 0 {
+        "0 KB".into()
+    } else {
+        format!("{:.0} KB", (value / 1024.0).ceil())
+    }
 }
 
 #[cfg(test)]
@@ -3020,7 +3044,7 @@ mod tests {
                     config: Some(config.clone()),
                     ..Response::default()
                 }),
-                config,
+                config: Box::new(config),
                 kind,
             });
             assert!(ui.get_editing());
@@ -3971,7 +3995,7 @@ mod tests {
                     revision: 2,
                     ..Response::default()
                 }),
-                config,
+                config: Box::new(config),
                 kind,
             });
             assert!(ui.get_settings_dirty());
