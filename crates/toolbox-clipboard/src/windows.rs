@@ -538,6 +538,12 @@ fn render_format(hwnd: HWND, format: u32, inner: &Arc<Inner>) {
     let Some(offer) = inner.deferred.lock().unwrap().clone() else {
         return;
     };
+    // Record who asked: a paste comes from the target app, while a pull right
+    // after the copy means some clipboard monitor is rendering every entry.
+    eprintln!(
+        "Sean Toolbox clipboard render: format {format} requested by {}",
+        clipboard_requester()
+    );
     let content = match ensure_fetched(inner, &offer) {
         Ok(content) => content,
         Err(error) => {
@@ -580,6 +586,48 @@ fn render_format(hwnd: HWND, format: u32, inner: &Arc<Inner>) {
         eprintln!("Sean Toolbox clipboard render format {format}: {error}");
     }
     let _ = hwnd;
+}
+
+/// Executable of the process that currently has the clipboard open, i.e. the
+/// one whose `GetClipboardData` triggered `WM_RENDERFORMAT`.
+fn clipboard_requester() -> String {
+    use windows_sys::Win32::{
+        Foundation::CloseHandle,
+        System::{
+            DataExchange::GetOpenClipboardWindow,
+            Threading::{
+                OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+                QueryFullProcessImageNameW,
+            },
+        },
+        UI::WindowsAndMessaging::GetWindowThreadProcessId,
+    };
+    let window = unsafe { GetOpenClipboardWindow() };
+    if window.is_null() {
+        return "unknown (no clipboard window)".into();
+    }
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(window, &mut pid) };
+    if pid == 0 {
+        return "unknown".into();
+    }
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if process.is_null() {
+        return format!("pid {pid}");
+    }
+    let mut buffer = [0u16; 512];
+    let mut len = buffer.len() as u32;
+    let ok = unsafe {
+        QueryFullProcessImageNameW(process, PROCESS_NAME_WIN32, buffer.as_mut_ptr(), &mut len)
+    };
+    unsafe { CloseHandle(process) };
+    if ok == 0 {
+        return format!("pid {pid}");
+    }
+    format!(
+        "pid {pid} {}",
+        String::from_utf16_lossy(&buffer[..len as usize])
+    )
 }
 
 fn utf16_bytes(text: &str) -> Vec<u8> {
