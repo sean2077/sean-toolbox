@@ -18,7 +18,7 @@ Sean Toolbox 使用 Rust + Slint，支持 Windows、macOS 和 Linux，优先面�
 
 更多截图：[项目管理](docs/images/projects.png) · [Quake 停靠](docs/images/quake-editor.png) · [Skills 管理（示例数据）](docs/images/skills-manager.png)。
 
-截图使用当前源码和示例数据生成；尚未发布的界面变化不包含在下方的 0.3.0 发行包中。
+截图使用示例数据展示主要界面，实际显示以所用版本和配置为准。
 
 ## 功能
 
@@ -26,13 +26,14 @@ Sean Toolbox 使用 Rust + Slint，支持 Windows、macOS 和 Linux，优先面�
 - **下拉与停靠**：Windows 可用独立的 WezTerm 下拉终端，收起后任务继续运行；其他应用也可停靠到屏幕一侧。可设置宽高、对齐方式和显示器。
 - **最近项目**：搜索 VS Code Stable 的文件夹、工作区和远程项目历史，用键盘或鼠标打开。
 - **Skills 管理**：从 GitHub 仓库发现、安装和更新 Skills，导入本机目录，按符号链接（默认）或复制方式启用到 Claude Code、Codex、Gemini CLI、OpenCode、Grok Build 和通用 `.agents` 目录；可开启每日自动更新，保留本地修改并报告冲突。仓库操作需要 Git，详细行为见[使用指南](docs/USAGE.md#skills-管理)。
+- **跨机剪贴板**：Windows 与 Linux Wayland 两台设备间同步文字、HTML 和图片，文件在粘贴时传输。默认关闭，需配置配对密钥和连接地址，详见[使用指南](docs/USAGE.md#跨机剪贴板)。
 - **界面与配置**：中文或英文界面，跟随系统、浅色和深色主题；支持配置导入、导出和开机启动。
 
 关闭界面后，界面进程默认退出；托盘和全局快捷键继续运行。再次唤起时会重新打开界面。
 
 ## 下载与开始使用
 
-正式版下载：[最新版本](https://github.com/sean2077/sean-toolbox/releases/latest) · [0.3.0](https://github.com/sean2077/sean-toolbox/releases/tag/v0.3.0)。
+正式版下载：[最新版本](https://github.com/sean2077/sean-toolbox/releases/latest) · [0.4.0](https://github.com/sean2077/sean-toolbox/releases/tag/v0.4.0)。
 
 按系统和处理器选择 Release 中的压缩包；开发构建仍可从 [Actions](https://github.com/sean2077/sean-toolbox/actions/workflows/ci.yml) 的成功运行记录中下载。
 
