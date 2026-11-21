@@ -332,6 +332,11 @@ fn handshake(
     initiator: bool,
     key: &[u8; crypto::KEY_BYTES],
 ) -> Result<NetStream, String> {
+    // Frames are small and latency-sensitive (a paste waits for them); Nagle
+    // plus delayed ACKs added tens of milliseconds per frame.
+    stream
+        .set_nodelay(true)
+        .map_err(|error| error.to_string())?;
     // The Noise handshake can take longer than a clipboard poll interval on a
     // LAN or after a Windows sleep; give it its own generous read timeout.
     stream
@@ -1405,9 +1410,13 @@ impl NetStream {
             .seal(&bytes)
             .map_err(|error| error.to_string())?;
         let len = u16::try_from(cipher.len()).map_err(|_| "ciphertext too large")?;
+        // One write per frame: separate length and body writes are two small
+        // segments on the wire.
+        let mut packet = Vec::with_capacity(2 + cipher.len());
+        packet.extend_from_slice(&len.to_be_bytes());
+        packet.extend_from_slice(&cipher);
         self.stream
-            .write_all(&len.to_be_bytes())
-            .and_then(|()| self.stream.write_all(&cipher))
+            .write_all(&packet)
             .and_then(|()| self.stream.flush())
             .map_err(|error| error.to_string())
     }
