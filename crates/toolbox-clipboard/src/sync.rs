@@ -32,11 +32,15 @@ impl LoopGuard {
     /// not be sent back.
     pub fn note_received(&mut self, content: &ClipboardContent) {
         self.last_received = Some(content.fingerprint());
+        // A remote write must not suppress the same local content later: the
+        // origin marker is the primary echo guard, the hash is only a fallback.
+        self.last_sent = None;
     }
 
     /// Record content successfully sent to the peer.
     pub fn note_sent(&mut self, content: &ClipboardContent) {
         self.last_sent = Some(content.fingerprint());
+        self.last_received = None;
     }
 
     pub fn last_sent(&self) -> Option<&str> {
@@ -153,6 +157,25 @@ mod tests {
         assert_eq!(content.text.as_deref(), Some("once"));
         assert!(guard.ready(now + Duration::from_secs(2)).is_none());
         assert_eq!(guard.last_sent(), Some(hash.as_str()));
+    }
+
+    #[test]
+    fn same_content_after_a_remote_copy_is_sent_again() {
+        let mut guard = LoopGuard::new();
+        let now = Instant::now();
+        let a = text("A");
+        guard.note_sent(&a);
+        guard.note_received(&text("B"));
+        guard.observe(a, now);
+        assert_eq!(
+            guard
+                .ready(now + Duration::from_secs(1))
+                .unwrap()
+                .0
+                .text
+                .as_deref(),
+            Some("A")
+        );
     }
 
     #[test]

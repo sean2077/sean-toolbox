@@ -50,6 +50,7 @@ impl ClipboardWorker {
             key_path: self.config_path.with_file_name("clipboard.key"),
             cache_dir: toolbox_clipboard::default_cache_dir(),
             host_name: host_name(),
+            silence_timeout: std::time::Duration::from_secs(45),
         };
         match toolbox_clipboard::start(settings) {
             Ok(handle) => self.handle = Some(handle),

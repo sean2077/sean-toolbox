@@ -9,6 +9,7 @@ mod image_codec;
 #[cfg(target_os = "linux")]
 pub mod linux;
 pub mod model;
+pub mod notify;
 pub mod platform;
 pub mod protocol;
 pub mod service;

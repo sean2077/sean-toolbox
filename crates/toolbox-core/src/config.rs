@@ -397,6 +397,8 @@ struct LegacyConfig {
     ui_idle_seconds: u64,
     vscode_path_override: Option<String>,
     profiles: Vec<AppProfile>,
+    #[serde(default)]
+    clipboard: ClipboardSyncConfig,
 }
 
 impl Default for LegacyConfig {
@@ -413,6 +415,7 @@ impl Default for LegacyConfig {
             ui_idle_seconds: config.ui.idle_seconds,
             vscode_path_override: config.projects.vscode_path,
             profiles: config.windows.profiles,
+            clipboard: config.clipboard,
         }
     }
 }
@@ -438,7 +441,7 @@ impl From<LegacyConfig> for Config {
             ui: UiConfig {
                 idle_seconds: config.ui_idle_seconds,
             },
-            clipboard: ClipboardSyncConfig::default(),
+            clipboard: config.clipboard,
         };
         // Version 1 files are the last flat layout; a missing version stays
         // invalid instead of being silently adopted.
@@ -981,5 +984,17 @@ mod tests {
         assert!(config.check().is_err());
         config.clipboard.peer = "192.168.62.38:24802".into();
         assert!(config.check().is_ok());
+    }
+
+    #[test]
+    fn legacy_schema_one_with_clipboard_migrates_to_schema_two() {
+        let parsed: Config = serde_json::from_str(
+            r#"{"schema_version":1,"language":"en","clipboard":{"enabled":true,"role":"connect","peer":"192.168.62.38:24802"}}"#,
+        )
+        .unwrap();
+        assert_eq!(parsed.schema_version, 2);
+        assert!(parsed.clipboard.enabled);
+        assert_eq!(parsed.clipboard.role, ClipboardRole::Connect);
+        assert_eq!(serde_json::to_value(&parsed).unwrap()["schema_version"], 2);
     }
 }

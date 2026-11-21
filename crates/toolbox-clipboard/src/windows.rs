@@ -219,8 +219,19 @@ fn notify(inner: &Arc<Inner>) {
     }
 }
 
+fn open_clipboard(hwnd: HWND) -> bool {
+    for _ in 0..10 {
+        if unsafe { OpenClipboard(hwnd) } != 0 {
+            return true;
+        }
+        unsafe { Sleep(25) };
+    }
+    false
+}
+
 fn read_clipboard(hwnd: HWND, inner: &Arc<Inner>) {
-    if unsafe { OpenClipboard(hwnd) } == 0 {
+    if !open_clipboard(hwnd) {
+        eprintln!("Sean Toolbox clipboard: OpenClipboard stayed busy after 10 retries");
         return;
     }
     let read = read_locked();
@@ -303,8 +314,8 @@ fn write_clipboard(
     content: &ClipboardContent,
     inner: &Arc<Inner>,
 ) -> Result<(), String> {
-    if unsafe { OpenClipboard(hwnd) } == 0 {
-        return Err("OpenClipboard failed".into());
+    if !open_clipboard(hwnd) {
+        return Err("OpenClipboard failed after 10 retries".into());
     }
     let result = write_locked(content);
     unsafe { CloseClipboard() };

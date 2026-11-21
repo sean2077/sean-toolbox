@@ -21,6 +21,7 @@ image = { version = "0.25.8", default-features = false, features = ["png", "bmp"
 wayland-client = "0.31.12"
 wayland-protocols = { version = "0.32.13", features = ["client", "staging"] }
 libc.workspace = true
+zbus = { version = "=5.19.0", default-features = false, features = ["async-io", "blocking-api"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = [
@@ -35,3 +36,4 @@ windows-sys = { workspace = true, features = [
   "Win32_Graphics_Gdi",
   "Win32_Storage_FileSystem",
 ] }
+notify-rust = { version = "4", default-features = false }

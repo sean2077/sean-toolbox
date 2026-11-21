@@ -7,6 +7,7 @@ use crate::model::{
     self, BlobMeta, ClipboardContent, DEFAULT_MAX_TRANSFER_BYTES, MAX_HTML_BYTES, MAX_IMAGE_BYTES,
     MAX_TEXT_BYTES, Manifest, blob_meta,
 };
+use crate::notify::{Notifier, desktop_notifier};
 use crate::protocol::{BlobKind, Message, PROTO_VERSION};
 use crate::sync::LoopGuard;
 use crate::transfer::{FileSink, cache_root, cleanup_cache};
@@ -58,6 +59,8 @@ pub struct Settings {
     pub key_path: PathBuf,
     pub cache_dir: PathBuf,
     pub host_name: String,
+    /// Disconnect when no inbound frame arrives for this long (3 heartbeats).
+    pub silence_timeout: Duration,
 }
 
 impl Settings {
@@ -77,6 +80,7 @@ impl Settings {
             key_path,
             cache_dir,
             host_name: host_name.into(),
+            silence_timeout: Duration::from_secs(45),
         }
     }
 }
@@ -123,10 +127,18 @@ impl Drop for Handle {
 /// unavailable; the host keeps running and reports the warning.
 pub fn start(settings: Settings) -> Result<Handle, String> {
     let backend = crate::platform::backend()?;
-    start_with_backend(settings, backend)
+    start_with_notifier(settings, backend, desktop_notifier())
 }
 
 pub fn start_with_backend(settings: Settings, backend: Box<dyn Backend>) -> Result<Handle, String> {
+    start_with_notifier(settings, backend, desktop_notifier())
+}
+
+pub fn start_with_notifier(
+    settings: Settings,
+    backend: Box<dyn Backend>,
+    notifier: Arc<dyn Notifier>,
+) -> Result<Handle, String> {
     let key =
         crypto::read_key(&settings.key_path).map_err(|error| format!("clipboard key: {error}"))?;
     let status = Arc::new(Mutex::new(Status {
@@ -143,8 +155,14 @@ pub fn start_with_backend(settings: Settings, backend: Box<dyn Backend>) -> Resu
     let thread_status = status.clone();
     let thread_stop = stop.clone();
     let thread = thread::spawn(move || {
-        if let Err(error) = run_service(settings, key, backend, thread_status.clone(), thread_stop)
-        {
+        if let Err(error) = run_service(
+            settings,
+            key,
+            backend,
+            thread_status.clone(),
+            thread_stop,
+            notifier,
+        ) {
             if let Ok(mut status) = thread_status.lock() {
                 status.connected = false;
                 status.last_error = Some(error.clone());
@@ -165,6 +183,7 @@ fn run_service(
     mut backend: Box<dyn Backend>,
     status: Arc<Mutex<Status>>,
     stop: Arc<AtomicBool>,
+    notifier: Arc<dyn Notifier>,
 ) -> Result<(), String> {
     let _ = cleanup_cache(&settings.cache_dir, CACHE_KEEP, CACHE_AGE);
     let (events_tx, events_rx) = mpsc::channel();
@@ -179,6 +198,7 @@ fn run_service(
             &status,
             &stop,
             &mut guard,
+            &notifier,
         ),
         Role::Connect => connect_loop(
             &settings,
@@ -188,10 +208,42 @@ fn run_service(
             &status,
             &stop,
             &mut guard,
+            &notifier,
         ),
     }
 }
 
+enum SessionEnd {
+    Closed,
+    Replace(NetStream),
+}
+
+fn handshake(
+    mut stream: TcpStream,
+    initiator: bool,
+    key: &[u8; crypto::KEY_BYTES],
+) -> Result<NetStream, String> {
+    // The Noise handshake can take longer than a clipboard poll interval on a
+    // LAN or after a Windows sleep; give it its own generous read timeout.
+    stream
+        .set_write_timeout(Some(Duration::from_secs(10)))
+        .map_err(|error| error.to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .map_err(|error| error.to_string())?;
+    let session = if initiator {
+        Session::initiator(&mut stream, key)
+    } else {
+        Session::responder(&mut stream, key)
+    }
+    .map_err(|error| format!("Noise handshake: {error}"))?;
+    stream
+        .set_read_timeout(Some(READ_TIMEOUT))
+        .map_err(|error| error.to_string())?;
+    Ok(NetStream::new(stream, session))
+}
+
+#[allow(clippy::too_many_arguments)]
 fn listen_loop(
     settings: &Settings,
     key: &[u8; crypto::KEY_BYTES],
@@ -200,6 +252,7 @@ fn listen_loop(
     status: &Arc<Mutex<Status>>,
     stop: &Arc<AtomicBool>,
     guard: &mut LoopGuard,
+    notifier: &Arc<dyn Notifier>,
 ) -> Result<(), String> {
     let listener = TcpListener::bind(&settings.listen)
         .map_err(|error| format!("cannot listen on {}: {error}", settings.listen))?;
@@ -213,14 +266,39 @@ fn listen_loop(
                     status.peer = peer.to_string();
                     status.last_error = None;
                 });
-                let result = session(
-                    stream, false, key, settings, backend, events, status, stop, guard,
-                );
-                if let Err(error) = result {
-                    set_status(status, |status| {
-                        status.connected = false;
-                        status.last_error = Some(error);
-                    });
+                let mut net = match handshake(stream, false, key) {
+                    Ok(net) => net,
+                    Err(error) => {
+                        set_status(status, |status| {
+                            status.connected = false;
+                            status.last_error = Some(error);
+                        });
+                        continue;
+                    }
+                };
+                loop {
+                    match session(
+                        net,
+                        key,
+                        settings,
+                        backend,
+                        events,
+                        status,
+                        stop,
+                        guard,
+                        notifier,
+                        Some(&listener),
+                    ) {
+                        Ok(SessionEnd::Replace(next)) => net = next,
+                        Ok(SessionEnd::Closed) => break,
+                        Err(error) => {
+                            set_status(status, |status| {
+                                status.connected = false;
+                                status.last_error = Some(error);
+                            });
+                            break;
+                        }
+                    }
                 }
             }
             Err(error) if error.kind() == ErrorKind::WouldBlock => {
@@ -233,6 +311,7 @@ fn listen_loop(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn connect_loop(
     settings: &Settings,
     key: &[u8; crypto::KEY_BYTES],
@@ -241,6 +320,7 @@ fn connect_loop(
     status: &Arc<Mutex<Status>>,
     stop: &Arc<AtomicBool>,
     guard: &mut LoopGuard,
+    notifier: &Arc<dyn Notifier>,
 ) -> Result<(), String> {
     let mut backoff = Duration::from_secs(1);
     loop {
@@ -273,14 +353,31 @@ fn connect_loop(
             continue;
         };
         backoff = Duration::from_secs(1);
-        let result = session(
-            stream, true, key, settings, backend, events, status, stop, guard,
-        );
-        if let Err(error) = result {
-            set_status(status, |status| {
-                status.connected = false;
-                status.last_error = Some(error);
-            });
+        let mut net = match handshake(stream, true, key) {
+            Ok(net) => net,
+            Err(error) => {
+                set_status(status, |status| {
+                    status.connected = false;
+                    status.last_error = Some(error);
+                });
+                thread::sleep(Duration::from_secs(1));
+                continue;
+            }
+        };
+        loop {
+            match session(
+                net, key, settings, backend, events, status, stop, guard, notifier, None,
+            ) {
+                Ok(SessionEnd::Replace(next)) => net = next,
+                Ok(SessionEnd::Closed) => break,
+                Err(error) => {
+                    set_status(status, |status| {
+                        status.connected = false;
+                        status.last_error = Some(error);
+                    });
+                    break;
+                }
+            }
         }
         thread::sleep(Duration::from_secs(1));
     }
@@ -304,8 +401,7 @@ fn drain_events(
 
 #[allow(clippy::too_many_arguments)]
 fn session(
-    stream: TcpStream,
-    initiator: bool,
+    mut net: NetStream,
     key: &[u8; crypto::KEY_BYTES],
     settings: &Settings,
     backend: &mut Box<dyn Backend>,
@@ -313,26 +409,9 @@ fn session(
     status: &Arc<Mutex<Status>>,
     stop: &Arc<AtomicBool>,
     guard: &mut LoopGuard,
-) -> Result<(), String> {
-    // The Noise handshake can take longer than a clipboard poll interval on a
-    // LAN or after a Windows sleep; give it its own generous read timeout.
-    stream
-        .set_write_timeout(Some(Duration::from_secs(10)))
-        .map_err(|error| error.to_string())?;
-    stream
-        .set_read_timeout(Some(Duration::from_secs(10)))
-        .map_err(|error| error.to_string())?;
-    let mut stream = stream;
-    let session = if initiator {
-        Session::initiator(&mut stream, key)
-    } else {
-        Session::responder(&mut stream, key)
-    }
-    .map_err(|error| format!("Noise handshake: {error}"))?;
-    stream
-        .set_read_timeout(Some(READ_TIMEOUT))
-        .map_err(|error| error.to_string())?;
-    let mut net = NetStream::new(stream, session);
+    notifier: &Arc<dyn Notifier>,
+    listener: Option<&TcpListener>,
+) -> Result<SessionEnd, String> {
     net.send(&Message::Hello {
         proto_version: PROTO_VERSION,
         host_name: settings.host_name.clone(),
@@ -341,10 +420,12 @@ fn session(
     let mut hello = false;
     let mut receiving: Option<ReceiveState> = None;
     let mut last_ping = Instant::now();
+    let mut last_inbound = Instant::now();
     while !stop.load(Ordering::Acquire) {
         let now = Instant::now();
         match net.try_frame() {
             Ok(Some(frame)) => {
+                last_inbound = now;
                 let message = Message::from_frame(&frame).map_err(|error| error.to_string())?;
                 match message {
                     Message::Hello { proto_version, .. } => {
@@ -367,7 +448,12 @@ fn session(
                         if let Some(old) = receiving.take() {
                             old.cancel();
                         }
-                        let next = ReceiveState::create(
+                        let has_files = files.is_some();
+                        if has_files {
+                            notifier.notify("Sean Toolbox", "正在接收文件…");
+                        }
+                        let cancel_id = id.clone();
+                        match ReceiveState::create(
                             &settings.cache_dir,
                             id,
                             text,
@@ -375,32 +461,96 @@ fn session(
                             image,
                             files,
                             settings.max_transfer_bytes,
-                        )?;
-                        receiving = Some(next);
+                        ) {
+                            Ok(next) => receiving = Some(next),
+                            Err(error) => {
+                                notifier
+                                    .notify("Sean Toolbox", &format!("接收剪贴板失败：{error}"));
+                                set_status(status, |status| {
+                                    status.last_error = Some(error);
+                                });
+                                let _ = net.send(&Message::Cancel { id: cancel_id });
+                            }
+                        }
                     }
                     Message::Chunk { id, kind, offset } => {
+                        let mut failure = None;
                         if let Some(state) = receiving.as_mut()
                             && state.id == id
                             && !frame.data.is_empty()
+                            && let Err(error) = state.chunk(kind, offset, &frame.data)
                         {
-                            state.chunk(kind, offset, &frame.data)?;
+                            failure = Some(error);
+                        }
+                        if let Some(error) = failure {
+                            notifier.notify("Sean Toolbox", &format!("接收剪贴板失败：{error}"));
+                            set_status(status, |status| {
+                                status.last_error = Some(error);
+                            });
+                            if let Some(state) = receiving.take() {
+                                state.cancel();
+                            }
+                            let _ = net.send(&Message::Cancel { id });
                         }
                     }
                     Message::End { id, kind } => {
+                        let mut failure = None;
+                        let mut complete = false;
                         if let Some(state) = receiving.as_mut()
                             && state.id == id
                         {
-                            state.end(kind)?;
-                            if state.complete() {
-                                let state = receiving.take().expect("state still present");
-                                let content = state.finish()?;
-                                backend.write(&content)?;
-                                guard.note_received(&content);
-                                set_status(status, |status| {
-                                    status.last_received =
-                                        Some(format!("{} {}", content.kind(), timestamp()));
-                                    status.received_count += 1;
-                                });
+                            match state.end(kind) {
+                                Ok(()) => complete = state.complete(),
+                                Err(error) => failure = Some(error),
+                            }
+                        }
+                        if let Some(error) = failure {
+                            notifier.notify("Sean Toolbox", &format!("接收剪贴板失败：{error}"));
+                            set_status(status, |status| {
+                                status.last_error = Some(error);
+                            });
+                            if let Some(state) = receiving.take() {
+                                state.cancel();
+                            }
+                            let _ = net.send(&Message::Cancel { id });
+                        } else if complete {
+                            let state = receiving.take().expect("state still present");
+                            match state.finish() {
+                                Ok(content) => {
+                                    if let Err(error) = backend.write(&content) {
+                                        notifier.notify(
+                                            "Sean Toolbox",
+                                            &format!("写入剪贴板失败：{error}"),
+                                        );
+                                        set_status(status, |status| {
+                                            status.last_error = Some(error);
+                                        });
+                                        let _ = net.send(&Message::Cancel { id });
+                                    } else {
+                                        if !content.files.is_empty() {
+                                            notifier.notify("Sean Toolbox", "文件已接收");
+                                        }
+                                        guard.note_received(&content);
+                                        set_status(status, |status| {
+                                            status.last_received =
+                                                Some(format!("{} {}", content.kind(), timestamp()));
+                                            status.received_count += 1;
+                                        });
+                                        let _ = cleanup_cache(
+                                            &settings.cache_dir,
+                                            CACHE_KEEP,
+                                            CACHE_AGE,
+                                        );
+                                    }
+                                }
+                                Err(error) => {
+                                    notifier
+                                        .notify("Sean Toolbox", &format!("接收文件失败：{error}"));
+                                    set_status(status, |status| {
+                                        status.last_error = Some(error);
+                                    });
+                                    let _ = net.send(&Message::Cancel { id });
+                                }
                             }
                         }
                     }
@@ -421,32 +571,85 @@ fn session(
             Err(error) => return Err(error),
         }
 
+        if now.duration_since(last_inbound) >= settings.silence_timeout {
+            return Err("peer silent".into());
+        }
         drain_events(backend, events, guard);
         if hello && let Some((content, _)) = guard.ready(now) {
-            send_content(&mut net, &content, settings.max_transfer_bytes)?;
-            guard.note_sent(&content);
-            set_status(status, |status| {
-                status.last_sent = Some(format!("{} {}", content.kind(), timestamp()));
-                status.sent_count += 1;
-            });
+            let has_files = !content.files.is_empty();
+            if has_files {
+                notifier.notify("Sean Toolbox", "正在发送文件…");
+            }
+            match send_content(&mut net, &content, settings.max_transfer_bytes) {
+                Ok(()) => {
+                    if has_files {
+                        notifier.notify("Sean Toolbox", "文件已发送");
+                    }
+                    guard.note_sent(&content);
+                    set_status(status, |status| {
+                        status.last_sent = Some(format!("{} {}", content.kind(), timestamp()));
+                        status.sent_count += 1;
+                    });
+                }
+                Err(SendContentError::Content(error)) => {
+                    notifier.notify("Sean Toolbox", &format!("剪贴板同步失败：{error}"));
+                    set_status(status, |status| {
+                        status.last_error = Some(error);
+                    });
+                }
+                Err(SendContentError::Network(error)) => return Err(error),
+            }
         }
         if hello && now.duration_since(last_ping) >= HEARTBEAT {
             net.send(&Message::Ping)?;
             last_ping = now;
+        }
+        if let Some(listener) = listener {
+            match listener.accept() {
+                Ok((stream, peer)) => {
+                    set_status(status, |status| {
+                        status.peer = peer.to_string();
+                    });
+                    match handshake(stream, false, key) {
+                        Ok(next) => {
+                            if let Some(state) = receiving.take() {
+                                state.cancel();
+                            }
+                            return Ok(SessionEnd::Replace(next));
+                        }
+                        Err(error) => {
+                            eprintln!("Sean Toolbox clipboard: replacement handshake: {error}");
+                        }
+                    }
+                }
+                Err(error) if error.kind() == ErrorKind::WouldBlock => {}
+                Err(error) => return Err(format!("accept: {error}")),
+            }
         }
         thread::sleep(LOOP_DELAY);
     }
     if let Some(state) = receiving {
         state.cancel();
     }
-    Ok(())
+    Ok(SessionEnd::Closed)
+}
+
+enum SendContentError {
+    Content(String),
+    Network(String),
+}
+
+impl From<String> for SendContentError {
+    fn from(error: String) -> Self {
+        Self::Network(error)
+    }
 }
 
 fn send_content(
     net: &mut NetStream,
     content: &ClipboardContent,
     max_transfer_bytes: u64,
-) -> Result<(), String> {
+) -> Result<(), SendContentError> {
     let text = content
         .text
         .as_ref()
@@ -457,28 +660,37 @@ fn send_content(
         .map(|value| blob_meta(value.as_bytes()));
     let image = content.image.as_ref().map(|value| blob_meta(value));
     if text.as_ref().is_some_and(|meta| meta.size > MAX_TEXT_BYTES) {
-        return Err("text exceeds the 16 MiB limit".into());
+        return Err(SendContentError::Content(
+            "text exceeds the 16 MiB limit".into(),
+        ));
     }
     if html.as_ref().is_some_and(|meta| meta.size > MAX_HTML_BYTES) {
-        return Err("HTML exceeds the 16 MiB limit".into());
+        return Err(SendContentError::Content(
+            "HTML exceeds the 16 MiB limit".into(),
+        ));
     }
     if image
         .as_ref()
         .is_some_and(|meta| meta.size > MAX_IMAGE_BYTES)
     {
-        return Err("image exceeds the 64 MiB limit".into());
+        return Err(SendContentError::Content(
+            "image exceeds the 64 MiB limit".into(),
+        ));
     }
     let files = if content.files.is_empty() {
         None
     } else {
-        let manifest = crate::transfer::collect_manifest(&content.files, max_transfer_bytes)
-            .map_err(|error| error.to_string())?;
-        Some(manifest)
+        Some(
+            crate::transfer::collect_manifest(&content.files, max_transfer_bytes)
+                .map_err(|error| SendContentError::Content(error.to_string()))?,
+        )
     };
     if let Some(manifest) = &files
         && manifest.total_size > max_transfer_bytes
     {
-        return Err("files exceed the transfer limit".into());
+        return Err(SendContentError::Content(
+            "files exceed the transfer limit".into(),
+        ));
     }
     let id = new_id();
     net.send(&Message::Offer {
@@ -488,45 +700,49 @@ fn send_content(
         image,
         files: files.clone(),
     })?;
-    if let Some(text) = &content.text {
-        send_bytes(net, &id, BlobKind::Text, text.as_bytes())?;
-    }
-    if let Some(html) = &content.html {
-        send_bytes(net, &id, BlobKind::Html, html.as_bytes())?;
-    }
-    if let Some(image) = &content.image {
-        send_bytes(net, &id, BlobKind::Image, image)?;
-    }
-    if let Some(manifest) = &files {
-        let mut roots = std::collections::HashMap::new();
-        for path in &content.files {
-            if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
-                roots.insert(name.to_owned(), path.clone());
-            }
+    let result = (|| -> Result<(), SendContentError> {
+        if let Some(text) = &content.text {
+            send_bytes(net, &id, BlobKind::Text, text.as_bytes())?;
         }
-        let mut offset = 0u64;
-        let mut cancel = false;
-        for entry in &manifest.entries {
-            let mut parts = entry.path.splitn(2, '/');
-            let root_name = parts.next().unwrap_or_default();
-            let rest = parts.next();
-            let Some(root) = roots.get(root_name) else {
-                cancel = true;
-                break;
-            };
-            let actual = match rest {
-                Some(rest) => rest
-                    .split('/')
-                    .fold(root.clone(), |path, part| path.join(part)),
-                None => root.clone(),
-            };
-            let result = (|| -> Result<u64, String> {
-                use std::io::Read;
-                let mut file = std::fs::File::open(&actual).map_err(|error| error.to_string())?;
+        if let Some(html) = &content.html {
+            send_bytes(net, &id, BlobKind::Html, html.as_bytes())?;
+        }
+        if let Some(image) = &content.image {
+            send_bytes(net, &id, BlobKind::Image, image)?;
+        }
+        if let Some(manifest) = &files {
+            let mut roots = std::collections::HashMap::new();
+            for path in &content.files {
+                if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
+                    roots.insert(name.to_owned(), path.clone());
+                }
+            }
+            let mut offset = 0u64;
+            for entry in &manifest.entries {
+                let mut parts = entry.path.splitn(2, '/');
+                let root_name = parts.next().unwrap_or_default();
+                let rest = parts.next();
+                let Some(root) = roots.get(root_name) else {
+                    return Err(SendContentError::Content(format!(
+                        "missing file root: {root_name}"
+                    )));
+                };
+                let actual = match rest {
+                    Some(rest) => rest
+                        .split('/')
+                        .fold(root.clone(), |path, part| path.join(part)),
+                    None => root.clone(),
+                };
+                let mut file = std::fs::File::open(&actual).map_err(|error| {
+                    SendContentError::Content(format!("open {}: {error}", actual.display()))
+                })?;
                 let mut buffer = [0u8; CHUNK_BYTES];
                 let mut written = 0u64;
                 loop {
-                    let count = file.read(&mut buffer).map_err(|error| error.to_string())?;
+                    use std::io::Read;
+                    let count = file.read(&mut buffer).map_err(|error| {
+                        SendContentError::Content(format!("read {}: {error}", actual.display()))
+                    })?;
                     if count == 0 {
                         break;
                     }
@@ -538,30 +754,28 @@ fn send_content(
                     )?;
                     written += count as u64;
                 }
-                Ok(written)
-            })();
-            match result {
-                Ok(written) if written == entry.size => offset += written,
-                Ok(_) => {
-                    cancel = true;
-                    break;
+                if written != entry.size {
+                    return Err(SendContentError::Content(format!(
+                        "file changed while reading: {}",
+                        entry.path
+                    )));
                 }
-                Err(_) => {
-                    cancel = true;
-                    break;
-                }
+                offset += written;
             }
+            net.send(&Message::End {
+                id: id.clone(),
+                kind: BlobKind::File,
+            })?;
         }
-        if cancel {
-            let _ = net.send(&Message::Cancel { id: id.clone() });
-            return Err("file changed while reading or root missing".into());
+        Ok(())
+    })();
+    match result {
+        Err(SendContentError::Content(error)) => {
+            let _ = net.send(&Message::Cancel { id });
+            Err(SendContentError::Content(error))
         }
-        net.send(&Message::End {
-            id: id.clone(),
-            kind: BlobKind::File,
-        })?;
+        other => other,
     }
-    Ok(())
 }
 
 fn send_bytes(net: &mut NetStream, id: &str, kind: BlobKind, bytes: &[u8]) -> Result<(), String> {
@@ -879,6 +1093,8 @@ pub fn default_cache_dir() -> PathBuf {
 mod tests {
     use super::*;
     use crate::backend::FakeBackend;
+    use crate::notify::NoopNotifier;
+    use std::io::{Read, Write};
     use std::net::TcpListener;
 
     fn free_port() -> u16 {
@@ -913,7 +1129,7 @@ mod tests {
         let port = free_port();
         let listener_fake = FakeBackend::new();
         let connector_fake = FakeBackend::new();
-        let mut listener = start_with_backend(
+        let mut listener = start_with_notifier(
             Settings::with_defaults(
                 Role::Listen,
                 format!("127.0.0.1:{port}"),
@@ -923,9 +1139,10 @@ mod tests {
                 "listener",
             ),
             Box::new(listener_fake.clone()),
+            Arc::new(NoopNotifier),
         )
         .unwrap();
-        let mut connector = start_with_backend(
+        let mut connector = start_with_notifier(
             Settings::with_defaults(
                 Role::Connect,
                 "",
@@ -935,6 +1152,7 @@ mod tests {
                 "connector",
             ),
             Box::new(connector_fake.clone()),
+            Arc::new(NoopNotifier),
         )
         .unwrap();
         assert!(wait_until(Duration::from_secs(5), || {
@@ -997,7 +1215,7 @@ mod tests {
         let port = free_port();
         let listener_fake = FakeBackend::new();
         let connector_fake = FakeBackend::new();
-        let mut listener = start_with_backend(
+        let mut listener = start_with_notifier(
             Settings::with_defaults(
                 Role::Listen,
                 format!("127.0.0.1:{port}"),
@@ -1007,9 +1225,10 @@ mod tests {
                 "listener",
             ),
             Box::new(listener_fake.clone()),
+            Arc::new(NoopNotifier),
         )
         .unwrap();
-        let mut connector = start_with_backend(
+        let mut connector = start_with_notifier(
             Settings::with_defaults(
                 Role::Connect,
                 "",
@@ -1019,6 +1238,7 @@ mod tests {
                 "connector",
             ),
             Box::new(connector_fake),
+            Arc::new(NoopNotifier),
         )
         .unwrap();
         assert!(wait_until(Duration::from_secs(5), || {
@@ -1038,7 +1258,7 @@ mod tests {
         let port = free_port();
         let listener_fake = FakeBackend::new();
         let connector_fake = FakeBackend::new();
-        let mut listener = start_with_backend(
+        let mut listener = start_with_notifier(
             Settings::with_defaults(
                 Role::Listen,
                 format!("127.0.0.1:{port}"),
@@ -1048,9 +1268,10 @@ mod tests {
                 "listener",
             ),
             Box::new(listener_fake.clone()),
+            Arc::new(NoopNotifier),
         )
         .unwrap();
-        let mut connector = start_with_backend(
+        let mut connector = start_with_notifier(
             Settings::with_defaults(
                 Role::Connect,
                 "",
@@ -1060,6 +1281,7 @@ mod tests {
                 "connector",
             ),
             Box::new(connector_fake.clone()),
+            Arc::new(NoopNotifier),
         )
         .unwrap();
         assert!(wait_until(Duration::from_secs(5), || {
@@ -1082,6 +1304,143 @@ mod tests {
         assert_eq!(listener.status().sent_count, 1);
         assert_eq!(connector.status().received_count, 1);
         connector.stop();
+        listener.stop();
+    }
+
+    fn raw_client(port: u16, key: &[u8; crypto::KEY_BYTES]) -> (TcpStream, crypto::Session) {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let mut stream = loop {
+            match TcpStream::connect(("127.0.0.1", port)) {
+                Ok(stream) => break stream,
+                Err(error) if Instant::now() < deadline => {
+                    let _ = error;
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(error) => panic!("raw client connect: {error}"),
+            }
+        };
+        let session = crypto::Session::initiator(&mut stream, key).unwrap();
+        (stream, session)
+    }
+
+    fn send_hello(stream: &mut TcpStream, session: &mut crypto::Session) {
+        let frame = Message::Hello {
+            proto_version: PROTO_VERSION,
+            host_name: "raw".into(),
+        }
+        .frame()
+        .unwrap();
+        let bytes = frame.encode().unwrap();
+        let cipher = session.seal(&bytes).unwrap();
+        let len = u16::try_from(cipher.len()).unwrap();
+        stream.write_all(&len.to_be_bytes()).unwrap();
+        stream.write_all(&cipher).unwrap();
+        stream.flush().unwrap();
+    }
+
+    fn eventually_closed(stream: &mut TcpStream) -> bool {
+        stream
+            .set_read_timeout(Some(Duration::from_secs(1)))
+            .unwrap();
+        let mut buffer = [0u8; 256];
+        for _ in 0..10 {
+            match stream.read(&mut buffer) {
+                Ok(0) | Err(_) => return true,
+                Ok(_) => {}
+            }
+        }
+        false
+    }
+
+    fn listen_settings(
+        port: u16,
+        key: PathBuf,
+        cache: PathBuf,
+        silence_timeout: Duration,
+    ) -> Settings {
+        let mut settings = Settings::with_defaults(
+            Role::Listen,
+            format!("127.0.0.1:{port}"),
+            "",
+            key,
+            cache,
+            "listener",
+        );
+        settings.silence_timeout = silence_timeout;
+        settings
+    }
+
+    #[test]
+    fn silent_peer_times_out_and_a_new_connection_is_accepted() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = key_file(dir.path());
+        let key_bytes = crypto::read_key(&key).unwrap();
+        let port = free_port();
+        let fake = FakeBackend::new();
+        let mut listener = start_with_notifier(
+            listen_settings(
+                port,
+                key.clone(),
+                dir.path().join("cache"),
+                Duration::from_millis(300),
+            ),
+            Box::new(fake),
+            Arc::new(NoopNotifier),
+        )
+        .unwrap();
+        let (mut first, mut first_session) = raw_client(port, &key_bytes);
+        send_hello(&mut first, &mut first_session);
+        assert!(wait_until(Duration::from_secs(5), || {
+            listener.status().connected
+        }));
+        assert!(wait_until(Duration::from_secs(3), || {
+            listener.status().last_error.as_deref() == Some("peer silent")
+        }));
+        assert!(!listener.status().connected);
+        assert!(eventually_closed(&mut first));
+
+        let (mut second, mut second_session) = raw_client(port, &key_bytes);
+        send_hello(&mut second, &mut second_session);
+        assert!(wait_until(Duration::from_secs(5), || {
+            listener.status().connected
+        }));
+        assert_eq!(
+            listener.status().peer,
+            second.local_addr().unwrap().to_string()
+        );
+        listener.stop();
+    }
+
+    #[test]
+    fn a_new_connection_replaces_a_still_live_peer() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = key_file(dir.path());
+        let key_bytes = crypto::read_key(&key).unwrap();
+        let port = free_port();
+        let fake = FakeBackend::new();
+        let mut listener = start_with_notifier(
+            listen_settings(
+                port,
+                key.clone(),
+                dir.path().join("cache"),
+                Duration::from_secs(5),
+            ),
+            Box::new(fake),
+            Arc::new(NoopNotifier),
+        )
+        .unwrap();
+        let (mut first, mut first_session) = raw_client(port, &key_bytes);
+        send_hello(&mut first, &mut first_session);
+        assert!(wait_until(Duration::from_secs(5), || {
+            listener.status().connected
+        }));
+        let (mut second, mut second_session) = raw_client(port, &key_bytes);
+        send_hello(&mut second, &mut second_session);
+        assert!(wait_until(Duration::from_secs(5), || {
+            listener.status().peer == second.local_addr().unwrap().to_string()
+                && listener.status().connected
+        }));
+        assert!(eventually_closed(&mut first));
         listener.stop();
     }
 }
