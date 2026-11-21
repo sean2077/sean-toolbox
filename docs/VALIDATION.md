@@ -1054,3 +1054,90 @@ Windows/macOS 的图标路径不变（EXE 资源与 ICNS）。
 
 验证仅覆盖 KDE Wayland；X11 使用同一 app id 作为 `WM_CLASS`，未在本机 X11 会话验证。
 Windows 与 macOS 未重新构建。
+
+## 2026-11-21 跨机剪贴板核心与宿主接线
+
+### 范围
+
+新增 `crates/toolbox-clipboard`：Noise NNpsk0 长连接、分块协议、200 ms 去抖与
+hash/origin 防循环、文件暂存与路径安全、CF_HTML、PNG/DIB 转换、Wayland
+`ext_data_control_manager_v1` 后端、Win32 `WM_CLIPBOARDUPDATE` 后端和
+`FakeBackend` 回环测试。`toolbox-core` 增加 `clipboard` 配置与
+`HostCommand::Clipboard(Status)`；`toolbox-host` 增加 `clipboard_worker` 和
+`sean-toolbox clipboard status|keygen`。
+
+### 自动检查
+
+| 检查 | 结果 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace` | 334 通过、0 失败、3 ignored |
+| `cargo check --target x86_64-pc-windows-msvc -p toolbox-clipboard` | 通过（仅编译检查，未链接/运行） |
+| `python scripts/collect_licenses.py` | 476 个包，无缺失许可文本 |
+
+3 个 ignored：两个剪贴板的真机只读探针/60 秒空闲测试，以及原有的平台限制测试。
+额外的 `idle_one_minute_has_zero_sends` 以 `--ignored` 单独运行通过（61.1 s）。
+
+### 真机部署与网络测试（2026-11-21）
+
+- u26 监听 `24802/tcp`，w11 宿主在 session 1；两端 `clipboard status` 均为
+  `connected=true`，TCP Established。
+- 最终构建空闲 60 s：u26 `sent_count` 1→1，w11 `received_count` 0→0，新增发送 0；
+  断网恢复后再次空闲 60 s 计数不变。
+- 用 UFW 临时 deny `24802/tcp` 并断开已建立连接，持续约 60 s；放开后
+  **27.6 s 自动重连**（连接端指数退避上限 30 s）。断连期间监听端和新连接替换
+  逻辑未影响其他会话；短超时单元测试覆盖静默 45 s 与新连接替换。
+- `wl-clipboard 2.2.1` 不支持 `ext-data-control`，不能作为健康检查；真机探针只在
+  严格外部 timeout 下运行。
+
+### 未执行的真机验收
+
+GUI 应用内粘贴尚未执行：文字、HTML、截图、文件、敏感内容、>1 GiB 拒绝、
+Deskflow 切屏后粘贴和 Windows toast 外观。`wl-clipboard 2.2.1` 不能作为健康
+检查；请用户在 GUI 中实际 `Ctrl+C`/`Ctrl+V`。Windows toast 只做了交叉编译检查，
+未在桌面显示验证。
+
+### 按需粘贴与界面功能区（2026-11-21）
+
+- 协议升为 v2：新增 `Defer`、`Fetch`、`FetchFailed`；`clipboard.mode` 支持
+  `eager`（默认）和 `on_paste`。源端保留最近 8 项快照，目标端在粘贴时按 id
+  取回；文件在 `Fetch` 完成前先落到接收缓存。
+- Windows 目标端新增延迟渲染：`SetClipboardData(format, NULL)` +
+  `WM_RENDERFORMAT`，支持 `CF_UNICODETEXT`、`HTML Format`、`PNG`、`CF_DIB`、
+  `CF_HDROP`。`Fetcher` 只通过服务线程的请求通道访问 Noise 会话。
+- 新增跨机剪贴板页面（导航快捷键 `6`）：连接状态、最近发送/接收/待传输、
+  传输计数、启用/角色/模式/地址/上限设置，保存复用设置页的草稿与校验。
+- 测试与检查：
+
+| 检查 | 结果 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test -p toolbox-clipboard` | 42 通过、0 失败、2 ignored |
+| 新增 `on_paste_mode_transfers_only_when_the_peer_fetches` | 通过（源端 Defer 后目标端无写入；`Fetch` 返回内容；二次粘贴仍可取回） |
+| `cargo check --workspace` | 通过 |
+| `cargo check -p toolbox-clipboard --target x86_64-pc-windows-msvc` | 通过（仅编译检查，未链接/运行） |
+| `python scripts/translations.py check` | 通过（新增中文条目已补齐） |
+
+### 按需粘贴未执行的真机验收
+
+需要用户在 u26 GUI 复制、w11 GUI 粘贴来验证：文字、HTML、截图、文件和目录；
+确认复制后 w11 没有立即收到内容，首次粘贴才传输；源端离线/淘汰条目时粘贴失败
+且不崩溃；大文件粘贴的等待行为；Windows 剪贴板历史/管理器的提前请求是否会把
+延迟项变成即时传输。Linux 作为目标端仍是即时拉取回退，不属于本次验收。
+
+## 2026-11-21：跨机剪贴板按需传输（u26 Kubuntu 26.04 / KWin 6.6.7 ↔ w11 Windows 11）
+
+- 版本：`feat/clipboard-sync`，两端 `clipboard.mode=on_paste`，协议 v2，w11 宿主在交互会话（session 1）。
+- u26 → w11：Klipper D-Bus 写入文本后，w11 `deferred_count` +1、`received_count` 不变；w11 日志 `ignored background request for format 13 from ... GameViewer.exe`（网易 UU 远程的剪贴板监视），u26 无新增发送。最初按“只给前台窗口进程”过滤，结果 w11 Claude Code 粘贴失败：它通过子进程 `powershell.exe` 读剪贴板，被当成后台拒绝；改为只拒绝名单内的进程。
+- w11 → u26：会话 1 中 `Set-Clipboard` 后，u26 `deferred_count` +1、`received_count` 保持 0；日志 `ignored background request for text/plain;charset=utf-8 from pid ... fcitx5`。fcitx5 5.1.19 的剪贴板插件即使设置 `IgnorePasswordFromPasswordManager=True` 仍会读取文本，因此由后端名单拒绝。
+- 未覆盖：前台应用真实粘贴（飞书、Word、Dolphin、Claude Code）、图片与文件，需在桌面上人工验收。
+
+
+## 2026-11-21：跨机剪贴板协议 v3（文字/图片即推送、文件粘贴时传）
+
+- 版本：`feat/clipboard-sync` 192c6c3；u26 Kubuntu 26.04 / KWin 6.6.7（listen），w11 Windows 11（connect，宿主在交互会话 session 1）。
+- 命令行实测：u26 → w11 中文文字，w11 在交互会话用 `Get-Clipboard` 读取内容一致，约 50 ms（与读本机剪贴板相当）；w11 → u26 文字进入 Klipper。w11 `Set-Clipboard -Path` 复制目录 + 5 MB 文件后，u26 `transfer` 为空、`cache_bytes` 保持 0，粘贴前无传输。`clipboard clear-cache` 将 w11 缓存从 221 MB 清到 0。
+- 用户 GUI 验收通过：两向文字、飞书带格式文字、两向截图（含 Claude Code 粘贴）、小文件一次粘贴、100 MB 文件“第一次粘贴开始传输、通知完成后再粘贴”。
+- 测试期间 w11 的剪贴板曾被未知进程持续占用约数分钟（任何程序 `OpenClipboard` 均失败，退出工具箱后依旧），随后自行恢复；新版在写入失败时发通知并记录 `last_error`。

@@ -15,7 +15,8 @@ use std::{
     },
 };
 use toolbox_core::{
-    Config, HostCommand, Response, ShortcutCaptureAction, UiPage, UiRequest, skills::SkillsCommand,
+    ClipboardCommand, Config, HostCommand, Response, ShortcutCaptureAction, UiPage, UiRequest,
+    skills::SkillsCommand,
 };
 use toolbox_i18n::messages;
 use toolbox_projects::ProjectItem;
@@ -95,6 +96,7 @@ pub enum Work {
     },
     Toggle(String),
     Status,
+    ClearClipboardCache,
     GetSkills,
     Skills(SkillsCommand),
     ShortcutCapture {
@@ -114,7 +116,8 @@ pub enum Event {
     },
     Saved {
         response: Result<Response, String>,
-        config: Config,
+        // Boxed: a full Config makes this the enum's largest variant.
+        config: Box<Config>,
         kind: SaveKind,
     },
     Projects {
@@ -177,7 +180,7 @@ pub fn run(receiver: Receiver<Work>, latest_query: Arc<AtomicU64>) {
                     expected_revision: revision,
                 })
                 .and_then(successful),
-                config,
+                config: Box::new(config),
                 kind,
             },
             Work::Discover {
@@ -249,6 +252,10 @@ pub fn run(receiver: Receiver<Work>, latest_query: Arc<AtomicU64>) {
             Work::Status => {
                 Event::Status(toolbox_ipc::call(HostCommand::Status).and_then(successful))
             }
+            Work::ClearClipboardCache => Event::Status(
+                toolbox_ipc::call(HostCommand::Clipboard(ClipboardCommand::ClearCache))
+                    .and_then(successful),
+            ),
             Work::GetSkills => {
                 Event::SkillsLoaded(toolbox_ipc::call(HostCommand::GetSkills).and_then(successful))
             }

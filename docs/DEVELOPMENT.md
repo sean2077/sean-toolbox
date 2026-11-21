@@ -155,7 +155,7 @@ tag、版本号和 Release 仍按发布流程单独授权。
 | [toolbox-windows](../crates/toolbox-windows/README.md) | 应用窗口切换和 Quake 状态、Win32 / Accessibility / X11 适配 |
 | [toolbox-projects](../crates/toolbox-projects/README.md) | VS Code 历史读取、项目身份、排序和打开方式 |
 | [toolbox-skills](../crates/toolbox-skills/README.md) | Skills 来源、发现、集中存储、按应用部署、更新与独立状态 |
-| `toolbox-host` | 单实例、全局快捷键、托盘、配置保存、窗口 worker、Skills worker 和界面进程管理；Linux Wayland 的 KWin 脚本后端位于 `src/wayland.rs` |
+| `toolbox-host` | 单实例、全局快捷键、托盘、配置保存、窗口 worker、Skills worker、剪贴板 worker 和界面进程管理；Linux Wayland 的 KWin 脚本后端位于 `src/wayland.rs` |
 | [toolbox-ui](../crates/toolbox-ui/README.md) | Slint 项目面板与管理窗口、编辑状态、项目查询和文件选择 |
 
 `sean-toolbox` 是常驻宿主，`sean-toolbox-ui` 是按需启动的界面进程。Slint、SQLite 和项目查询位于界面一侧，宿主负责快捷键、托盘及窗口控制。窗口 worker 接到请求后执行操作，宿主主循环等待事件。
@@ -163,6 +163,16 @@ tag、版本号和 Release 仍按发布流程单独授权。
 模块通过配置、命令和数据模型协作。新增功能可放在独立 Rust crate 中，按需要接入宿主或界面。当前模块随应用一起构建和分发。
 
 Skills 的网络和文件操作在宿主的独立 worker 串行执行，桌面线程通过有界队列投递命令，立即返回接受状态；`GetSkills` 读取缓存快照，不等待下载。每日调度在关闭界面后继续运行，关闭自动更新时阻塞等待命令，开启后按持久化期限触发；定期复核系统时间以处理休眠恢复。退出宿主会取消网络子进程并等待 worker 收尾。它不链接 Slint 或 SQLite，也不添加 OS 定时任务。
+
+### 剪贴板同步
+
+`toolbox-clipboard` 的 `service.rs` 在宿主后台线程运行 TCP + Noise 会话；`toolbox-host/src/clipboard_worker.rs` 根据 `clipboard` 配置启动、停止或重启它，并通过 `HostCommand::Clipboard(Status)` 暴露状态。Linux 后端在 `linux.rs` 使用 `ext_data_control_manager_v1`，Windows 后端在 `windows.rs` 使用 message-only window + `WM_CLIPBOARDUPDATE`；两者都实现 `backend::Backend`，测试使用 `FakeBackend`。
+
+`protocol.rs` 的帧上限为 60 KiB（Noise 传输消息上限 65535 字节），因此文字/HTML/图片/文件都按 32 KiB 分块。`sync.rs` 的 `LoopGuard` 负责 200 ms 去抖、最后收发指纹和 echo 抑制；任何周期性内容发送都属于回归。`transfer.rs` 在接收侧先写临时目录，完成后再改名，并校验相对路径（拒绝 `..`、绝对路径、盘符、UNC 和 Windows 保留名）。
+
+协议 v3：文字、HTML、图片用 `Offer` + `Chunk`/`End` 立即推送；文件只发 `FileOffer`（清单），目标端在应用粘贴时由后端通过 `Fetcher` 请求，服务发 `Fetch`，源端在独立线程里流式发送文件。`Fetcher::fetch` 最多等 `PASTE_WAIT`（800 ms，低于 Qt 读剪贴板管道的 1 秒超时），超时返回 `InProgress`，传输继续，完成后下一次粘贴直接从缓存返回路径。服务的主线程只阻塞在一个事件通道上；每条连接有阻塞读线程和有界队列写线程，读超时（45 秒）即断线检测。Windows 后端只对 `CF_HDROP` 使用延迟渲染（`WM_RENDERFORMAT`），Linux 后端只对文件 MIME 使用 `FileSourceData`；两端的窗口/Wayland 线程分别靠 `WM_APP` 和唤醒管道唤醒，不轮询。接收缓存的清理规则在 `transfer::cleanup_cache`。
+
+密钥由 `sean-toolbox clipboard keygen` 单独写入 `clipboard.key`，不进入 `config.json`。`docs/USAGE.md` 的“跨机剪贴板”是用户配置入口；真机验收记录写入 `docs/VALIDATION.md`。
 
 ## 国际化与翻译维护
 

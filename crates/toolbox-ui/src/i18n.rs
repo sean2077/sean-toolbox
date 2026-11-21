@@ -50,6 +50,7 @@ impl From<ConfigError> for UiText {
             ConfigError::LaunchCandidates(id) => messages::config_error_launch_candidates(id),
             ConfigError::InvalidLaunchCommand(id) => messages::config_error_launch_command(id),
             ConfigError::InvalidVsCodePath => messages::config_error_vscode_path(),
+            ConfigError::Clipboard(reason) => return Self::Raw(format!("Clipboard: {reason}")),
         }
         .into()
     }

@@ -2,6 +2,7 @@
 use crate::focus_watch::{FocusQueue, FocusWatch};
 use crate::{
     autostart,
+    clipboard_worker::ClipboardWorker,
     hotkeys::{Binding, Hotkeys},
     shortcut_capture::ShortcutCapture,
     skills_worker::SkillsWorker,
@@ -20,8 +21,8 @@ use std::{
     time::{Duration, Instant},
 };
 use toolbox_core::{
-    AppProfile, Config, HostCommand, HostStatus, PROTOCOL_VERSION, Platform, Request, Response,
-    UiPage, storage::ConfigStore,
+    AppProfile, ClipboardCommand, Config, HostCommand, HostStatus, PROTOCOL_VERSION, Platform,
+    Request, Response, UiPage, storage::ConfigStore,
 };
 use toolbox_i18n::{Locale, messages};
 use toolbox_windows::{WindowCapabilities, WindowService};
@@ -170,6 +171,7 @@ struct App {
     executable: PathBuf,
     pressed: HashSet<u32>,
     shortcut_capture: ShortcutCapture,
+    clipboard: ClipboardWorker,
 }
 
 impl App {
@@ -252,12 +254,15 @@ impl App {
                 eprintln!("Sean Toolbox: window cleanup: {error}");
             }
         });
+        let mut clipboard = ClipboardWorker::new(store.path(), &config.clipboard);
+        let clipboard_warnings = clipboard.take_warnings();
         Ok(Self {
             config,
             store,
             revision,
             status: HostStatus {
                 process_id: std::process::id(),
+                warnings: clipboard_warnings,
                 ..HostStatus::default()
             },
             hotkeys: None,
@@ -280,6 +285,7 @@ impl App {
             executable,
             pressed: HashSet::new(),
             shortcut_capture: ShortcutCapture::default(),
+            clipboard,
         })
     }
 
@@ -426,6 +432,8 @@ impl App {
         self.status.warnings.extend(warnings);
         let language_changed = self.config.general.language != config.general.language;
         self.config = config;
+        self.clipboard.apply(&self.config.clipboard);
+        self.status.warnings.extend(self.clipboard.take_warnings());
         #[cfg(windows)]
         {
             if !needs_focus_watch(&self.config) {
@@ -483,6 +491,7 @@ impl App {
             revision: self.revision,
             skills: None,
             shortcut_capture: None,
+            clipboard: self.clipboard.status(),
         }
     }
 
@@ -497,6 +506,13 @@ impl App {
             HostCommand::GetSkills => Response {
                 skills: Some(self.skills.snapshot()),
                 ..Response::success("Skills status")
+            },
+            HostCommand::Clipboard(command) => match command {
+                ClipboardCommand::Status => self.response("Clipboard status", false),
+                ClipboardCommand::ClearCache => {
+                    self.clipboard.clear_cache();
+                    self.response("Clipboard cache cleared", false)
+                }
             },
             HostCommand::Skills(command) => match self.skills.submit(command) {
                 Ok(snapshot) => Response {
@@ -700,6 +716,7 @@ impl ApplicationHandler<Event> for App {
                     "settings" => UiPage::Settings,
                     "diagnostics" => UiPage::Diagnostics,
                     "skills" => UiPage::Skills,
+                    "clipboard" => UiPage::Clipboard,
                     "quit" => {
                         event_loop.exit();
                         return;
@@ -796,6 +813,7 @@ impl ApplicationHandler<Event> for App {
 
 impl Drop for App {
     fn drop(&mut self) {
+        self.clipboard.stop();
         self.stop_window_worker();
     }
 }

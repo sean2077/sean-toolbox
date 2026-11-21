@@ -436,6 +436,7 @@ pub fn page_index(page: UiPage) -> i32 {
         UiPage::Settings => 2,
         UiPage::Diagnostics => 3,
         UiPage::Skills => 4,
+        UiPage::Clipboard => 5,
     }
 }
 pub fn page_from_index(index: i32) -> UiPage {
@@ -444,6 +445,7 @@ pub fn page_from_index(index: i32) -> UiPage {
         2 => UiPage::Settings,
         3 => UiPage::Diagnostics,
         4 => UiPage::Skills,
+        5 => UiPage::Clipboard,
         _ => UiPage::Projects,
     }
 }

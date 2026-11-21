@@ -1,6 +1,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod autostart;
+mod clipboard_worker;
 #[cfg(any(windows, test))]
 mod focus_watch;
 mod hotkeys;
@@ -18,7 +19,7 @@ use std::{
     time::{Duration, Instant},
 };
 use toolbox_core::{
-    HostCommand, Response, UiPage,
+    ClipboardCommand, HostCommand, Response, UiPage,
     skills::SkillsCommand,
     storage::{ConfigStore, default_config_path},
 };
@@ -84,6 +85,15 @@ fn start() -> Result<(), String> {
         Some("status") if args.len() == 1 => HostCommand::Status,
         Some("config") if args.len() == 1 => HostCommand::GetConfig,
         Some("skills") if args.len() <= 3 => parse_skills_command(&args[1..])?,
+        Some("clipboard") if args.len() == 2 => match args[1].as_str() {
+            "status" => HostCommand::Clipboard(ClipboardCommand::Status),
+            "clear-cache" => HostCommand::Clipboard(ClipboardCommand::ClearCache),
+            "keygen" => {
+                generate_clipboard_key()?;
+                return Ok(());
+            }
+            _ => return Err("Usage: sean-toolbox clipboard status|clear-cache|keygen".into()),
+        },
         Some("quit") if args.len() == 1 => HostCommand::Quit,
         _ => return Err("Unknown arguments. Run sean-toolbox --help".into()),
     };
@@ -116,6 +126,14 @@ fn start() -> Result<(), String> {
     }
 }
 
+fn generate_clipboard_key() -> Result<(), String> {
+    let path = default_config_path()?.with_file_name("clipboard.key");
+    let key = toolbox_clipboard::crypto::generate_key();
+    toolbox_clipboard::crypto::write_key(&path, &key).map_err(|error| error.to_string())?;
+    println!("{}", path.display());
+    Ok(())
+}
+
 fn parse_page(page: &str) -> Result<UiPage, String> {
     match page {
         "projects" => Ok(UiPage::Projects),
@@ -123,6 +141,7 @@ fn parse_page(page: &str) -> Result<UiPage, String> {
         "settings" => Ok(UiPage::Settings),
         "diagnostics" => Ok(UiPage::Diagnostics),
         "skills" => Ok(UiPage::Skills),
+        "clipboard" => Ok(UiPage::Clipboard),
         _ => Err(format!("Unknown page: {page}")),
     }
 }

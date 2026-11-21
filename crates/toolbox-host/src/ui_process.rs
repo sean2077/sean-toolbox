@@ -134,6 +134,7 @@ impl UiProcess {
                     UiPage::Settings => "settings",
                     UiPage::Diagnostics => "diagnostics",
                     UiPage::Skills => "skills",
+                    UiPage::Clipboard => "clipboard",
                 };
                 let mut command = Command::new(&executable);
                 command
