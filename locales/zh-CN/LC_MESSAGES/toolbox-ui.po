@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Sean Toolbox\n"
 "Report-Msgid-Bugs-To: https://github.com/sean2077/sean-toolbox/issues\n"
-"POT-Creation-Date: 2026-11-21 06:53+0000\n"
+"POT-Creation-Date: 2026-11-21 07:54+0000\n"
 "PO-Revision-Date: 2026-11-07 19:07+0800\n"
 "Last-Translator: Sean Toolbox contributors\n"
 "Language-Team: Simplified Chinese\n"
@@ -153,22 +153,22 @@ msgctxt "ui.launcher.remote"
 msgid "Remote"
 msgstr "远程"
 
-#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:93
+#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:165
 msgctxt "ui.status.connecting"
 msgid "Connecting…"
 msgstr "正在连接…"
 
-#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:525
+#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:598
 msgctxt "ui.projects.disabled"
 msgid "Recent projects is turned off"
 msgstr "最近项目已停用"
 
-#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:525
+#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:598
 msgctxt "ui.projects.read_failed"
 msgid "Couldn't read recent projects"
 msgstr "暂时无法读取最近项目"
 
-#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:525
+#: crates/toolbox-ui/ui/launcher.slint:278 crates/toolbox-ui/ui/main.slint:598
 msgctxt "ui.projects.no_matches"
 msgid "No matching projects"
 msgstr "没有匹配的项目"
@@ -193,18 +193,18 @@ msgctxt "ui.launcher.empty_hint"
 msgid "Open a folder or workspace in VS Code, then refresh."
 msgstr "在 VS Code 中打开文件夹或工作区，然后刷新。"
 
-#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:536
+#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:609
 msgctxt "ui.action.open_settings"
 msgid "Open settings"
 msgstr "前往设置"
 
-#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:448
-#: crates/toolbox-ui/ui/main.slint:598
+#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:521
+#: crates/toolbox-ui/ui/main.slint:671
 msgctxt "ui.action.clear_search"
 msgid "Clear search"
 msgstr "清空搜索"
 
-#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:536
+#: crates/toolbox-ui/ui/launcher.slint:294 crates/toolbox-ui/ui/main.slint:609
 msgctxt "ui.action.refresh_projects"
 msgid "Refresh projects"
 msgstr "刷新项目"
@@ -229,12 +229,12 @@ msgctxt "ui.launcher.updating"
 msgid "Updating…"
 msgstr "正在更新…"
 
-#: crates/toolbox-ui/ui/launcher.slint:357 crates/toolbox-ui/ui/main.slint:563
+#: crates/toolbox-ui/ui/launcher.slint:357 crates/toolbox-ui/ui/main.slint:636
 msgctxt "ui.action.select"
 msgid "Select"
 msgstr "选择"
 
-#: crates/toolbox-ui/ui/launcher.slint:360 crates/toolbox-ui/ui/main.slint:565
+#: crates/toolbox-ui/ui/launcher.slint:360 crates/toolbox-ui/ui/main.slint:638
 msgctxt "ui.action.open"
 msgid "Open"
 msgstr "打开"
@@ -264,949 +264,970 @@ msgctxt "ui.shortcut.record"
 msgid "Record"
 msgstr "录入"
 
-#: crates/toolbox-ui/ui/main.slint:250
-msgctxt "ui.settings.search.general"
-msgid "General language theme appearance light dark system sign-in startup login"
-msgstr "通用 语言 中文 英文 主题 外观 浅色 深色 跟随系统 登录 开机 启动 General language theme"
-
-#: crates/toolbox-ui/ui/main.slint:251
-msgctxt "ui.settings.search.projects"
-msgid "Recent projects launcher shortcut hotkey VS Code path location cache memory seconds"
-msgstr "最近项目 面板 快捷键 热键 VS Code 路径 位置 缓存 内存 秒 Recent projects shortcut"
-
-#: crates/toolbox-ui/ui/main.slint:252
-msgctxt "ui.settings.search.windows"
-msgid "Window switcher apps applications shortcut dock quake"
-msgstr "窗口切换 应用 快捷键 停靠 下拉 Quake Window switcher apps"
-
-#: crates/toolbox-ui/ui/main.slint:253
-msgctxt "ui.settings.search.skills"
-msgid "Skills agents daily update deployment symlink copy repositories"
-msgstr "技能管理 Skills 智能体 每日 自动更新 部署 符号链接 复制 仓库"
-
-#: crates/toolbox-ui/ui/main.slint:254
-msgctxt "ui.settings.search_configuration"
-msgid "Configuration import export backup reload JSON INI"
-msgstr "配置 导入 导出 备份 重新读取 JSON INI"
-
-#: crates/toolbox-ui/ui/main.slint:257 crates/toolbox-ui/ui/main.slint:402
-#: crates/toolbox-ui/ui/main.slint:929
-msgctxt "ui.navigation.windows"
-msgid "Window switcher"
-msgstr "窗口切换"
-
-#: crates/toolbox-ui/ui/main.slint:257 crates/toolbox-ui/ui/main.slint:404
-msgctxt "ui.navigation.clipboard"
-msgid "Cross-machine clipboard"
-msgstr "跨机剪贴板"
-
-#: crates/toolbox-ui/ui/main.slint:257 crates/toolbox-ui/ui/main.slint:408
-msgctxt "ui.navigation.status"
-msgid "Status & about"
-msgstr "运行状态"
-
-#: crates/toolbox-ui/ui/main.slint:258
-msgctxt "ui.page.projects_description"
-msgid "Pick up where you left off in VS Code."
-msgstr "继续上次的工作，快速回到你的项目。"
-
-#: crates/toolbox-ui/ui/main.slint:258
-msgctxt "ui.page.windows_description"
-msgid "Your everyday apps, one shortcut away."
-msgstr "一个快捷键，启动、切回或收起常用应用。"
-
-#: crates/toolbox-ui/ui/main.slint:258
-msgctxt "ui.page.settings_description"
-msgid "Make the toolbox work your way."
-msgstr "按照你的习惯，调整工具箱。"
-
-#: crates/toolbox-ui/ui/main.slint:258 crates/toolbox-ui/ui/main.slint:949
-msgctxt "ui.page.skills_description"
-msgid "Manage skills across your agents and keep them up to date."
-msgstr "统一管理各个 Agent 的技能，并保持每天更新。"
-
-#: crates/toolbox-ui/ui/main.slint:258
-msgctxt "ui.page.clipboard_description"
-msgid "Copy on one PC, paste on the other. Choose whether payloads travel immediately or only when you paste."
-msgstr "在一台电脑复制，在另一台粘贴。可选择复制后立即传输，或等对端粘贴时再传输。"
-
-#: crates/toolbox-ui/ui/main.slint:258
-msgctxt "ui.page.status_description"
-msgid "Check what is available on this device."
-msgstr "查看当前设备的可用能力与运行信息。"
-
-#: crates/toolbox-ui/ui/main.slint:400
-msgctxt "ui.main.workspace"
-msgid "WORKSPACE"
-msgstr "工作空间"
-
-#: crates/toolbox-ui/ui/main.slint:406
-msgctxt "ui.main.preferences"
-msgid "PREFERENCES"
-msgstr "工具箱"
-
-#: crates/toolbox-ui/ui/main.slint:414
-msgctxt "ui.main.on_your_device"
-msgid "On your device"
-msgstr "本地运行"
-
-#: crates/toolbox-ui/ui/main.slint:434
-msgctxt "ui.main.close_ui_esc"
-msgid "Close UI · Esc"
-msgstr "关闭界面 · Esc"
-
-#: crates/toolbox-ui/ui/main.slint:447
-msgctxt "ui.main.search_projects_by_name_or_path"
-msgid "Search projects by name or path…"
-msgstr "搜索项目名称或路径…"
-
-#: crates/toolbox-ui/ui/main.slint:458
-msgctxt "ui.main.recently_opened"
-msgid "RECENTLY OPENED"
-msgstr "最近访问"
-
-#: crates/toolbox-ui/ui/main.slint:458
-msgctxt "ui.main.search_results"
-msgid "SEARCH RESULTS"
-msgstr "搜索结果"
-
-#: crates/toolbox-ui/ui/main.slint:461 crates/toolbox-ui/ui/skills.slint:432
-msgctxt "ui.action.refresh"
-msgid "Refresh"
-msgstr "刷新"
-
-#: crates/toolbox-ui/ui/main.slint:525
-msgctxt "ui.main.connecting_to_your_toolbox"
-msgid "Connecting to your toolbox"
-msgstr "正在连接工具箱"
-
-#: crates/toolbox-ui/ui/main.slint:525
-msgctxt "ui.main.loading_your_projects"
-msgid "Loading your projects"
-msgstr "正在读取最近项目"
-
-#: crates/toolbox-ui/ui/main.slint:525
-msgctxt "ui.main.your_next_project_starts_here"
-msgid "Your next project starts here"
-msgstr "从这里继续你的工作"
-
-#: crates/toolbox-ui/ui/main.slint:529
-msgctxt "ui.projects.enable_hint"
-msgid "Enable recent projects in Settings to get started."
-msgstr "在设置中启用最近项目，即可开始使用。"
-
-#: crates/toolbox-ui/ui/main.slint:529
-msgctxt "ui.projects.search_hint"
-msgid "Try a shorter name or part of a project path."
-msgstr "试试更短的名称，或输入项目路径的一部分。"
-
-#: crates/toolbox-ui/ui/main.slint:529
-msgctxt "ui.projects.empty_hint"
-msgid "Open a folder or workspace in VS Code, then refresh this list."
-msgstr "在 VS Code 中打开文件夹或工作区，刷新后就会出现在这里。"
-
-#: crates/toolbox-ui/ui/main.slint:552
-msgctxt "ui.main.updating"
-msgid "Updating…"
-msgstr "正在更新…"
-
-#: crates/toolbox-ui/ui/main.slint:552
-msgctxt "ui.main.vs_code_history_stored_locally"
-msgid "VS Code history · stored locally"
-msgstr "VS Code 历史记录 · 数据保留在本机"
-
-#: crates/toolbox-ui/ui/main.slint:570
-msgctxt "ui.main.opening"
-msgid "Opening…"
-msgstr "正在打开…"
-
-#: crates/toolbox-ui/ui/main.slint:570
-msgctxt "ui.main.open_in_vs_code"
-msgid "Open in VS Code"
-msgstr "在 VS Code 中打开"
-
-#: crates/toolbox-ui/ui/main.slint:584
-msgctxt "ui.profiles.disabled_hint"
-msgid "Window switching is turned off. Your app configurations are kept."
-msgstr "窗口切换已停用，应用配置仍会保留。"
-
-#: crates/toolbox-ui/ui/main.slint:593 crates/toolbox-ui/ui/main.slint:632
-msgctxt "ui.main.add_application"
-msgid "Add application"
-msgstr "添加应用"
-
-#: crates/toolbox-ui/ui/main.slint:597
-msgctxt "ui.profiles.search"
-msgid "Find an app…"
-msgstr "查找应用…"
-
-#: crates/toolbox-ui/ui/main.slint:603 crates/toolbox-ui/ui/main.slint:609
-msgctxt "ui.main.applications"
-msgid "APPLICATIONS"
-msgstr "应用列表"
-
-#: crates/toolbox-ui/ui/main.slint:620
-msgctxt "ui.profiles.no_matches"
-msgid "No matching apps. Try a name or shortcut."
-msgstr "没有匹配的应用，请尝试名称或快捷键。"
-
-#: crates/toolbox-ui/ui/main.slint:620
-msgctxt "ui.profiles.empty_hint"
-msgid "No applications yet. Add one to create your first shortcut."
-msgstr "还没有应用，添加一个常用应用开始使用。"
-
-#: crates/toolbox-ui/ui/main.slint:630
-msgctxt "ui.profiles.select_title"
-msgid "Choose an application"
-msgstr "选择一个应用"
-
-#: crates/toolbox-ui/ui/main.slint:631
-msgctxt "ui.profiles.select_hint"
-msgid "Select an app to edit its shortcut and window behavior, or add a new app."
-msgstr "选择应用来调整快捷键和窗口行为，或添加新应用。"
-
-#: crates/toolbox-ui/ui/main.slint:640
-msgctxt "ui.main.new_application"
-msgid "New application"
-msgstr "添加应用"
-
-#: crates/toolbox-ui/ui/main.slint:641
-msgctxt "ui.main.unsaved"
-msgid "Unsaved"
-msgstr "未保存"
-
-#: crates/toolbox-ui/ui/main.slint:641
-msgctxt "ui.main.saved"
-msgid "Saved"
-msgstr "已保存"
-
-#: crates/toolbox-ui/ui/main.slint:643
-msgctxt "ui.profiles.test_saved"
-msgid "Test saved"
-msgstr "测试已保存配置"
-
-#: crates/toolbox-ui/ui/main.slint:646
-msgctxt "ui.profiles.test_hint"
-msgid "Runs the saved app configuration. Unsaved changes stay in the editor."
-msgstr "按已保存的配置切换应用，编辑中的修改会保留。"
-
-#: crates/toolbox-ui/ui/main.slint:646
-msgctxt "ui.profiles.test_unavailable"
-msgid "Save and enable this app for the current operating system to test it."
-msgstr "保存并启用适用于当前系统的应用配置后，即可测试。"
-
-#: crates/toolbox-ui/ui/main.slint:658 crates/toolbox-ui/ui/main.slint:664
-msgctxt "ui.profiles.program"
-msgid "Program"
-msgstr "启动程序"
-
-#: crates/toolbox-ui/ui/main.slint:664 crates/toolbox-ui/ui/main.slint:771
-msgctxt "ui.main.choose_a_program"
-msgid "Choose a program…"
-msgstr "选择应用程序…"
-
-#: crates/toolbox-ui/ui/main.slint:665 crates/toolbox-ui/ui/main.slint:780
-msgctxt "ui.action.browse"
-msgid "Browse"
-msgstr "浏览"
-
-#: crates/toolbox-ui/ui/main.slint:668 crates/toolbox-ui/ui/main.slint:669
-msgctxt "ui.main.display_name"
-msgid "Display name"
-msgstr "显示名称"
-
-#: crates/toolbox-ui/ui/main.slint:669
-msgctxt "ui.main.e_g_vs_code"
-msgid "e.g. VS Code"
-msgstr "例如：VS Code"
-
-#: crates/toolbox-ui/ui/main.slint:671 crates/toolbox-ui/ui/main.slint:674
-msgctxt "ui.main.shortcut_optional"
-msgid "Shortcut · optional"
-msgstr "快捷键 · 可留空"
-
-#: crates/toolbox-ui/ui/main.slint:681 crates/toolbox-ui/ui/main.slint:902
-msgctxt "ui.shortcut.preparing"
-msgid "Preparing recorder…"
-msgstr "正在准备录制…"
-
-#: crates/toolbox-ui/ui/main.slint:682 crates/toolbox-ui/ui/main.slint:903
-msgctxt "ui.shortcut.record_hint"
-msgid "Press a shortcut. Esc cancels; Backspace clears."
-msgstr "按下快捷键，Esc 取消，Backspace 清空。"
-
-#: crates/toolbox-ui/ui/main.slint:684
-msgctxt "ui.main.enable_this_application"
-msgid "Enable this application"
-msgstr "启用此应用"
-
-#: crates/toolbox-ui/ui/main.slint:686
-msgctxt "ui.profiles.window_behavior"
-msgid "Window behavior"
-msgstr "窗口行为"
-
-#: crates/toolbox-ui/ui/main.slint:687
-msgctxt "ui.quake.wezterm_enabled"
-msgid "Enable a dedicated WezTerm dropdown"
-msgstr "启用 WezTerm 独立下拉"
-
-#: crates/toolbox-ui/ui/main.slint:687
-msgctxt "ui.quake.enabled"
-msgid "Dock one window to the screen edge"
-msgstr "将一个应用窗口停靠到屏幕边缘"
-
-#: crates/toolbox-ui/ui/main.slint:690
-msgctxt "ui.profiles.maximize_new"
-msgid "Maximize newly launched windows only"
-msgstr "仅最大化新启动的窗口"
-
-#: crates/toolbox-ui/ui/main.slint:691
-msgctxt "ui.profiles.wrap_cycle"
-msgid "Wrap to the first window at the end"
-msgstr "循环到末尾后回到第一个窗口"
-
-#: crates/toolbox-ui/ui/main.slint:695
-msgctxt "ui.quake.wezterm_hint"
-msgid "Opens a dedicated window with your WezTerm shell, font and colors. Terminal tasks keep running while hidden."
-msgstr "打开独立窗口，沿用 WezTerm 的 shell、字体与配色。收起后终端任务继续运行。"
-
-#: crates/toolbox-ui/ui/main.slint:695
-msgctxt "ui.quake.toggle_hint"
-msgid "Summon the same window with your shortcut. Press again while it is active to hide it."
-msgstr "快捷键唤回同一个窗口；窗口在前台时再按一次即可收起。"
-
-#: crates/toolbox-ui/ui/main.slint:699
-msgctxt "ui.main.top_half"
-msgid "Top half"
-msgstr "顶部半屏"
-
-#: crates/toolbox-ui/ui/main.slint:700
-msgctxt "ui.main.right_side"
-msgid "Right side"
-msgstr "右侧边栏"
-
-#: crates/toolbox-ui/ui/main.slint:701
-msgctxt "ui.main.fill_screen"
-msgid "Fill screen"
-msgstr "铺满工作区"
-
-#: crates/toolbox-ui/ui/main.slint:707 crates/toolbox-ui/ui/main.slint:708
-msgctxt "ui.main.screen_edge"
-msgid "Screen edge"
-msgstr "停靠边缘"
-
-#: crates/toolbox-ui/ui/main.slint:712 crates/toolbox-ui/ui/main.slint:713
-msgctxt "ui.main.alignment"
-msgid "Alignment"
-msgstr "对齐位置"
-
-#: crates/toolbox-ui/ui/main.slint:713
-msgctxt "ui.quake.horizontal_alignment.center"
-msgid "Center"
-msgstr "居中"
-
-#: crates/toolbox-ui/ui/main.slint:713
-msgctxt "ui.quake.vertical_alignment.center"
-msgid "Center"
-msgstr "居中"
-
-#: crates/toolbox-ui/ui/main.slint:720 crates/toolbox-ui/ui/main.slint:721
-msgctxt "ui.quake.width_percent"
-msgid "Width · % of work area"
-msgstr "宽度 · 工作区百分比"
-
-#: crates/toolbox-ui/ui/main.slint:725 crates/toolbox-ui/ui/main.slint:726
-msgctxt "ui.quake.height_percent"
-msgid "Height · % of work area"
-msgstr "高度 · 工作区百分比"
-
-#: crates/toolbox-ui/ui/main.slint:729 crates/toolbox-ui/ui/main.slint:730
-msgctxt "ui.main.show_on_display"
-msgid "Show on display"
-msgstr "唤出位置"
-
-#: crates/toolbox-ui/ui/main.slint:731
-msgctxt "ui.quake.always_on_top"
-msgid "Keep on top while shown"
-msgstr "显示时保持置顶"
-
-#: crates/toolbox-ui/ui/main.slint:732
-msgctxt "ui.quake.hide_on_blur"
-msgid "Hide when focus leaves · Windows"
-msgstr "失去焦点时自动收起 · Windows"
-
-#: crates/toolbox-ui/ui/main.slint:733
-msgctxt "ui.quake.macos_hint"
-msgid "macOS supports placement through Accessibility. Keep-on-top and auto-hide are unavailable."
-msgstr "macOS 通过辅助功能定位窗口；暂不支持置顶和失焦收起。"
-
-#: crates/toolbox-ui/ui/main.slint:733
-msgctxt "ui.quake.linux_hint"
-msgid "Requires an X11 / EWMH desktop. Auto-hide is currently available on Windows only."
-msgstr "需要 X11 / EWMH 桌面。失焦自动收起目前仅支持 Windows。"
-
-#: crates/toolbox-ui/ui/main.slint:733
-msgctxt "ui.quake.placement_hint"
-msgid "Uses the display work area, leaving room for the taskbar. Esc stays available to your app."
-msgstr "按显示器可用工作区定位，避开任务栏；Esc 保留给目标应用。"
-
-#: crates/toolbox-ui/ui/main.slint:737
-msgctxt "ui.profiles.hide_advanced"
-msgid "Hide advanced options"
-msgstr "收起高级选项"
-
-#: crates/toolbox-ui/ui/main.slint:737
-msgctxt "ui.profiles.show_advanced"
-msgid "Advanced options"
-msgstr "高级选项"
-
-#: crates/toolbox-ui/ui/main.slint:743
-msgctxt "ui.profiles.advanced_hint"
-msgid "Adjust matching rules and launch alternatives when automatic suggestions do not fit your app."
-msgstr "自动建议不适用时，可调整匹配规则和备用启动方式。"
-
-#: crates/toolbox-ui/ui/main.slint:748 crates/toolbox-ui/ui/main.slint:749
-msgctxt "ui.main.application_id"
-msgid "Application ID"
-msgstr "应用标识"
-
-#: crates/toolbox-ui/ui/main.slint:753 crates/toolbox-ui/ui/main.slint:754
-msgctxt "ui.main.platform"
-msgid "Platform"
-msgstr "适用系统"
-
-#: crates/toolbox-ui/ui/main.slint:758 crates/toolbox-ui/ui/main.slint:759
-msgctxt "ui.main.window_match"
-msgid "Window match"
-msgstr "窗口匹配"
-
-#: crates/toolbox-ui/ui/main.slint:763 crates/toolbox-ui/ui/main.slint:767
-msgctxt "ui.main.launch_options"
-msgid "LAUNCH OPTIONS"
-msgstr "启动方式"
-
-#: crates/toolbox-ui/ui/main.slint:764
-msgctxt "ui.launch_options.order_hint"
-msgid "If the app is closed, try these locations in order."
-msgstr "应用未运行时，按顺序尝试以下启动候选。"
-
-#: crates/toolbox-ui/ui/main.slint:768
-msgctxt "ui.main.add_candidate"
-msgid "Add candidate"
-msgstr "添加启动候选"
-
-#: crates/toolbox-ui/ui/main.slint:769
-msgctxt "ui.main.remove_candidate"
-msgid "Remove candidate"
-msgstr "移除启动候选"
-
-#: crates/toolbox-ui/ui/main.slint:772 crates/toolbox-ui/ui/main.slint:773
-msgctxt "ui.main.arguments_json_array"
-msgid "Arguments · JSON array"
-msgstr "启动参数 · JSON 数组"
-
-#: crates/toolbox-ui/ui/main.slint:774
-msgctxt "ui.launch_options.arguments_hint"
-msgid "Use [] for no arguments; each argument is a quoted string."
-msgstr "无参数时填写 []；每个参数用双引号包裹。"
-
-#: crates/toolbox-ui/ui/main.slint:776 crates/toolbox-ui/ui/main.slint:779
-msgctxt "ui.main.working_directory_optional"
-msgid "Working directory · optional"
-msgstr "工作目录 · 可留空"
-
-#: crates/toolbox-ui/ui/main.slint:779
-msgctxt "ui.main.default_directory"
-msgid "Default directory"
-msgstr "默认目录"
-
-#: crates/toolbox-ui/ui/main.slint:789
-msgctxt "ui.action.delete"
-msgid "Delete"
-msgstr "删除"
-
-#: crates/toolbox-ui/ui/main.slint:791 crates/toolbox-ui/ui/main.slint:987
-msgctxt "ui.action.discard"
-msgid "Discard"
-msgstr "撤销修改"
-
-#: crates/toolbox-ui/ui/main.slint:791
-msgctxt "ui.profiles.close_details"
-msgid "Close"
-msgstr "关闭详情"
-
-#: crates/toolbox-ui/ui/main.slint:792 crates/toolbox-ui/ui/main.slint:988
-#: crates/toolbox-ui/ui/main.slint:1133
-msgctxt "ui.status.saving"
-msgid "Saving…"
-msgstr "保存中…"
-
-#: crates/toolbox-ui/ui/main.slint:792
-msgctxt "ui.main.save_app"
-msgid "Save app"
-msgstr "保存应用"
-
-#: crates/toolbox-ui/ui/main.slint:803
-msgctxt "ui.settings.search"
-msgid "Find a setting…"
-msgstr "查找设置…"
-
-#: crates/toolbox-ui/ui/main.slint:814 crates/toolbox-ui/ui/main.slint:831
-msgctxt "ui.settings.category.general"
-msgid "General"
-msgstr "通用"
-
-#: crates/toolbox-ui/ui/main.slint:818 crates/toolbox-ui/ui/main.slint:963
-msgctxt "ui.settings.category.configuration"
-msgid "Configuration file"
-msgstr "配置文件"
-
-#: crates/toolbox-ui/ui/main.slint:831
-msgctxt "ui.settings.general_description"
-msgid "Language, appearance and startup."
-msgstr "语言、外观与启动方式。"
-
-#: crates/toolbox-ui/ui/main.slint:836 crates/toolbox-ui/ui/main.slint:841
-msgctxt "ui.main.language"
-msgid "Language"
-msgstr "界面语言"
-
-#: crates/toolbox-ui/ui/main.slint:837
-msgctxt "ui.settings.language_hint"
-msgid "Preview immediately. Save to keep your choice."
-msgstr "选择后即时预览，保存后保留。"
-
-#: crates/toolbox-ui/ui/main.slint:849
-msgctxt "ui.main.choose_your_theme"
-msgid "Choose your theme"
-msgstr "选择界面主题"
-
-#: crates/toolbox-ui/ui/main.slint:850
-msgctxt "ui.settings.theme_hint"
-msgid "Preview instantly in the manager and project launcher. Save to keep your choice."
-msgstr "管理窗口与最近项目面板同步预览，保存后保留。"
-
-#: crates/toolbox-ui/ui/main.slint:860 crates/toolbox-ui/ui/main.slint:862
-msgctxt "ui.main.launch_at_sign_in"
-msgid "Launch at sign-in"
-msgstr "登录时启动"
-
-#: crates/toolbox-ui/ui/main.slint:861
-msgctxt "ui.settings.autostart_hint"
-msgid "Keep your shortcuts ready when you sign in."
-msgstr "登录系统后，让快捷键随时可用。"
-
-#: crates/toolbox-ui/ui/main.slint:880
-msgctxt "ui.settings.projects_hint"
-msgid "Find folders and workspaces from VS Code history."
-msgstr "查找 VS Code 最近使用的文件夹和工作区。"
-
-#: crates/toolbox-ui/ui/main.slint:885 crates/toolbox-ui/ui/main.slint:887
-msgctxt "ui.main.enable_recent_projects"
-msgid "Enable recent projects"
-msgstr "启用最近项目"
-
-#: crates/toolbox-ui/ui/main.slint:886
-msgctxt "ui.settings.projects_switch_hint"
-msgid "Turning this off also releases the panel shortcut."
-msgstr "关闭后同时释放面板快捷键。"
-
-#: crates/toolbox-ui/ui/main.slint:892 crates/toolbox-ui/ui/main.slint:895
-msgctxt "ui.settings.launcher_shortcut"
-msgid "Recent projects shortcut"
-msgstr "最近项目快捷键"
-
-#: crates/toolbox-ui/ui/main.slint:909 crates/toolbox-ui/ui/main.slint:913
-msgctxt "ui.main.vs_code_location"
-msgid "VS Code location"
-msgstr "VS Code 路径"
-
-#: crates/toolbox-ui/ui/main.slint:910
-msgctxt "ui.settings.code_path_hint"
-msgid "Leave empty to locate VS Code automatically."
-msgstr "留空时自动查找；也可以指定可执行文件。"
-
-#: crates/toolbox-ui/ui/main.slint:913
-msgctxt "ui.main.automatically_detect"
-msgid "Automatically detect"
-msgstr "自动查找"
-
-#: crates/toolbox-ui/ui/main.slint:919 crates/toolbox-ui/ui/main.slint:921
-msgctxt "ui.settings.cache_title"
-msgid "Keep the hidden launcher ready · seconds"
-msgstr "收起后保留界面 · 秒"
-
-#: crates/toolbox-ui/ui/main.slint:920
-msgctxt "ui.settings.cache_hint"
-msgid "0 uses less memory. A short delay reopens faster; closing the window releases it immediately."
-msgstr "0 可节省内存，短暂保留可加快再次唤起；主动关闭时立即释放。"
-
-#: crates/toolbox-ui/ui/main.slint:929
-msgctxt "ui.settings.windows_hint"
-msgid "Launch, focus and minimize apps with a shortcut."
-msgstr "通过快捷键启动、切回和收起应用。"
-
-#: crates/toolbox-ui/ui/main.slint:934 crates/toolbox-ui/ui/main.slint:936
-msgctxt "ui.main.enable_window_switcher"
-msgid "Enable window switcher"
-msgstr "启用窗口切换"
-
-#: crates/toolbox-ui/ui/main.slint:935
-msgctxt "ui.settings.windows_switch_hint"
-msgid "Turning this off releases every app shortcut and keeps their settings."
-msgstr "关闭后释放所有应用快捷键，应用配置保留。"
-
-#: crates/toolbox-ui/ui/main.slint:940
-msgctxt "ui.settings.manage_apps_title"
-msgid "Apps and shortcuts"
-msgstr "应用与快捷键"
-
-#: crates/toolbox-ui/ui/main.slint:941
-msgctxt "ui.settings.manage_apps_hint"
-msgid "Add apps and set their shortcuts, window behavior and docking on the Window switcher page."
-msgstr "在“窗口切换”页添加应用，设置快捷键、窗口行为与停靠方式。"
-
-#: crates/toolbox-ui/ui/main.slint:942
-msgctxt "ui.settings.manage_apps"
-msgid "Manage apps"
-msgstr "管理应用"
-
-#: crates/toolbox-ui/ui/main.slint:954
-msgctxt "ui.settings.skills_updates_title"
-msgid "Updates and deployment"
-msgstr "更新与部署"
-
-#: crates/toolbox-ui/ui/main.slint:955
-msgctxt "ui.settings.skills_updates_hint"
-msgid "Daily updates and the default deployment mode are saved immediately on the Skills page, under Repositories."
-msgstr "每日自动更新与默认部署方式在技能管理的“仓库”页设置，修改后立即保存。"
-
-#: crates/toolbox-ui/ui/main.slint:956
-msgctxt "ui.settings.open_skill_repositories"
-msgid "Open repositories"
-msgstr "打开仓库设置"
-
-#: crates/toolbox-ui/ui/main.slint:963
-msgctxt "ui.settings.import_export_hint"
-msgid "Import a WinGuake INI or Toolbox JSON with a preview. Export backs up the configuration currently in use."
-msgstr "导入 WinGuake INI 或工具箱 JSON，预览后再应用；导出当前已生效的配置以备份。"
-
-#: crates/toolbox-ui/ui/main.slint:969
-msgctxt "ui.main.import"
-msgid "Import…"
-msgstr "导入配置"
-
-#: crates/toolbox-ui/ui/main.slint:970
-msgctxt "ui.main.export_json"
-msgid "Export JSON…"
-msgstr "导出 JSON"
-
-#: crates/toolbox-ui/ui/main.slint:972
-msgctxt "ui.main.reload_saved"
-msgid "Reload saved"
-msgstr "重新载入"
-
-#: crates/toolbox-ui/ui/main.slint:977
-msgctxt "ui.settings.no_matches"
-msgid "No matching settings. Try a shorter search."
-msgstr "没有匹配的设置，请缩短搜索关键词。"
-
-#: crates/toolbox-ui/ui/main.slint:986 crates/toolbox-ui/ui/main.slint:1131
-msgctxt "ui.main.you_have_unsaved_changes"
-msgid "You have unsaved changes"
-msgstr "有尚未保存的修改"
-
-#: crates/toolbox-ui/ui/main.slint:986 crates/toolbox-ui/ui/main.slint:1131
-msgctxt "ui.main.all_changes_saved"
-msgid "All changes saved"
-msgstr "设置已保存"
-
-#: crates/toolbox-ui/ui/main.slint:988 crates/toolbox-ui/ui/main.slint:1133
-msgctxt "ui.main.save_settings"
-msgid "Save settings"
-msgstr "保存设置"
-
-#: crates/toolbox-ui/ui/main.slint:1004
-msgctxt "ui.clipboard.connection_section"
-msgid "CONNECTION"
-msgstr "连接"
-
-#: crates/toolbox-ui/ui/main.slint:1005 crates/toolbox-ui/ui/main.slint:1026
-msgctxt "ui.clipboard.connected"
-msgid "Connected"
-msgstr "已连接"
-
-#: crates/toolbox-ui/ui/main.slint:1005 crates/toolbox-ui/ui/main.slint:1026
-msgctxt "ui.clipboard.disconnected"
-msgid "Disconnected"
-msgstr "未连接"
-
-#: crates/toolbox-ui/ui/main.slint:1007
-msgctxt "ui.clipboard.refresh"
-msgid "Refresh"
-msgstr "刷新"
-
-#: crates/toolbox-ui/ui/main.slint:1008
-msgctxt "ui.clipboard.save"
-msgid "Save clipboard settings"
-msgstr "保存剪贴板设置"
-
-#: crates/toolbox-ui/ui/main.slint:1015
-msgctxt "ui.clipboard.checking_status"
-msgid "Checking clipboard status…"
-msgstr "正在检查剪贴板状态…"
-
-#: crates/toolbox-ui/ui/main.slint:1020
-msgctxt "ui.clipboard.connection_title"
-msgid "Clipboard bridge"
-msgstr "剪贴板桥接"
-
-#: crates/toolbox-ui/ui/main.slint:1031
-msgctxt "ui.clipboard.role_title"
-msgid "Role"
-msgstr "角色"
-
-#: crates/toolbox-ui/ui/main.slint:1037
-msgctxt "ui.clipboard.last_deferred"
-msgid "Latest deferred item"
-msgstr "最近的待传输项"
-
-#: crates/toolbox-ui/ui/main.slint:1038
-msgctxt "ui.clipboard.last_deferred_hint"
-msgid "Metadata announced on the last copy."
-msgstr "上次复制时同步的元数据。"
-
-#: crates/toolbox-ui/ui/main.slint:1039 crates/toolbox-ui/ui/main.slint:1044
-msgctxt "ui.clipboard.none"
-msgid "None"
-msgstr "无"
-
-#: crates/toolbox-ui/ui/main.slint:1043
-msgctxt "ui.clipboard.last_sent"
-msgid "Last sent"
-msgstr "最近发送"
-
-#: crates/toolbox-ui/ui/main.slint:1048
-msgctxt "ui.clipboard.last_received"
-msgid "Last received"
-msgstr "最近接收"
-
-#: crates/toolbox-ui/ui/main.slint:1053
-msgctxt "ui.clipboard.counters"
-msgid "Transfers"
-msgstr "传输计数"
-
-#: crates/toolbox-ui/ui/main.slint:1054
-msgctxt "ui.clipboard.fetching"
-msgid "Fetching the payload for a paste…"
-msgstr "正在为粘贴获取内容…"
-
-#: crates/toolbox-ui/ui/main.slint:1054
-msgctxt "ui.clipboard.counters_hint"
-msgid "sent / received / deferred"
-msgstr "发送 / 接收 / 待传输"
-
-#: crates/toolbox-ui/ui/main.slint:1063
-msgctxt "ui.clipboard.last_error"
-msgid "Last clipboard error"
-msgstr "最近的剪贴板错误"
-
-#: crates/toolbox-ui/ui/main.slint:1071 crates/toolbox-ui/ui/main.slint:1073
+#: crates/toolbox-ui/ui/main.slint:92 crates/toolbox-ui/ui/main.slint:94
 msgctxt "ui.clipboard.enable_title"
 msgid "Enable cross-machine clipboard"
 msgstr "启用跨机剪贴板"
 
-#: crates/toolbox-ui/ui/main.slint:1072
+#: crates/toolbox-ui/ui/main.slint:93
 msgctxt "ui.clipboard.enable_hint"
 msgid "Uses an encrypted Noise connection. The key file is separate from config.json and is never shown here."
 msgstr "使用 Noise 加密连接。密钥文件与 config.json 分开保存，不会在此显示。"
 
-#: crates/toolbox-ui/ui/main.slint:1078 crates/toolbox-ui/ui/main.slint:1084
+#: crates/toolbox-ui/ui/main.slint:98 crates/toolbox-ui/ui/main.slint:104
 msgctxt "ui.clipboard.role_field"
 msgid "Role"
 msgstr "角色"
 
-#: crates/toolbox-ui/ui/main.slint:1079
+#: crates/toolbox-ui/ui/main.slint:99
 msgctxt "ui.clipboard.role_hint"
 msgid "Listen waits for the other PC. Connect dials the listening PC."
 msgstr "Listen 等待另一台电脑连接；Connect 主动连接监听端。"
 
-#: crates/toolbox-ui/ui/main.slint:1082
+#: crates/toolbox-ui/ui/main.slint:102
 msgctxt "ui.clipboard.role_listen"
 msgid "Listen (server)"
 msgstr "监听（服务端）"
 
-#: crates/toolbox-ui/ui/main.slint:1082
+#: crates/toolbox-ui/ui/main.slint:102
 msgctxt "ui.clipboard.role_connect"
 msgid "Connect (client)"
 msgstr "连接（客户端）"
 
-#: crates/toolbox-ui/ui/main.slint:1092 crates/toolbox-ui/ui/main.slint:1098
-msgctxt "ui.clipboard.mode_field"
-msgid "Transfer timing"
-msgstr "传输时机"
-
-#: crates/toolbox-ui/ui/main.slint:1093
-msgctxt "ui.clipboard.mode_on_paste_hint"
-msgid "Only metadata is sent on copy. The other PC fetches the payload when you paste; a large file makes the paste wait."
-msgstr "复制时只发送元数据，对端粘贴时才获取内容；大文件会让粘贴等待。"
-
-#: crates/toolbox-ui/ui/main.slint:1093
-msgctxt "ui.clipboard.mode_eager_hint"
-msgid "Content is transferred immediately after you copy, so the other PC can paste offline."
-msgstr "复制后立即传输内容，对端离线也能粘贴。"
-
-#: crates/toolbox-ui/ui/main.slint:1096
-msgctxt "ui.clipboard.mode_eager"
-msgid "Immediately on copy"
-msgstr "复制后立即传输"
-
-#: crates/toolbox-ui/ui/main.slint:1096
-msgctxt "ui.clipboard.mode_on_paste"
-msgid "Only when the peer pastes"
-msgstr "仅在对端粘贴时"
-
-#: crates/toolbox-ui/ui/main.slint:1106 crates/toolbox-ui/ui/main.slint:1107
+#: crates/toolbox-ui/ui/main.slint:111 crates/toolbox-ui/ui/main.slint:114
 msgctxt "ui.clipboard.listen_field"
 msgid "Listen address"
 msgstr "监听地址"
 
-#: crates/toolbox-ui/ui/main.slint:1112 crates/toolbox-ui/ui/main.slint:1113
+#: crates/toolbox-ui/ui/main.slint:112
+msgctxt "ui.clipboard.listen_hint"
+msgid "Address and port this PC accepts the other PC on. 0.0.0.0 listens on every network."
+msgstr "本机接受另一台电脑连接的地址和端口。0.0.0.0 表示监听所有网络。"
+
+#: crates/toolbox-ui/ui/main.slint:117 crates/toolbox-ui/ui/main.slint:120
 msgctxt "ui.clipboard.peer_field"
 msgid "Peer address"
 msgstr "对端地址"
 
-#: crates/toolbox-ui/ui/main.slint:1117 crates/toolbox-ui/ui/main.slint:1121
+#: crates/toolbox-ui/ui/main.slint:118
+msgctxt "ui.clipboard.peer_hint"
+msgid "IP address or host name of the listening PC, with its port. A host name is resolved again on every reconnect."
+msgstr "监听端电脑的 IP 地址或主机名，带端口。主机名每次重连都会重新解析。"
+
+#: crates/toolbox-ui/ui/main.slint:124 crates/toolbox-ui/ui/main.slint:130
+msgctxt "ui.clipboard.mode_field"
+msgid "Transfer timing"
+msgstr "传输时机"
+
+#: crates/toolbox-ui/ui/main.slint:125
+msgctxt "ui.clipboard.mode_on_paste_hint"
+msgid "Only metadata is sent on copy. The other PC fetches the payload when you paste; a large file makes the paste wait."
+msgstr "复制时只发送元数据，对端粘贴时才获取内容；大文件会让粘贴等待。"
+
+#: crates/toolbox-ui/ui/main.slint:125
+msgctxt "ui.clipboard.mode_eager_hint"
+msgid "Content is transferred immediately after you copy, so the other PC can paste offline."
+msgstr "复制后立即传输内容，对端离线也能粘贴。"
+
+#: crates/toolbox-ui/ui/main.slint:128
+msgctxt "ui.clipboard.mode_eager"
+msgid "Immediately on copy"
+msgstr "复制后立即传输"
+
+#: crates/toolbox-ui/ui/main.slint:128
+msgctxt "ui.clipboard.mode_on_paste"
+msgid "Only when the peer pastes"
+msgstr "仅在对端粘贴时"
+
+#: crates/toolbox-ui/ui/main.slint:137 crates/toolbox-ui/ui/main.slint:141
 msgctxt "ui.clipboard.limit_title"
 msgid "Maximum transfer"
 msgstr "最大传输大小"
 
-#: crates/toolbox-ui/ui/main.slint:1118
+#: crates/toolbox-ui/ui/main.slint:138
 msgctxt "ui.clipboard.limit_hint"
 msgid "Applies to file selections; text and image limits are fixed."
 msgstr "仅用于文件选择；文本和图片有固定上限。"
 
-#: crates/toolbox-ui/ui/main.slint:1143
+#: crates/toolbox-ui/ui/main.slint:322
+msgctxt "ui.settings.search.general"
+msgid "General language theme appearance light dark system sign-in startup login"
+msgstr "通用 语言 中文 英文 主题 外观 浅色 深色 跟随系统 登录 开机 启动 General language theme"
+
+#: crates/toolbox-ui/ui/main.slint:323
+msgctxt "ui.settings.search.projects"
+msgid "Recent projects launcher shortcut hotkey VS Code path location cache memory seconds"
+msgstr "最近项目 面板 快捷键 热键 VS Code 路径 位置 缓存 内存 秒 Recent projects shortcut"
+
+#: crates/toolbox-ui/ui/main.slint:324
+msgctxt "ui.settings.search.windows"
+msgid "Window switcher apps applications shortcut dock quake"
+msgstr "窗口切换 应用 快捷键 停靠 下拉 Quake Window switcher apps"
+
+#: crates/toolbox-ui/ui/main.slint:325
+msgctxt "ui.settings.search.skills"
+msgid "Skills agents daily update deployment symlink copy repositories"
+msgstr "技能管理 Skills 智能体 每日 自动更新 部署 符号链接 复制 仓库"
+
+#: crates/toolbox-ui/ui/main.slint:326
+msgctxt "ui.settings.search.clipboard"
+msgid "Cross-machine clipboard copy paste peer address IP host port listen connect transfer files"
+msgstr "跨机剪贴板 复制 粘贴 对端 地址 IP 主机名 端口 监听 连接 传输 文件 Cross-machine clipboard copy paste peer address IP host port listen connect transfer files"
+
+#: crates/toolbox-ui/ui/main.slint:327
+msgctxt "ui.settings.search_configuration"
+msgid "Configuration import export backup reload JSON INI"
+msgstr "配置 导入 导出 备份 重新读取 JSON INI"
+
+#: crates/toolbox-ui/ui/main.slint:330 crates/toolbox-ui/ui/main.slint:475
+#: crates/toolbox-ui/ui/main.slint:1003
+msgctxt "ui.navigation.windows"
+msgid "Window switcher"
+msgstr "窗口切换"
+
+#: crates/toolbox-ui/ui/main.slint:330 crates/toolbox-ui/ui/main.slint:477
+#: crates/toolbox-ui/ui/main.slint:1037
+msgctxt "ui.navigation.clipboard"
+msgid "Cross-machine clipboard"
+msgstr "跨机剪贴板"
+
+#: crates/toolbox-ui/ui/main.slint:330 crates/toolbox-ui/ui/main.slint:481
+msgctxt "ui.navigation.status"
+msgid "Status & about"
+msgstr "运行状态"
+
+#: crates/toolbox-ui/ui/main.slint:331
+msgctxt "ui.page.projects_description"
+msgid "Pick up where you left off in VS Code."
+msgstr "继续上次的工作，快速回到你的项目。"
+
+#: crates/toolbox-ui/ui/main.slint:331
+msgctxt "ui.page.windows_description"
+msgid "Your everyday apps, one shortcut away."
+msgstr "一个快捷键，启动、切回或收起常用应用。"
+
+#: crates/toolbox-ui/ui/main.slint:331
+msgctxt "ui.page.settings_description"
+msgid "Make the toolbox work your way."
+msgstr "按照你的习惯，调整工具箱。"
+
+#: crates/toolbox-ui/ui/main.slint:331 crates/toolbox-ui/ui/main.slint:1023
+msgctxt "ui.page.skills_description"
+msgid "Manage skills across your agents and keep them up to date."
+msgstr "统一管理各个 Agent 的技能，并保持每天更新。"
+
+#: crates/toolbox-ui/ui/main.slint:331
+msgctxt "ui.page.clipboard_description"
+msgid "Copy on one PC, paste on the other. Choose whether payloads travel immediately or only when you paste."
+msgstr "在一台电脑复制，在另一台粘贴。可选择复制后立即传输，或等对端粘贴时再传输。"
+
+#: crates/toolbox-ui/ui/main.slint:331
+msgctxt "ui.page.status_description"
+msgid "Check what is available on this device."
+msgstr "查看当前设备的可用能力与运行信息。"
+
+#: crates/toolbox-ui/ui/main.slint:473
+msgctxt "ui.main.workspace"
+msgid "WORKSPACE"
+msgstr "工作空间"
+
+#: crates/toolbox-ui/ui/main.slint:479
+msgctxt "ui.main.preferences"
+msgid "PREFERENCES"
+msgstr "工具箱"
+
+#: crates/toolbox-ui/ui/main.slint:487
+msgctxt "ui.main.on_your_device"
+msgid "On your device"
+msgstr "本地运行"
+
+#: crates/toolbox-ui/ui/main.slint:507
+msgctxt "ui.main.close_ui_esc"
+msgid "Close UI · Esc"
+msgstr "关闭界面 · Esc"
+
+#: crates/toolbox-ui/ui/main.slint:520
+msgctxt "ui.main.search_projects_by_name_or_path"
+msgid "Search projects by name or path…"
+msgstr "搜索项目名称或路径…"
+
+#: crates/toolbox-ui/ui/main.slint:531
+msgctxt "ui.main.recently_opened"
+msgid "RECENTLY OPENED"
+msgstr "最近访问"
+
+#: crates/toolbox-ui/ui/main.slint:531
+msgctxt "ui.main.search_results"
+msgid "SEARCH RESULTS"
+msgstr "搜索结果"
+
+#: crates/toolbox-ui/ui/main.slint:534 crates/toolbox-ui/ui/skills.slint:432
+msgctxt "ui.action.refresh"
+msgid "Refresh"
+msgstr "刷新"
+
+#: crates/toolbox-ui/ui/main.slint:598
+msgctxt "ui.main.connecting_to_your_toolbox"
+msgid "Connecting to your toolbox"
+msgstr "正在连接工具箱"
+
+#: crates/toolbox-ui/ui/main.slint:598
+msgctxt "ui.main.loading_your_projects"
+msgid "Loading your projects"
+msgstr "正在读取最近项目"
+
+#: crates/toolbox-ui/ui/main.slint:598
+msgctxt "ui.main.your_next_project_starts_here"
+msgid "Your next project starts here"
+msgstr "从这里继续你的工作"
+
+#: crates/toolbox-ui/ui/main.slint:602
+msgctxt "ui.projects.enable_hint"
+msgid "Enable recent projects in Settings to get started."
+msgstr "在设置中启用最近项目，即可开始使用。"
+
+#: crates/toolbox-ui/ui/main.slint:602
+msgctxt "ui.projects.search_hint"
+msgid "Try a shorter name or part of a project path."
+msgstr "试试更短的名称，或输入项目路径的一部分。"
+
+#: crates/toolbox-ui/ui/main.slint:602
+msgctxt "ui.projects.empty_hint"
+msgid "Open a folder or workspace in VS Code, then refresh this list."
+msgstr "在 VS Code 中打开文件夹或工作区，刷新后就会出现在这里。"
+
+#: crates/toolbox-ui/ui/main.slint:625
+msgctxt "ui.main.updating"
+msgid "Updating…"
+msgstr "正在更新…"
+
+#: crates/toolbox-ui/ui/main.slint:625
+msgctxt "ui.main.vs_code_history_stored_locally"
+msgid "VS Code history · stored locally"
+msgstr "VS Code 历史记录 · 数据保留在本机"
+
+#: crates/toolbox-ui/ui/main.slint:643
+msgctxt "ui.main.opening"
+msgid "Opening…"
+msgstr "正在打开…"
+
+#: crates/toolbox-ui/ui/main.slint:643
+msgctxt "ui.main.open_in_vs_code"
+msgid "Open in VS Code"
+msgstr "在 VS Code 中打开"
+
+#: crates/toolbox-ui/ui/main.slint:657
+msgctxt "ui.profiles.disabled_hint"
+msgid "Window switching is turned off. Your app configurations are kept."
+msgstr "窗口切换已停用，应用配置仍会保留。"
+
+#: crates/toolbox-ui/ui/main.slint:666 crates/toolbox-ui/ui/main.slint:705
+msgctxt "ui.main.add_application"
+msgid "Add application"
+msgstr "添加应用"
+
+#: crates/toolbox-ui/ui/main.slint:670
+msgctxt "ui.profiles.search"
+msgid "Find an app…"
+msgstr "查找应用…"
+
+#: crates/toolbox-ui/ui/main.slint:676 crates/toolbox-ui/ui/main.slint:682
+msgctxt "ui.main.applications"
+msgid "APPLICATIONS"
+msgstr "应用列表"
+
+#: crates/toolbox-ui/ui/main.slint:693
+msgctxt "ui.profiles.no_matches"
+msgid "No matching apps. Try a name or shortcut."
+msgstr "没有匹配的应用，请尝试名称或快捷键。"
+
+#: crates/toolbox-ui/ui/main.slint:693
+msgctxt "ui.profiles.empty_hint"
+msgid "No applications yet. Add one to create your first shortcut."
+msgstr "还没有应用，添加一个常用应用开始使用。"
+
+#: crates/toolbox-ui/ui/main.slint:703
+msgctxt "ui.profiles.select_title"
+msgid "Choose an application"
+msgstr "选择一个应用"
+
+#: crates/toolbox-ui/ui/main.slint:704
+msgctxt "ui.profiles.select_hint"
+msgid "Select an app to edit its shortcut and window behavior, or add a new app."
+msgstr "选择应用来调整快捷键和窗口行为，或添加新应用。"
+
+#: crates/toolbox-ui/ui/main.slint:713
+msgctxt "ui.main.new_application"
+msgid "New application"
+msgstr "添加应用"
+
+#: crates/toolbox-ui/ui/main.slint:714
+msgctxt "ui.main.unsaved"
+msgid "Unsaved"
+msgstr "未保存"
+
+#: crates/toolbox-ui/ui/main.slint:714
+msgctxt "ui.main.saved"
+msgid "Saved"
+msgstr "已保存"
+
+#: crates/toolbox-ui/ui/main.slint:716
+msgctxt "ui.profiles.test_saved"
+msgid "Test saved"
+msgstr "测试已保存配置"
+
+#: crates/toolbox-ui/ui/main.slint:719
+msgctxt "ui.profiles.test_hint"
+msgid "Runs the saved app configuration. Unsaved changes stay in the editor."
+msgstr "按已保存的配置切换应用，编辑中的修改会保留。"
+
+#: crates/toolbox-ui/ui/main.slint:719
+msgctxt "ui.profiles.test_unavailable"
+msgid "Save and enable this app for the current operating system to test it."
+msgstr "保存并启用适用于当前系统的应用配置后，即可测试。"
+
+#: crates/toolbox-ui/ui/main.slint:731 crates/toolbox-ui/ui/main.slint:737
+msgctxt "ui.profiles.program"
+msgid "Program"
+msgstr "启动程序"
+
+#: crates/toolbox-ui/ui/main.slint:737 crates/toolbox-ui/ui/main.slint:844
+msgctxt "ui.main.choose_a_program"
+msgid "Choose a program…"
+msgstr "选择应用程序…"
+
+#: crates/toolbox-ui/ui/main.slint:738 crates/toolbox-ui/ui/main.slint:853
+msgctxt "ui.action.browse"
+msgid "Browse"
+msgstr "浏览"
+
+#: crates/toolbox-ui/ui/main.slint:741 crates/toolbox-ui/ui/main.slint:742
+msgctxt "ui.main.display_name"
+msgid "Display name"
+msgstr "显示名称"
+
+#: crates/toolbox-ui/ui/main.slint:742
+msgctxt "ui.main.e_g_vs_code"
+msgid "e.g. VS Code"
+msgstr "例如：VS Code"
+
+#: crates/toolbox-ui/ui/main.slint:744 crates/toolbox-ui/ui/main.slint:747
+msgctxt "ui.main.shortcut_optional"
+msgid "Shortcut · optional"
+msgstr "快捷键 · 可留空"
+
+#: crates/toolbox-ui/ui/main.slint:754 crates/toolbox-ui/ui/main.slint:976
+msgctxt "ui.shortcut.preparing"
+msgid "Preparing recorder…"
+msgstr "正在准备录制…"
+
+#: crates/toolbox-ui/ui/main.slint:755 crates/toolbox-ui/ui/main.slint:977
+msgctxt "ui.shortcut.record_hint"
+msgid "Press a shortcut. Esc cancels; Backspace clears."
+msgstr "按下快捷键，Esc 取消，Backspace 清空。"
+
+#: crates/toolbox-ui/ui/main.slint:757
+msgctxt "ui.main.enable_this_application"
+msgid "Enable this application"
+msgstr "启用此应用"
+
+#: crates/toolbox-ui/ui/main.slint:759
+msgctxt "ui.profiles.window_behavior"
+msgid "Window behavior"
+msgstr "窗口行为"
+
+#: crates/toolbox-ui/ui/main.slint:760
+msgctxt "ui.quake.wezterm_enabled"
+msgid "Enable a dedicated WezTerm dropdown"
+msgstr "启用 WezTerm 独立下拉"
+
+#: crates/toolbox-ui/ui/main.slint:760
+msgctxt "ui.quake.enabled"
+msgid "Dock one window to the screen edge"
+msgstr "将一个应用窗口停靠到屏幕边缘"
+
+#: crates/toolbox-ui/ui/main.slint:763
+msgctxt "ui.profiles.maximize_new"
+msgid "Maximize newly launched windows only"
+msgstr "仅最大化新启动的窗口"
+
+#: crates/toolbox-ui/ui/main.slint:764
+msgctxt "ui.profiles.wrap_cycle"
+msgid "Wrap to the first window at the end"
+msgstr "循环到末尾后回到第一个窗口"
+
+#: crates/toolbox-ui/ui/main.slint:768
+msgctxt "ui.quake.wezterm_hint"
+msgid "Opens a dedicated window with your WezTerm shell, font and colors. Terminal tasks keep running while hidden."
+msgstr "打开独立窗口，沿用 WezTerm 的 shell、字体与配色。收起后终端任务继续运行。"
+
+#: crates/toolbox-ui/ui/main.slint:768
+msgctxt "ui.quake.toggle_hint"
+msgid "Summon the same window with your shortcut. Press again while it is active to hide it."
+msgstr "快捷键唤回同一个窗口；窗口在前台时再按一次即可收起。"
+
+#: crates/toolbox-ui/ui/main.slint:772
+msgctxt "ui.main.top_half"
+msgid "Top half"
+msgstr "顶部半屏"
+
+#: crates/toolbox-ui/ui/main.slint:773
+msgctxt "ui.main.right_side"
+msgid "Right side"
+msgstr "右侧边栏"
+
+#: crates/toolbox-ui/ui/main.slint:774
+msgctxt "ui.main.fill_screen"
+msgid "Fill screen"
+msgstr "铺满工作区"
+
+#: crates/toolbox-ui/ui/main.slint:780 crates/toolbox-ui/ui/main.slint:781
+msgctxt "ui.main.screen_edge"
+msgid "Screen edge"
+msgstr "停靠边缘"
+
+#: crates/toolbox-ui/ui/main.slint:785 crates/toolbox-ui/ui/main.slint:786
+msgctxt "ui.main.alignment"
+msgid "Alignment"
+msgstr "对齐位置"
+
+#: crates/toolbox-ui/ui/main.slint:786
+msgctxt "ui.quake.horizontal_alignment.center"
+msgid "Center"
+msgstr "居中"
+
+#: crates/toolbox-ui/ui/main.slint:786
+msgctxt "ui.quake.vertical_alignment.center"
+msgid "Center"
+msgstr "居中"
+
+#: crates/toolbox-ui/ui/main.slint:793 crates/toolbox-ui/ui/main.slint:794
+msgctxt "ui.quake.width_percent"
+msgid "Width · % of work area"
+msgstr "宽度 · 工作区百分比"
+
+#: crates/toolbox-ui/ui/main.slint:798 crates/toolbox-ui/ui/main.slint:799
+msgctxt "ui.quake.height_percent"
+msgid "Height · % of work area"
+msgstr "高度 · 工作区百分比"
+
+#: crates/toolbox-ui/ui/main.slint:802 crates/toolbox-ui/ui/main.slint:803
+msgctxt "ui.main.show_on_display"
+msgid "Show on display"
+msgstr "唤出位置"
+
+#: crates/toolbox-ui/ui/main.slint:804
+msgctxt "ui.quake.always_on_top"
+msgid "Keep on top while shown"
+msgstr "显示时保持置顶"
+
+#: crates/toolbox-ui/ui/main.slint:805
+msgctxt "ui.quake.hide_on_blur"
+msgid "Hide when focus leaves · Windows"
+msgstr "失去焦点时自动收起 · Windows"
+
+#: crates/toolbox-ui/ui/main.slint:806
+msgctxt "ui.quake.macos_hint"
+msgid "macOS supports placement through Accessibility. Keep-on-top and auto-hide are unavailable."
+msgstr "macOS 通过辅助功能定位窗口；暂不支持置顶和失焦收起。"
+
+#: crates/toolbox-ui/ui/main.slint:806
+msgctxt "ui.quake.linux_hint"
+msgid "Requires an X11 / EWMH desktop. Auto-hide is currently available on Windows only."
+msgstr "需要 X11 / EWMH 桌面。失焦自动收起目前仅支持 Windows。"
+
+#: crates/toolbox-ui/ui/main.slint:806
+msgctxt "ui.quake.placement_hint"
+msgid "Uses the display work area, leaving room for the taskbar. Esc stays available to your app."
+msgstr "按显示器可用工作区定位，避开任务栏；Esc 保留给目标应用。"
+
+#: crates/toolbox-ui/ui/main.slint:810
+msgctxt "ui.profiles.hide_advanced"
+msgid "Hide advanced options"
+msgstr "收起高级选项"
+
+#: crates/toolbox-ui/ui/main.slint:810
+msgctxt "ui.profiles.show_advanced"
+msgid "Advanced options"
+msgstr "高级选项"
+
+#: crates/toolbox-ui/ui/main.slint:816
+msgctxt "ui.profiles.advanced_hint"
+msgid "Adjust matching rules and launch alternatives when automatic suggestions do not fit your app."
+msgstr "自动建议不适用时，可调整匹配规则和备用启动方式。"
+
+#: crates/toolbox-ui/ui/main.slint:821 crates/toolbox-ui/ui/main.slint:822
+msgctxt "ui.main.application_id"
+msgid "Application ID"
+msgstr "应用标识"
+
+#: crates/toolbox-ui/ui/main.slint:826 crates/toolbox-ui/ui/main.slint:827
+msgctxt "ui.main.platform"
+msgid "Platform"
+msgstr "适用系统"
+
+#: crates/toolbox-ui/ui/main.slint:831 crates/toolbox-ui/ui/main.slint:832
+msgctxt "ui.main.window_match"
+msgid "Window match"
+msgstr "窗口匹配"
+
+#: crates/toolbox-ui/ui/main.slint:836 crates/toolbox-ui/ui/main.slint:840
+msgctxt "ui.main.launch_options"
+msgid "LAUNCH OPTIONS"
+msgstr "启动方式"
+
+#: crates/toolbox-ui/ui/main.slint:837
+msgctxt "ui.launch_options.order_hint"
+msgid "If the app is closed, try these locations in order."
+msgstr "应用未运行时，按顺序尝试以下启动候选。"
+
+#: crates/toolbox-ui/ui/main.slint:841
+msgctxt "ui.main.add_candidate"
+msgid "Add candidate"
+msgstr "添加启动候选"
+
+#: crates/toolbox-ui/ui/main.slint:842
+msgctxt "ui.main.remove_candidate"
+msgid "Remove candidate"
+msgstr "移除启动候选"
+
+#: crates/toolbox-ui/ui/main.slint:845 crates/toolbox-ui/ui/main.slint:846
+msgctxt "ui.main.arguments_json_array"
+msgid "Arguments · JSON array"
+msgstr "启动参数 · JSON 数组"
+
+#: crates/toolbox-ui/ui/main.slint:847
+msgctxt "ui.launch_options.arguments_hint"
+msgid "Use [] for no arguments; each argument is a quoted string."
+msgstr "无参数时填写 []；每个参数用双引号包裹。"
+
+#: crates/toolbox-ui/ui/main.slint:849 crates/toolbox-ui/ui/main.slint:852
+msgctxt "ui.main.working_directory_optional"
+msgid "Working directory · optional"
+msgstr "工作目录 · 可留空"
+
+#: crates/toolbox-ui/ui/main.slint:852
+msgctxt "ui.main.default_directory"
+msgid "Default directory"
+msgstr "默认目录"
+
+#: crates/toolbox-ui/ui/main.slint:862
+msgctxt "ui.action.delete"
+msgid "Delete"
+msgstr "删除"
+
+#: crates/toolbox-ui/ui/main.slint:864 crates/toolbox-ui/ui/main.slint:1077
+msgctxt "ui.action.discard"
+msgid "Discard"
+msgstr "撤销修改"
+
+#: crates/toolbox-ui/ui/main.slint:864
+msgctxt "ui.profiles.close_details"
+msgid "Close"
+msgstr "关闭详情"
+
+#: crates/toolbox-ui/ui/main.slint:865 crates/toolbox-ui/ui/main.slint:1078
+#: crates/toolbox-ui/ui/main.slint:1173
+msgctxt "ui.status.saving"
+msgid "Saving…"
+msgstr "保存中…"
+
+#: crates/toolbox-ui/ui/main.slint:865
+msgctxt "ui.main.save_app"
+msgid "Save app"
+msgstr "保存应用"
+
+#: crates/toolbox-ui/ui/main.slint:876
+msgctxt "ui.settings.search"
+msgid "Find a setting…"
+msgstr "查找设置…"
+
+#: crates/toolbox-ui/ui/main.slint:887 crates/toolbox-ui/ui/main.slint:905
+msgctxt "ui.settings.category.general"
+msgid "General"
+msgstr "通用"
+
+#: crates/toolbox-ui/ui/main.slint:892 crates/toolbox-ui/ui/main.slint:1053
+msgctxt "ui.settings.category.configuration"
+msgid "Configuration file"
+msgstr "配置文件"
+
+#: crates/toolbox-ui/ui/main.slint:905
+msgctxt "ui.settings.general_description"
+msgid "Language, appearance and startup."
+msgstr "语言、外观与启动方式。"
+
+#: crates/toolbox-ui/ui/main.slint:910 crates/toolbox-ui/ui/main.slint:915
+msgctxt "ui.main.language"
+msgid "Language"
+msgstr "界面语言"
+
+#: crates/toolbox-ui/ui/main.slint:911
+msgctxt "ui.settings.language_hint"
+msgid "Preview immediately. Save to keep your choice."
+msgstr "选择后即时预览，保存后保留。"
+
+#: crates/toolbox-ui/ui/main.slint:923
+msgctxt "ui.main.choose_your_theme"
+msgid "Choose your theme"
+msgstr "选择界面主题"
+
+#: crates/toolbox-ui/ui/main.slint:924
+msgctxt "ui.settings.theme_hint"
+msgid "Preview instantly in the manager and project launcher. Save to keep your choice."
+msgstr "管理窗口与最近项目面板同步预览，保存后保留。"
+
+#: crates/toolbox-ui/ui/main.slint:934 crates/toolbox-ui/ui/main.slint:936
+msgctxt "ui.main.launch_at_sign_in"
+msgid "Launch at sign-in"
+msgstr "登录时启动"
+
+#: crates/toolbox-ui/ui/main.slint:935
+msgctxt "ui.settings.autostart_hint"
+msgid "Keep your shortcuts ready when you sign in."
+msgstr "登录系统后，让快捷键随时可用。"
+
+#: crates/toolbox-ui/ui/main.slint:954
+msgctxt "ui.settings.projects_hint"
+msgid "Find folders and workspaces from VS Code history."
+msgstr "查找 VS Code 最近使用的文件夹和工作区。"
+
+#: crates/toolbox-ui/ui/main.slint:959 crates/toolbox-ui/ui/main.slint:961
+msgctxt "ui.main.enable_recent_projects"
+msgid "Enable recent projects"
+msgstr "启用最近项目"
+
+#: crates/toolbox-ui/ui/main.slint:960
+msgctxt "ui.settings.projects_switch_hint"
+msgid "Turning this off also releases the panel shortcut."
+msgstr "关闭后同时释放面板快捷键。"
+
+#: crates/toolbox-ui/ui/main.slint:966 crates/toolbox-ui/ui/main.slint:969
+msgctxt "ui.settings.launcher_shortcut"
+msgid "Recent projects shortcut"
+msgstr "最近项目快捷键"
+
+#: crates/toolbox-ui/ui/main.slint:983 crates/toolbox-ui/ui/main.slint:987
+msgctxt "ui.main.vs_code_location"
+msgid "VS Code location"
+msgstr "VS Code 路径"
+
+#: crates/toolbox-ui/ui/main.slint:984
+msgctxt "ui.settings.code_path_hint"
+msgid "Leave empty to locate VS Code automatically."
+msgstr "留空时自动查找；也可以指定可执行文件。"
+
+#: crates/toolbox-ui/ui/main.slint:987
+msgctxt "ui.main.automatically_detect"
+msgid "Automatically detect"
+msgstr "自动查找"
+
+#: crates/toolbox-ui/ui/main.slint:993 crates/toolbox-ui/ui/main.slint:995
+msgctxt "ui.settings.cache_title"
+msgid "Keep the hidden launcher ready · seconds"
+msgstr "收起后保留界面 · 秒"
+
+#: crates/toolbox-ui/ui/main.slint:994
+msgctxt "ui.settings.cache_hint"
+msgid "0 uses less memory. A short delay reopens faster; closing the window releases it immediately."
+msgstr "0 可节省内存，短暂保留可加快再次唤起；主动关闭时立即释放。"
+
+#: crates/toolbox-ui/ui/main.slint:1003
+msgctxt "ui.settings.windows_hint"
+msgid "Launch, focus and minimize apps with a shortcut."
+msgstr "通过快捷键启动、切回和收起应用。"
+
+#: crates/toolbox-ui/ui/main.slint:1008 crates/toolbox-ui/ui/main.slint:1010
+msgctxt "ui.main.enable_window_switcher"
+msgid "Enable window switcher"
+msgstr "启用窗口切换"
+
+#: crates/toolbox-ui/ui/main.slint:1009
+msgctxt "ui.settings.windows_switch_hint"
+msgid "Turning this off releases every app shortcut and keeps their settings."
+msgstr "关闭后释放所有应用快捷键，应用配置保留。"
+
+#: crates/toolbox-ui/ui/main.slint:1014
+msgctxt "ui.settings.manage_apps_title"
+msgid "Apps and shortcuts"
+msgstr "应用与快捷键"
+
+#: crates/toolbox-ui/ui/main.slint:1015
+msgctxt "ui.settings.manage_apps_hint"
+msgid "Add apps and set their shortcuts, window behavior and docking on the Window switcher page."
+msgstr "在“窗口切换”页添加应用，设置快捷键、窗口行为与停靠方式。"
+
+#: crates/toolbox-ui/ui/main.slint:1016
+msgctxt "ui.settings.manage_apps"
+msgid "Manage apps"
+msgstr "管理应用"
+
+#: crates/toolbox-ui/ui/main.slint:1028
+msgctxt "ui.settings.skills_updates_title"
+msgid "Updates and deployment"
+msgstr "更新与部署"
+
+#: crates/toolbox-ui/ui/main.slint:1029
+msgctxt "ui.settings.skills_updates_hint"
+msgid "Daily updates and the default deployment mode are saved immediately on the Skills page, under Repositories."
+msgstr "每日自动更新与默认部署方式在技能管理的“仓库”页设置，修改后立即保存。"
+
+#: crates/toolbox-ui/ui/main.slint:1030
+msgctxt "ui.settings.open_skill_repositories"
+msgid "Open repositories"
+msgstr "打开仓库设置"
+
+#: crates/toolbox-ui/ui/main.slint:1037 crates/toolbox-ui/ui/main.slint:1095
+msgctxt "ui.clipboard.connected"
+msgid "Connected"
+msgstr "已连接"
+
+#: crates/toolbox-ui/ui/main.slint:1037 crates/toolbox-ui/ui/main.slint:1095
+msgctxt "ui.clipboard.disconnected"
+msgid "Disconnected"
+msgstr "未连接"
+
+#: crates/toolbox-ui/ui/main.slint:1049
+msgctxt "ui.settings.open_clipboard_page"
+msgid "Open clipboard status"
+msgstr "查看剪贴板状态"
+
+#: crates/toolbox-ui/ui/main.slint:1053
+msgctxt "ui.settings.import_export_hint"
+msgid "Import a WinGuake INI or Toolbox JSON with a preview. Export backs up the configuration currently in use."
+msgstr "导入 WinGuake INI 或工具箱 JSON，预览后再应用；导出当前已生效的配置以备份。"
+
+#: crates/toolbox-ui/ui/main.slint:1059
+msgctxt "ui.main.import"
+msgid "Import…"
+msgstr "导入配置"
+
+#: crates/toolbox-ui/ui/main.slint:1060
+msgctxt "ui.main.export_json"
+msgid "Export JSON…"
+msgstr "导出 JSON"
+
+#: crates/toolbox-ui/ui/main.slint:1062
+msgctxt "ui.main.reload_saved"
+msgid "Reload saved"
+msgstr "重新载入"
+
+#: crates/toolbox-ui/ui/main.slint:1067
+msgctxt "ui.settings.no_matches"
+msgid "No matching settings. Try a shorter search."
+msgstr "没有匹配的设置，请缩短搜索关键词。"
+
+#: crates/toolbox-ui/ui/main.slint:1076 crates/toolbox-ui/ui/main.slint:1171
+msgctxt "ui.main.you_have_unsaved_changes"
+msgid "You have unsaved changes"
+msgstr "有尚未保存的修改"
+
+#: crates/toolbox-ui/ui/main.slint:1076 crates/toolbox-ui/ui/main.slint:1171
+msgctxt "ui.main.all_changes_saved"
+msgid "All changes saved"
+msgstr "设置已保存"
+
+#: crates/toolbox-ui/ui/main.slint:1078 crates/toolbox-ui/ui/main.slint:1173
+msgctxt "ui.main.save_settings"
+msgid "Save settings"
+msgstr "保存设置"
+
+#: crates/toolbox-ui/ui/main.slint:1094
+msgctxt "ui.clipboard.connection_section"
+msgid "CONNECTION"
+msgstr "连接"
+
+#: crates/toolbox-ui/ui/main.slint:1097
+msgctxt "ui.clipboard.refresh"
+msgid "Refresh"
+msgstr "刷新"
+
+#: crates/toolbox-ui/ui/main.slint:1098
+msgctxt "ui.clipboard.save"
+msgid "Save clipboard settings"
+msgstr "保存剪贴板设置"
+
+#: crates/toolbox-ui/ui/main.slint:1105
+msgctxt "ui.clipboard.checking_status"
+msgid "Checking clipboard status…"
+msgstr "正在检查剪贴板状态…"
+
+#: crates/toolbox-ui/ui/main.slint:1121
+msgctxt "ui.clipboard.connection_title"
+msgid "Clipboard bridge"
+msgstr "剪贴板桥接"
+
+#: crates/toolbox-ui/ui/main.slint:1132
+msgctxt "ui.clipboard.role_title"
+msgid "Role"
+msgstr "角色"
+
+#: crates/toolbox-ui/ui/main.slint:1138
+msgctxt "ui.clipboard.last_deferred"
+msgid "Latest deferred item"
+msgstr "最近的待传输项"
+
+#: crates/toolbox-ui/ui/main.slint:1139
+msgctxt "ui.clipboard.last_deferred_hint"
+msgid "Metadata announced on the last copy."
+msgstr "上次复制时同步的元数据。"
+
+#: crates/toolbox-ui/ui/main.slint:1140 crates/toolbox-ui/ui/main.slint:1145
+msgctxt "ui.clipboard.none"
+msgid "None"
+msgstr "无"
+
+#: crates/toolbox-ui/ui/main.slint:1144
+msgctxt "ui.clipboard.last_sent"
+msgid "Last sent"
+msgstr "最近发送"
+
+#: crates/toolbox-ui/ui/main.slint:1149
+msgctxt "ui.clipboard.last_received"
+msgid "Last received"
+msgstr "最近接收"
+
+#: crates/toolbox-ui/ui/main.slint:1154
+msgctxt "ui.clipboard.counters"
+msgid "Transfers"
+msgstr "传输计数"
+
+#: crates/toolbox-ui/ui/main.slint:1155
+msgctxt "ui.clipboard.fetching"
+msgid "Fetching the payload for a paste…"
+msgstr "正在为粘贴获取内容…"
+
+#: crates/toolbox-ui/ui/main.slint:1155
+msgctxt "ui.clipboard.counters_hint"
+msgid "sent / received / deferred"
+msgstr "发送 / 接收 / 待传输"
+
+#: crates/toolbox-ui/ui/main.slint:1164
+msgctxt "ui.clipboard.last_error"
+msgid "Last clipboard error"
+msgstr "最近的剪贴板错误"
+
+#: crates/toolbox-ui/ui/main.slint:1183
 msgctxt "ui.main.device_capabilities"
 msgid "DEVICE CAPABILITIES"
 msgstr "设备能力"
 
-#: crates/toolbox-ui/ui/main.slint:1146
+#: crates/toolbox-ui/ui/main.slint:1186
 msgctxt "ui.main.checking"
 msgid "Checking…"
 msgstr "检查中…"
 
-#: crates/toolbox-ui/ui/main.slint:1146
+#: crates/toolbox-ui/ui/main.slint:1186
 msgctxt "ui.main.check_again"
 msgid "Check again"
 msgstr "重新检查"
 
-#: crates/toolbox-ui/ui/main.slint:1150
+#: crates/toolbox-ui/ui/main.slint:1190
 msgctxt "ui.main.window_control"
 msgid "Window control"
 msgstr "窗口控制"
 
-#: crates/toolbox-ui/ui/main.slint:1150 crates/toolbox-ui/ui/main.slint:1151
+#: crates/toolbox-ui/ui/main.slint:1190 crates/toolbox-ui/ui/main.slint:1191
 msgctxt "ui.status.unchecked"
 msgid "Unchecked"
 msgstr "尚未确认"
 
-#: crates/toolbox-ui/ui/main.slint:1151
+#: crates/toolbox-ui/ui/main.slint:1191
 msgctxt "ui.main.global_shortcuts"
 msgid "Global shortcuts"
 msgstr "全局快捷键"
 
-#: crates/toolbox-ui/ui/main.slint:1152
+#: crates/toolbox-ui/ui/main.slint:1192
 msgctxt "ui.main.system_tray"
 msgid "System tray"
 msgstr "系统托盘"
 
-#: crates/toolbox-ui/ui/main.slint:1162
+#: crates/toolbox-ui/ui/main.slint:1202
 msgctxt "ui.main.last_action"
 msgid "LAST ACTION"
 msgstr "最近操作"
 
-#: crates/toolbox-ui/ui/main.slint:1163
+#: crates/toolbox-ui/ui/main.slint:1203
 msgctxt "ui.main.no_actions_recorded_yet"
 msgid "No actions recorded yet."
 msgstr "暂无操作记录。"
 
-#: crates/toolbox-ui/ui/main.slint:1170
+#: crates/toolbox-ui/ui/main.slint:1210
 msgctxt "ui.main.needs_your_attention"
 msgid "Needs your attention"
 msgstr "需要留意"
 
-#: crates/toolbox-ui/ui/main.slint:1178
+#: crates/toolbox-ui/ui/main.slint:1218
 msgctxt "ui.main.last_interface_error"
 msgid "Last interface error"
 msgstr "最近一次界面错误"
 
-#: crates/toolbox-ui/ui/main.slint:1183
+#: crates/toolbox-ui/ui/main.slint:1223
 msgctxt "ui.main.hide_technical_details"
 msgid "Hide technical details"
 msgstr "收起技术详情"
 
-#: crates/toolbox-ui/ui/main.slint:1183
+#: crates/toolbox-ui/ui/main.slint:1223
 msgctxt "ui.main.show_technical_details"
 msgid "Show technical details"
 msgstr "查看技术详情"
 
-#: crates/toolbox-ui/ui/main.slint:1202
+#: crates/toolbox-ui/ui/main.slint:1242
 msgctxt "ui.about.description"
 msgid "An independent, local-first personal toolbox."
 msgstr "独立运行的个人工具箱，专注本地日常工作。"
 
-#: crates/toolbox-ui/ui/main.slint:1205
+#: crates/toolbox-ui/ui/main.slint:1245
 msgctxt "ui.main.project_licenses"
 msgid "Project & licenses"
 msgstr "项目与许可证"
 
-#: crates/toolbox-ui/ui/main.slint:1206
+#: crates/toolbox-ui/ui/main.slint:1246
 msgctxt "ui.main.slint_website"
 msgid "Slint website"
 msgstr "Slint 网站"
 
-#: crates/toolbox-ui/ui/main.slint:1225 crates/toolbox-ui/ui/skills.slint:573
+#: crates/toolbox-ui/ui/main.slint:1265 crates/toolbox-ui/ui/skills.slint:573
 msgctxt "ui.action.details"
 msgid "Details"
 msgstr "查看详情"
 
-#: crates/toolbox-ui/ui/main.slint:1243
+#: crates/toolbox-ui/ui/main.slint:1283
 msgctxt "ui.main.review_your_import"
 msgid "Review your import"
 msgstr "确认导入内容"
 
-#: crates/toolbox-ui/ui/main.slint:1244
+#: crates/toolbox-ui/ui/main.slint:1284
 msgctxt "ui.import.review_hint"
 msgid "Review the applications below before applying changes."
 msgstr "先检查应用和设置，再选择如何应用。"
 
-#: crates/toolbox-ui/ui/main.slint:1247
+#: crates/toolbox-ui/ui/main.slint:1287
 msgctxt "ui.import.merge_hint"
 msgid "Merge replaces matching app IDs. Replace removes the existing app list; JSON also replaces settings. No application is launched."
 msgstr "合并会更新相同标识的应用；替换会移除原应用列表，JSON 还会替换通用设置。导入不会启动应用。"
 
-#: crates/toolbox-ui/ui/main.slint:1251
+#: crates/toolbox-ui/ui/main.slint:1291
 msgctxt "ui.action.cancel"
 msgid "Cancel"
 msgstr "取消"
 
-#: crates/toolbox-ui/ui/main.slint:1253
+#: crates/toolbox-ui/ui/main.slint:1293
 msgctxt "ui.main.replace_all"
 msgid "Replace all"
 msgstr "替换全部配置"
 
-#: crates/toolbox-ui/ui/main.slint:1253
+#: crates/toolbox-ui/ui/main.slint:1293
 msgctxt "ui.main.replace_app_list"
 msgid "Replace app list"
 msgstr "替换应用列表"
 
-#: crates/toolbox-ui/ui/main.slint:1254
+#: crates/toolbox-ui/ui/main.slint:1294
 msgctxt "ui.main.merge_apps"
 msgid "Merge apps"
 msgstr "合并应用"
 
-#: crates/toolbox-ui/ui/main.slint:1303
+#: crates/toolbox-ui/ui/main.slint:1343
 msgctxt "ui.dialog.file_chooser_hint"
 msgid "Continue in the file chooser"
 msgstr "请在文件选择窗口中继续"
