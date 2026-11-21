@@ -38,7 +38,7 @@ pub struct Prepared {
 }
 
 impl Hotkeys {
-    pub fn new(config: &Config, executable: &Path) -> (Self, Vec<String>) {
+    pub fn new(config: &Config, _executable: &Path) -> (Self, Vec<String>) {
         let mut warnings = Vec::new();
         #[cfg(target_os = "linux")]
         let wayland_session = crate::wayland::is_wayland();
@@ -46,7 +46,7 @@ impl Hotkeys {
         let wayland_session = false;
         #[cfg(target_os = "linux")]
         let wayland = if wayland_session {
-            match crate::wayland::KWinHotkeys::detect(executable) {
+            match crate::wayland::KWinHotkeys::detect(_executable) {
                 Ok(mut backend) => {
                     warnings.extend(backend.sync(config));
                     Some(backend)
@@ -120,8 +120,8 @@ impl Hotkeys {
 
     /// Ask the compositor script to run the profile's toggle. Used by the CLI
     /// and tray because native Wayland clients cannot enumerate windows.
+    #[cfg(target_os = "linux")]
     pub fn invoke_profile(&self, id: &str) -> Result<(), String> {
-        #[cfg(target_os = "linux")]
         if let Some(wayland) = &self.wayland {
             return wayland.invoke(id);
         }
