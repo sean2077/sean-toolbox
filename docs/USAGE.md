@@ -312,6 +312,7 @@ Skills 命令立即返回是否接受任务，接受不代表更新完成。使�
 | 应用可以启动但无法切回窗口 | 核对匹配标识；Windows 检查目标应用的权限，macOS 检查辅助功能授权 |
 | macOS 更换安装位置后无法控制窗口 | 在“系统设置 → 隐私与安全性 → 辅助功能”重新授权，再到运行状态页重新检查 |
 | Linux 没有托盘图标 | 先确认宿主在运行：`systemctl --user status 'app-sean\x2dtoolbox@autostart.service'`；桌面需提供托盘宿主；托盘使用图标主题名 `sean-toolbox`，按安装步骤安装 `packaging/sean-toolbox.svg` |
+| Linux 窗口、任务栏或切换器显示通用图标 | 界面进程的 app id 必须匹配桌面入口名 `sean-toolbox.desktop`；确认安装的是当前构建，并已把 `packaging/sean-toolbox.svg` 放到图标主题目录 |
 | Linux 无法选择导入或导出文件 | 安装并启用 XDG Desktop Portal 文件选择后端，或安装 `zenity` |
 | 最近项目列表为空 | 先在 VS Code Stable 中打开项目，再刷新；确认使用的是标准用户数据目录 |
 | 关闭面板后仍有界面进程 | 检查缓存时间、另一个可见窗口、未保存草稿及尚未完成的操作 |
