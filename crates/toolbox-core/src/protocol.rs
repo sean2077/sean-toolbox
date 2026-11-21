@@ -21,6 +21,7 @@ pub enum HostCommand {
     GetConfig,
     GetSkills,
     Skills(SkillsCommand),
+    Clipboard(ClipboardCommand),
     /// Temporarily route this toolbox's registered shortcuts to its recorder.
     /// A matching poll renews the short lease; no persistent setting changes.
     ShortcutCapture {
@@ -49,6 +50,24 @@ pub enum ShortcutCaptureAction {
     Begin,
     Poll,
     End,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClipboardCommand {
+    Status,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClipboardStatus {
+    pub enabled: bool,
+    pub role: String,
+    pub connected: bool,
+    pub peer: String,
+    pub last_sent: Option<String>,
+    pub last_received: Option<String>,
+    pub sent_count: u64,
+    pub received_count: u64,
+    pub last_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,6 +109,8 @@ pub struct Response {
     pub skills: Option<SkillsSnapshot>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shortcut_capture: Option<ShortcutCaptureState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clipboard: Option<ClipboardStatus>,
 }
 impl Response {
     pub fn success(message: impl Into<String>) -> Self {

@@ -265,6 +265,36 @@ impl Default for WindowsConfig {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClipboardRole {
+    #[default]
+    Listen,
+    Connect,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ClipboardSyncConfig {
+    pub enabled: bool,
+    pub role: ClipboardRole,
+    pub listen: String,
+    pub peer: String,
+    pub max_transfer_bytes: u64,
+}
+
+impl Default for ClipboardSyncConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            role: ClipboardRole::Listen,
+            listen: "0.0.0.0:24802".into(),
+            peer: String::new(),
+            max_transfer_bytes: 1024 * 1024 * 1024,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct UiConfig {
     pub idle_seconds: u64,
@@ -279,6 +309,7 @@ pub struct Config {
     pub projects: ProjectsConfig,
     pub windows: WindowsConfig,
     pub ui: UiConfig,
+    pub clipboard: ClipboardSyncConfig,
 }
 
 impl Default for Config {
@@ -289,6 +320,7 @@ impl Default for Config {
             projects: ProjectsConfig::default(),
             windows: WindowsConfig::default(),
             ui: UiConfig::default(),
+            clipboard: ClipboardSyncConfig::default(),
         }
     }
 }
@@ -335,6 +367,8 @@ struct GroupedConfig {
     windows: WindowsConfig,
     #[serde(default)]
     ui: UiConfig,
+    #[serde(default)]
+    clipboard: ClipboardSyncConfig,
 }
 
 impl From<GroupedConfig> for Config {
@@ -345,6 +379,7 @@ impl From<GroupedConfig> for Config {
             projects: config.projects,
             windows: config.windows,
             ui: config.ui,
+            clipboard: config.clipboard,
         }
     }
 }
@@ -403,6 +438,7 @@ impl From<LegacyConfig> for Config {
             ui: UiConfig {
                 idle_seconds: config.ui_idle_seconds,
             },
+            clipboard: ClipboardSyncConfig::default(),
         };
         // Version 1 files are the last flat layout; a missing version stays
         // invalid instead of being silently adopted.
@@ -432,6 +468,7 @@ pub enum ConfigError {
     LaunchCandidates(String),
     InvalidLaunchCommand(String),
     InvalidVsCodePath,
+    Clipboard(String),
 }
 
 impl std::fmt::Display for ConfigError {
@@ -454,6 +491,7 @@ impl std::fmt::Display for ConfigError {
             Self::LaunchCandidates(_) => f.write_str("Each profile needs 1–8 launch candidates"),
             Self::InvalidLaunchCommand(id) => write!(f, "Invalid launch command: {id}"),
             Self::InvalidVsCodePath => f.write_str("Invalid VS Code override"),
+            Self::Clipboard(reason) => write!(f, "Clipboard: {reason}"),
         }
     }
 }
@@ -553,6 +591,38 @@ impl Config {
             .is_some_and(|s| s.contains('\0') || s.len() > 4096)
         {
             return Err(ConfigError::InvalidVsCodePath);
+        }
+        if self.clipboard.max_transfer_bytes == 0
+            || self.clipboard.max_transfer_bytes > 1024 * 1024 * 1024
+        {
+            return Err(ConfigError::Clipboard(
+                "max transfer must be between 1 byte and 1 GiB".into(),
+            ));
+        }
+        if self.clipboard.enabled {
+            match self.clipboard.role {
+                ClipboardRole::Listen
+                    if self
+                        .clipboard
+                        .listen
+                        .parse::<std::net::SocketAddr>()
+                        .is_err() =>
+                {
+                    return Err(ConfigError::Clipboard(format!(
+                        "invalid listen address: {}",
+                        self.clipboard.listen
+                    )));
+                }
+                ClipboardRole::Connect
+                    if self.clipboard.peer.trim().is_empty()
+                        || !self.clipboard.peer.contains(':') =>
+                {
+                    return Err(ConfigError::Clipboard(
+                        "peer must be host:port when connecting".into(),
+                    ));
+                }
+                _ => {}
+            }
         }
         Ok(())
     }
@@ -878,5 +948,38 @@ mod tests {
         assert!(serde_json::from_str::<QuakeConfig>(r#"{"edge":"diagonal"}"#).is_err());
         assert!(serde_json::from_str::<QuakeConfig>(r#"{"heigth_percent":50}"#).is_err());
         assert!(serde_json::from_str::<Config>(r#"{"theme":"auto"}"#).is_err());
+    }
+
+    #[test]
+    fn clipboard_defaults_load_for_old_configs_and_round_trip() {
+        let parsed: Config = serde_json::from_str(r#"{"schema_version":2}"#).unwrap();
+        assert_eq!(parsed.clipboard, ClipboardSyncConfig::default());
+        assert!(!parsed.clipboard.enabled);
+        let encoded = serde_json::to_string(&parsed).unwrap();
+        assert!(encoded.contains(r#""clipboard""#));
+        assert_eq!(serde_json::from_str::<Config>(&encoded).unwrap(), parsed);
+    }
+
+    #[test]
+    fn clipboard_validation_checks_limit_and_role_addresses() {
+        let mut config = Config::default();
+        config.clipboard.max_transfer_bytes = 0;
+        assert!(config.check().is_err());
+        config.clipboard.max_transfer_bytes = 1024 * 1024 * 1024 + 1;
+        assert!(config.check().is_err());
+
+        config.clipboard.max_transfer_bytes = 1024 * 1024 * 1024;
+        config.clipboard.enabled = true;
+        config.clipboard.role = ClipboardRole::Listen;
+        config.clipboard.listen = "not-an-address".into();
+        assert!(config.check().is_err());
+        config.clipboard.listen = "127.0.0.1:24802".into();
+        assert!(config.check().is_ok());
+
+        config.clipboard.role = ClipboardRole::Connect;
+        config.clipboard.peer = "u26".into();
+        assert!(config.check().is_err());
+        config.clipboard.peer = "192.168.62.38:24802".into();
+        assert!(config.check().is_ok());
     }
 }

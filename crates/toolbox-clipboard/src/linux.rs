@@ -681,6 +681,7 @@ impl Dispatch<ExtDataControlSourceV1, SourceData> for State {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     #[ignore = "reads the real Wayland clipboard; run manually in a KDE session"]
@@ -701,6 +702,45 @@ mod tests {
             read.remote_origin,
             read.sensitive
         );
+    }
+
+    #[test]
+    fn uri_lists_decode_spaces_and_chinese() {
+        let files =
+            parse_uri_list(b"# comment\r\nfile:///tmp/a%20b/\xe4\xb8\xad\xe6\x96\x87.txt\r\n");
+        assert_eq!(files.len(), 1);
+        assert!(files[0].ends_with("a b/中文.txt"));
+    }
+
+    #[test]
+    fn gnome_file_lists_skip_the_copy_header() {
+        let files = parse_gnome_files(b"copy\nfile:///tmp/x%20y.txt");
+        assert_eq!(files, vec![std::path::PathBuf::from("/tmp/x y.txt")]);
+    }
+
+    #[test]
+    fn source_offers_all_rich_text_mimes_and_origin() {
+        let content = ClipboardContent {
+            text: Some("hello".into()),
+            html: Some("<b>hello</b>".into()),
+            image: Some(vec![1, 2, 3]),
+            files: vec![PathBuf::from("/tmp/中文.txt")],
+        };
+        let data = SourceData::new(&content);
+        for mime in [
+            "text/plain;charset=utf-8",
+            "text/plain",
+            "UTF8_STRING",
+            "STRING",
+            "TEXT",
+            "text/html",
+            "image/png",
+            "text/uri-list",
+            "x-special/gnome-copied-files",
+            ORIGIN_MIME,
+        ] {
+            assert!(data.mimes.contains_key(mime), "{mime}");
+        }
     }
 
     #[test]
