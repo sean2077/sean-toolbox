@@ -1072,7 +1072,7 @@ hash/origin 防循环、文件暂存与路径安全、CF_HTML、PNG/DIB 转换�
 | --- | --- |
 | `cargo fmt --all -- --check` | 通过 |
 | `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
-| `cargo test --locked --workspace` | 333 通过、0 失败、3 ignored |
+| `cargo test --locked --workspace` | 334 通过、0 失败、3 ignored |
 | `cargo check --target x86_64-pc-windows-msvc -p toolbox-clipboard` | 通过（仅编译检查，未链接/运行） |
 | `python scripts/collect_licenses.py` | 476 个包，无缺失许可文本 |
 

@@ -1443,4 +1443,67 @@ mod tests {
         assert!(eventually_closed(&mut first));
         listener.stop();
     }
+
+    #[test]
+    fn one_oversized_item_does_not_close_the_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = key_file(dir.path());
+        let port = free_port();
+        let listener_fake = FakeBackend::new();
+        let connector_fake = FakeBackend::new();
+        let mut listener = start_with_notifier(
+            Settings::with_defaults(
+                Role::Listen,
+                format!("127.0.0.1:{port}"),
+                "",
+                key.clone(),
+                dir.path().join("cache-listen"),
+                "listener",
+            ),
+            Box::new(listener_fake.clone()),
+            Arc::new(NoopNotifier),
+        )
+        .unwrap();
+        let mut connector = start_with_notifier(
+            Settings::with_defaults(
+                Role::Connect,
+                "",
+                format!("127.0.0.1:{port}"),
+                key,
+                dir.path().join("cache-connect"),
+                "connector",
+            ),
+            Box::new(connector_fake.clone()),
+            Arc::new(NoopNotifier),
+        )
+        .unwrap();
+        assert!(wait_until(Duration::from_secs(5), || {
+            listener.status().connected && connector.status().connected
+        }));
+        listener_fake.set_local(ClipboardContent {
+            text: Some("x".repeat(MAX_TEXT_BYTES as usize + 1)),
+            ..Default::default()
+        });
+        assert!(wait_until(Duration::from_secs(5), || {
+            listener
+                .status()
+                .last_error
+                .as_deref()
+                .is_some_and(|error| error.contains("16 MiB"))
+        }));
+        assert!(connector_fake.writes().is_empty());
+        assert!(listener.status().connected);
+        listener_fake.set_local(ClipboardContent {
+            text: Some("after-error".into()),
+            ..Default::default()
+        });
+        assert!(wait_until(Duration::from_secs(5), || {
+            connector_fake
+                .writes()
+                .iter()
+                .any(|content| content.text.as_deref() == Some("after-error"))
+        }));
+        connector.stop();
+        listener.stop();
+    }
 }
