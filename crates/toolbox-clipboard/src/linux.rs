@@ -8,9 +8,7 @@ use crate::backend::{Backend, BackendEvent, ORIGIN_MIME, ReadContent};
 use crate::model::{ClipboardContent, blob_meta};
 use std::{
     collections::HashMap,
-    fs::File,
-    io::Write,
-    os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd},
+    os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd, RawFd},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -161,6 +159,8 @@ impl State {
     }
 
     fn read_selection(&mut self, conn: &Connection, inner: &Arc<Inner>, deadline: Instant) {
+        // One deadline covers text, HTML, image and files; no MIME gets a
+        // fresh 2 s budget, so the event thread is bounded by READ_DEADLINE.
         self.read_at = None;
         let Some(offer) = self.current_offer.clone() else {
             *inner.latest.lock().unwrap() = Some(ReadContent::default());
@@ -330,6 +330,58 @@ fn receive(
         }
     }
     Ok(bytes)
+}
+
+fn write_all_deadline(fd: RawFd, bytes: &[u8], deadline: Instant) -> Result<(), String> {
+    let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+    if flags >= 0 {
+        unsafe {
+            libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        }
+    }
+    let mut offset = 0;
+    while offset < bytes.len() {
+        let now = Instant::now();
+        if now >= deadline {
+            return Err("clipboard write timed out".into());
+        }
+        let remaining = deadline.saturating_duration_since(now);
+        let timeout = remaining.as_millis().clamp(1, 100) as i32;
+        let mut pollfd = libc::pollfd {
+            fd,
+            events: libc::POLLOUT,
+            revents: 0,
+        };
+        let ready = unsafe { libc::poll(&mut pollfd, 1, timeout) };
+        if ready < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(format!("poll: {error}"));
+        }
+        if ready == 0 {
+            continue;
+        }
+        if pollfd.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL) != 0 {
+            return Err("clipboard destination closed".into());
+        }
+        let written =
+            unsafe { libc::write(fd, bytes[offset..].as_ptr().cast(), bytes.len() - offset) };
+        if written > 0 {
+            offset += written as usize;
+        } else {
+            let error = std::io::Error::last_os_error();
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::Interrupted | std::io::ErrorKind::WouldBlock
+            ) {
+                continue;
+            }
+            return Err(format!("write: {error}"));
+        }
+    }
+    Ok(())
 }
 
 fn parse_uri_list(bytes: &[u8]) -> Vec<std::path::PathBuf> {
@@ -598,11 +650,15 @@ impl Dispatch<ExtDataControlSourceV1, SourceData> for State {
         match event {
             ext_data_control_source_v1::Event::Send { mime_type, fd } => {
                 if let Some(bytes) = data.mimes.get(&mime_type).cloned() {
-                    // Never write a large payload on the Wayland event thread:
-                    // a slow reader would stop selection changes and Cancelled.
+                    // Never write a large payload on the Wayland event thread.
+                    // The helper is non-blocking and gives up after 5 s so a
+                    // reader that never drains the pipe cannot leak a thread.
                     thread::spawn(move || {
-                        let mut file = File::from(fd);
-                        let _ = file.write_all(&bytes);
+                        let _ = write_all_deadline(
+                            fd.as_raw_fd(),
+                            &bytes,
+                            Instant::now() + Duration::from_secs(5),
+                        );
                     });
                 }
             }
@@ -645,5 +701,22 @@ mod tests {
             read.remote_origin,
             read.sensitive
         );
+    }
+
+    #[test]
+    fn nonblocking_write_gives_up_without_a_reader() {
+        let mut fds = [0i32; 2];
+        assert_eq!(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) }, 0);
+        let read_fd = unsafe { OwnedFd::from_raw_fd(fds[0]) };
+        let write_fd = unsafe { OwnedFd::from_raw_fd(fds[1]) };
+        let data = vec![0u8; 1024 * 1024];
+        let result = write_all_deadline(
+            write_fd.as_raw_fd(),
+            &data,
+            Instant::now() + Duration::from_millis(100),
+        );
+        assert!(result.is_err());
+        drop(write_fd);
+        drop(read_fd);
     }
 }
