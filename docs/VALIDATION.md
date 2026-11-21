@@ -1020,3 +1020,37 @@ Rust 1.99.1。验证使用真实会话、安装版宿主和用户配置。
 | `cargo test --locked --workspace` | **288 通过、0 失败、1 ignored** |
 
 验证仅覆盖 Linux；Windows 和 macOS 的托盘实现未改，只共享 `with_title` 调用。
+
+## 2026-11-21：Linux 窗口关联桌面入口，修复通用图标
+
+日期：2026-11-21。环境：Kubuntu，KDE Plasma 6.6.7 / KWin 6.6.7（原生 Wayland），
+WhiteSur-dark-sean 窗口装饰，安装版宿主与界面。
+
+### 现象
+
+`~/.local/share/applications/sean-toolbox.desktop` 与 `sean-toolbox.svg`、256 像素 PNG 均已安装，
+`kiconfinder6 sean-toolbox` 可解析；但 KWin 检查窗口得到 `resourceClass=sean-toolbox-ui`、
+`desktopFileName` 为空。桌面入口名是 `sean-toolbox.desktop`，合成器无法把窗口关联到入口，
+任务栏、窗口装饰和 Alt+Tab 都显示通用图标。
+
+### 修复
+
+`crates/toolbox-ui/src/main.rs` 在 `BackendSelector::select()` 之后、创建 Slint 窗口之前调用
+`slint::set_xdg_app_id("sean-toolbox")`（仅 Unix、非 macOS）。winit 用该值设置 Wayland
+`app_id` 和 X11 `WM_CLASS`；名称与桌面入口一致后，合成器才能按 `.desktop` 的 `Icon=` 解析图标。
+Windows/macOS 的图标路径不变（EXE 资源与 ICNS）。
+
+### 验证
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| 修复前 KWin 窗口属性 | `resourceClass=sean-toolbox-ui`、`desktopFileName` 空 |
+| 修复后 KWin 窗口属性 | `resourceClass=sean-toolbox`、`desktopFileName=sean-toolbox` |
+| 图标主题解析 | `kiconfinder6 sean-toolbox` → `~/.local/share/icons/hicolor/256x256/apps/sean-toolbox.png` |
+| 安装版重启 | 宿主与界面启动无警告，托盘 `IconName=sean-toolbox`、`Status=Active` |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --locked --workspace` | **288 通过、0 失败、1 ignored** |
+
+验证仅覆盖 KDE Wayland；X11 使用同一 app id 作为 `WM_CLASS`，未在本机 X11 会话验证。
+Windows 与 macOS 未重新构建。

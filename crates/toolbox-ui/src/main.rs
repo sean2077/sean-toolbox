@@ -2569,6 +2569,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .backend_name("winit".into())
         .renderer_name("software".into())
         .select()?;
+    // Wayland and X11 resolve grouping and the window icon from the app id, so
+    // it must match the installed desktop entry name (packaging/linux/sean-toolbox.desktop).
+    // Left unset, the compositor falls back to the binary name (sean-toolbox-ui)
+    // and shows a generic icon wherever the desktop entry cannot be matched.
+    #[cfg(all(unix, not(target_os = "macos")))]
+    slint::set_xdg_app_id("sean-toolbox")?;
     let ui = AppWindow::new()?;
     let launcher = LauncherWindow::new()?;
     #[cfg(windows)]

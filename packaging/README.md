@@ -96,6 +96,8 @@ CI 调用 `prepare` 子命令读取 Actions 事件并输出版本、提交和发
   GNU 构建使用 MinGW `windres`。可用 `RC` 指定资源编译器的完整路径。
 - macOS 包将 ICNS 放入 `.app/Contents/Resources/`，由 `CFBundleIconFile` 引用。
 - Linux 包同时提供可缩放 SVG 和 256 像素 PNG，桌面入口使用 `sean-toolbox` 图标名。
+  界面进程启动时用 `slint::set_xdg_app_id("sean-toolbox")` 声明同一个名字；Wayland/X11
+  合成器按它匹配 `sean-toolbox.desktop`，任务栏、窗口装饰和切换器才能解析到图标。
 
 修改绘图源后，使用 **Python 3.11+、Pillow 和 Inkscape** 重新导出：
 
