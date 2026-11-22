@@ -513,6 +513,14 @@ impl App {
                     self.clipboard.clear_cache();
                     self.response("Clipboard cache cleared", false)
                 }
+                ClipboardCommand::Pause => {
+                    self.clipboard.set_manual_suspend(true);
+                    self.response("Clipboard paused", false)
+                }
+                ClipboardCommand::Resume => {
+                    self.clipboard.set_manual_suspend(false);
+                    self.response("Clipboard resumed", false)
+                }
             },
             HostCommand::Skills(command) => match self.skills.submit(command) {
                 Ok(snapshot) => Response {
@@ -549,7 +557,7 @@ impl App {
             HostCommand::SaveConfig {
                 config,
                 expected_revision,
-            } => match self.save(config, expected_revision) {
+            } => match self.save(*config, expected_revision) {
                 Ok(()) => self.response("配置已保存 / Configuration saved", true),
                 Err(e) => Response::error(e),
             },

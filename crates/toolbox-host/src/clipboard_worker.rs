@@ -50,6 +50,14 @@ impl ClipboardWorker {
             key_path: self.config_path.with_file_name("clipboard.key"),
             cache_dir: toolbox_clipboard::default_cache_dir(),
             host_name: host_name(),
+            suspend: toolbox_clipboard::SuspendSettings {
+                auto: config.suspend.auto,
+                processes: config.suspend.processes.clone(),
+                uu_child: config.suspend.uu_child.clone(),
+                recover_delay: std::time::Duration::from_secs(
+                    config.suspend.recover_delay_seconds.min(60),
+                ),
+            },
             silence_timeout: std::time::Duration::from_secs(45),
         };
         match toolbox_clipboard::start(settings) {
@@ -103,7 +111,17 @@ impl ClipboardWorker {
             }),
             cache_bytes: status.cache_bytes,
             last_error: status.last_error.or_else(|| self.last_error.clone()),
+            suspended: status.suspended,
+            suspended_by: status.suspended_by,
         })
+    }
+
+    /// Pause or resume the bridge. A disabled bridge ignores this because
+    /// there is nothing to synchronize.
+    pub fn set_manual_suspend(&self, paused: bool) {
+        if let Some(handle) = &self.handle {
+            handle.set_manual_suspend(paused);
+        }
     }
 
     /// Delete received files. Without a running bridge the cache directory is

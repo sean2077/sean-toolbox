@@ -72,6 +72,23 @@ is ignored. Content is also debounced for 200 ms and compared by fingerprint
 against the last sent/received item. There is no periodic send: an idle bridge
 only exchanges pings.
 
+## Suspension while another synchronizer is active
+
+`remote_session` watches a configurable process list and pauses both directions
+while a remote-control session owns the desktop clipboard: no local selection is
+read or sent, and peer content is discarded without being written locally. The
+TCP connection and heartbeat stay up. UU Remote's host process is long-lived, so
+`uuremote-server` only counts while it has an `ffmpeg` encoder child (a connected
+viewer); other remote tools match by process name. A session ending keeps the
+bridge paused for `recover_delay` (default 3 s) before resuming. Copies made while
+paused are dropped, not replayed on resume.
+
+The library default for `Settings::suspend` is detection **off** so tests and
+embedders are unaffected by remote-control processes on the build machine; the
+host enables it from `config.json`. `Handle::set_manual_suspend` pauses/resumes
+at runtime and waits briefly for the worker so an IPC response carries the new
+status. `Status.suspended` and `Status.suspended_by` expose the state.
+
 ## Configuration and key
 
 `toolbox-core` stores the `clipboard` section in the normal `config.json`. A

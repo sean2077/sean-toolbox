@@ -23,6 +23,7 @@ use crate::model::{
 };
 use crate::notify::{Notifier, desktop_notifier};
 use crate::protocol::{BlobKind, Message, PROTO_VERSION};
+use crate::remote_session::SuspendSettings;
 use crate::sync::LoopGuard;
 use crate::transfer::{
     self, CACHE_MAX_AGE, CACHE_MAX_BYTES, FileSink, cache_root, cleanup_cache, clear_cache,
@@ -78,6 +79,9 @@ pub struct Settings {
     pub key_path: PathBuf,
     pub cache_dir: PathBuf,
     pub host_name: String,
+    /// Pause the bridge while another clipboard synchronizer is controlling
+    /// this desktop. The library default is off; the application enables it.
+    pub suspend: SuspendSettings,
     /// Close the connection when nothing arrives for this long. Both sides
     /// send a ping every [`HEARTBEAT`], so a live peer is never silent.
     pub silence_timeout: Duration,
@@ -100,6 +104,7 @@ impl Settings {
             key_path,
             cache_dir,
             host_name: host_name.into(),
+            suspend: SuspendSettings::default(),
             silence_timeout: Duration::from_secs(45),
         }
     }
@@ -126,6 +131,11 @@ pub struct Status {
     pub transfer: Option<Transfer>,
     pub cache_bytes: u64,
     pub last_error: Option<String>,
+    /// The bridge is paused: nothing is read from or written to the local
+    /// clipboard, and peer content is discarded.
+    pub suspended: bool,
+    /// `manual` or the detected remote-control process name.
+    pub suspended_by: Option<String>,
 }
 
 pub struct Handle {
@@ -143,6 +153,19 @@ impl Handle {
     /// Remove received files, except a transfer that is still running.
     pub fn clear_cache(&self) {
         let _ = self.events.send(Event::ClearCache);
+    }
+
+    /// Pause or resume synchronizing with the peer. Pausing discards the
+    /// current debounce state so a resume never replays what was copied while
+    /// another clipboard synchronizer owned the selection.
+    ///
+    /// Waits briefly for the service to apply the change so an IPC response
+    /// can carry the updated status instead of the previous one.
+    pub fn set_manual_suspend(&self, paused: bool) {
+        let (ack, applied) = mpsc::channel();
+        if self.events.send(Event::ManualSuspend(paused, ack)).is_ok() {
+            let _ = applied.recv_timeout(Duration::from_millis(250));
+        }
     }
 
     pub fn stop(&mut self) {
@@ -178,6 +201,9 @@ pub fn start_with_notifier(
 ) -> Result<Handle, String> {
     let key =
         crypto::read_key(&settings.key_path).map_err(|error| format!("clipboard key: {error}"))?;
+    // Start paused when a session is already active: otherwise the backend's
+    // initial selection event could be sent before the watcher reports it.
+    let initial_remote = crate::remote_session::detect_now(&settings.suspend);
     let status = Arc::new(Mutex::new(Status {
         enabled: true,
         role: settings.role.as_str().into(),
@@ -185,6 +211,8 @@ pub fn start_with_notifier(
             Role::Connect => settings.peer.clone(),
             Role::Listen => settings.listen.clone(),
         },
+        suspended: initial_remote.is_some(),
+        suspended_by: initial_remote.clone(),
         ..Default::default()
     }));
     let stop = Arc::new(AtomicBool::new(false));
@@ -200,6 +228,14 @@ pub fn start_with_notifier(
             }
         }
     });
+
+    if settings.suspend.auto {
+        let remote_events = events.clone();
+        let remote_stop = stop.clone();
+        crate::remote_session::watch(settings.suspend.clone(), remote_stop, move |session| {
+            let _ = remote_events.send(Event::RemoteSession(session));
+        });
+    }
 
     let need_link = Arc::new(AtomicBool::new(true));
     match settings.role {
@@ -233,6 +269,10 @@ pub fn start_with_notifier(
         remote_files: None,
         local_files: None,
         send_job: None,
+        suspend: SuspendState {
+            remote: initial_remote,
+            ..Default::default()
+        },
         last_cleanup: Instant::now(),
     };
     let thread = thread::spawn(move || worker.run(inbox));
@@ -255,6 +295,8 @@ enum Event {
     Frame(u64, Frame),
     Closed(u64, String),
     SendDone(String, Result<(), String>),
+    RemoteSession(Option<String>),
+    ManualSuspend(bool, Sender<()>),
     ClearCache,
     Stop,
 }
@@ -545,6 +587,32 @@ struct SendJob {
     cancel: Arc<AtomicBool>,
 }
 
+/// Automatic and manual suspension. `remote` keeps the detected process name
+/// while `resume_at` runs down, so the status stays readable during recovery.
+#[derive(Default)]
+struct SuspendState {
+    manual: bool,
+    /// The session the watcher currently reports.
+    remote: Option<String>,
+    /// The last session name, kept during the recovery delay for display.
+    last_reason: Option<String>,
+    resume_at: Option<Instant>,
+}
+
+impl SuspendState {
+    fn active(&self) -> bool {
+        self.manual || self.remote.is_some() || self.resume_at.is_some()
+    }
+
+    fn reason(&self) -> Option<&str> {
+        if self.manual {
+            Some("manual")
+        } else {
+            self.remote.as_deref().or(self.last_reason.as_deref())
+        }
+    }
+}
+
 struct Worker {
     settings: Settings,
     backend: Box<dyn Backend>,
@@ -560,6 +628,7 @@ struct Worker {
     remote_files: Option<RemoteFiles>,
     local_files: Option<LocalFiles>,
     send_job: Option<SendJob>,
+    suspend: SuspendState,
     last_cleanup: Instant,
 }
 
@@ -608,6 +677,11 @@ impl Worker {
                 }
             }
             Event::SendDone(id, result) => self.send_done(id, result),
+            Event::RemoteSession(session) => self.remote_session_changed(session),
+            Event::ManualSuspend(paused, ack) => {
+                self.set_manual_suspend(paused);
+                let _ = ack.send(());
+            }
             Event::ClearCache => {
                 let active = self.active_temp();
                 let left = clear_cache(&self.settings.cache_dir, active.as_deref());
@@ -643,7 +717,19 @@ impl Worker {
             connection.last_ping = now;
             let _ = connection.send(&Message::Ping);
         }
-        if let Some((content, _)) = self.guard.ready(now) {
+        if self
+            .suspend
+            .resume_at
+            .is_some_and(|resume_at| now >= resume_at)
+            && !self.suspend.manual
+        {
+            self.suspend.remote = None;
+            self.suspend.resume_at = None;
+            self.resume_sync();
+        }
+        if !self.suspend.active()
+            && let Some((content, _)) = self.guard.ready(now)
+        {
             self.publish(content);
         }
         if let Some(files) = &mut self.remote_files
@@ -666,6 +752,83 @@ impl Worker {
         if now.duration_since(self.last_cleanup) >= CLEANUP_INTERVAL {
             self.cleanup();
         }
+    }
+
+    /// A remote-control process appeared or went away. A disappeared session
+    /// keeps the bridge paused for `recover_delay`, so a process restart or a
+    /// codec switch does not briefly resume it in the middle of a session.
+    fn remote_session_changed(&mut self, session: Option<String>) {
+        match session {
+            Some(session) => {
+                let was_active = self.suspend.active();
+                self.suspend.last_reason = Some(session.clone());
+                self.suspend.remote = Some(session);
+                self.suspend.resume_at = None;
+                if !was_active {
+                    self.begin_suspend();
+                }
+            }
+            None => {
+                if self.suspend.remote.take().is_some() && !self.suspend.manual {
+                    self.suspend.resume_at =
+                        Some(Instant::now() + self.settings.suspend.recover_delay);
+                }
+            }
+        }
+        self.refresh_suspend_status();
+    }
+
+    fn set_manual_suspend(&mut self, paused: bool) {
+        if paused {
+            let was_active = self.suspend.active();
+            self.suspend.manual = true;
+            self.suspend.resume_at = None;
+            if !was_active {
+                self.begin_suspend();
+            }
+        } else {
+            self.suspend.manual = false;
+            if self.suspend.remote.is_none() && self.suspend.resume_at.is_none() {
+                self.resume_sync();
+            }
+        }
+        self.refresh_suspend_status();
+    }
+
+    /// Stop touching the local clipboard in either direction. Pending sends,
+    /// incoming payloads and announced files from the other side are dropped,
+    /// so a later resume cannot replay what another synchronizer owned.
+    fn begin_suspend(&mut self) {
+        self.guard.reset();
+        self.incoming = None;
+        self.cancel_send_job();
+        self.local_files = None;
+        self.drop_remote_files("clipboard sync paused");
+        if let Some(reason) = self.suspend.reason() {
+            eprintln!("Sean Toolbox clipboard: paused ({reason})");
+        }
+    }
+
+    fn resume_sync(&mut self) {
+        if self.suspend.active() {
+            return;
+        }
+        self.suspend.last_reason = None;
+        self.guard.reset();
+        self.incoming = None;
+        self.local_files = None;
+        self.drop_remote_files("clipboard sync resumed");
+        self.refresh_suspend_status();
+        eprintln!("Sean Toolbox clipboard: resumed");
+    }
+
+    fn refresh_suspend_status(&self) {
+        let suspended = self.suspend.active();
+        let suspended_by = self.suspend.reason().map(str::to_owned);
+        set_status(&self.status, |status| {
+            status.suspended = suspended;
+            status.suspended_by = suspended_by;
+        });
     }
 
     fn cleanup(&mut self) {
@@ -785,6 +948,9 @@ impl Worker {
     // -- local clipboard -------------------------------------------------------
 
     fn local_change(&mut self) {
+        if self.suspend.active() {
+            return;
+        }
         let Ok(read) = self.backend.read() else {
             return;
         };
@@ -800,7 +966,7 @@ impl Worker {
 
     /// Send a debounced local copy to the peer.
     fn publish(&mut self, content: ClipboardContent) {
-        if !self.connected_peer() {
+        if self.suspend.active() || !self.connected_peer() {
             return;
         }
         let result = if content.files.is_empty() {
@@ -942,6 +1108,11 @@ impl Worker {
 
     fn frame(&mut self, frame: Frame) -> Result<(), String> {
         let message = Message::from_frame(&frame).map_err(|error| error.to_string())?;
+        // Keep the connection alive while paused, but discard clipboard and
+        // file traffic: writing it would overwrite the other synchronizer.
+        if self.suspend.active() && !matches!(message, Message::Hello { .. } | Message::Ping) {
+            return Ok(());
+        }
         match message {
             Message::Hello { proto_version, .. } => {
                 if proto_version != PROTO_VERSION {

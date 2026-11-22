@@ -394,6 +394,127 @@ fn a_wrong_key_never_connects() {
 }
 
 #[test]
+fn manual_suspension_discards_both_directions_and_resume_does_not_replay() {
+    let pair = Pair::start();
+    pair.listen.set_manual_suspend(true);
+    assert!(wait_until(Duration::from_secs(2), || {
+        let status = pair.listen.status();
+        status.suspended && status.suspended_by.as_deref() == Some("manual")
+    }));
+
+    pair.listen_clip.set_local(text("paused-local"));
+    pair.connect_clip.set_local(text("paused-peer"));
+    thread::sleep(Duration::from_millis(1500));
+    assert!(
+        !pair.connect_clip.writes().contains(&text("paused-local")),
+        "a local copy must not be sent while paused"
+    );
+    assert!(
+        !pair.listen_clip.writes().contains(&text("paused-peer")),
+        "peer content must not be written while paused"
+    );
+    assert_eq!(pair.listen.status().sent_count, 0);
+    assert_eq!(pair.listen.status().received_count, 0);
+
+    pair.listen.set_manual_suspend(false);
+    assert!(wait_until(Duration::from_secs(2), || !pair
+        .listen
+        .status()
+        .suspended));
+    thread::sleep(Duration::from_millis(800));
+    assert!(
+        !pair.connect_clip.writes().contains(&text("paused-local")),
+        "resume must not replay a pre-pause local copy"
+    );
+    assert!(
+        !pair.listen_clip.writes().contains(&text("paused-peer")),
+        "resume must not replay pre-pause peer content"
+    );
+
+    pair.listen_clip.set_local(text("after-resume"));
+    assert!(wait_until(Duration::from_secs(5), || pair
+        .connect_clip
+        .writes()
+        .contains(&text("after-resume"))));
+}
+
+#[test]
+fn a_detected_remote_session_suspends_until_the_recovery_delay_ends() {
+    let pair = Pair::start_with(|settings| {
+        settings.suspend.recover_delay = Duration::from_millis(150);
+    });
+    let _ = pair
+        .listen
+        .events
+        .send(Event::RemoteSession(Some("uuremote-server".into())));
+    assert!(wait_until(Duration::from_secs(2), || {
+        let status = pair.listen.status();
+        status.suspended && status.suspended_by.as_deref() == Some("uuremote-server")
+    }));
+
+    let _ = pair.listen.events.send(Event::RemoteSession(None));
+    thread::sleep(Duration::from_millis(20));
+    assert!(
+        pair.listen.status().suspended,
+        "the recovery delay must keep the bridge paused"
+    );
+    assert!(wait_until(Duration::from_secs(2), || !pair
+        .listen
+        .status()
+        .suspended));
+}
+
+#[test]
+fn manual_resume_does_not_override_an_active_remote_session() {
+    let pair = Pair::start_with(|settings| {
+        settings.suspend.recover_delay = Duration::from_millis(50);
+    });
+    let _ = pair
+        .listen
+        .events
+        .send(Event::RemoteSession(Some("uuremote-server".into())));
+    assert!(wait_until(Duration::from_secs(2), || pair
+        .listen
+        .status()
+        .suspended));
+    pair.listen.set_manual_suspend(true);
+    assert!(wait_until(Duration::from_secs(2), || {
+        pair.listen.status().suspended_by.as_deref() == Some("manual")
+    }));
+    pair.listen.set_manual_suspend(false);
+    thread::sleep(Duration::from_millis(50));
+    let status = pair.listen.status();
+    assert!(status.suspended);
+    assert_eq!(status.suspended_by.as_deref(), Some("uuremote-server"));
+}
+
+#[test]
+fn manual_resume_after_the_session_ended_clears_the_pause() {
+    let pair = Pair::start_with(|settings| {
+        settings.suspend.recover_delay = Duration::from_millis(50);
+    });
+    let _ = pair
+        .listen
+        .events
+        .send(Event::RemoteSession(Some("uuremote-server".into())));
+    assert!(wait_until(Duration::from_secs(2), || pair
+        .listen
+        .status()
+        .suspended));
+    pair.listen.set_manual_suspend(true);
+    let _ = pair.listen.events.send(Event::RemoteSession(None));
+    thread::sleep(Duration::from_millis(100));
+    assert!(pair.listen.status().suspended);
+    assert_eq!(pair.listen.status().suspended_by.as_deref(), Some("manual"));
+
+    pair.listen.set_manual_suspend(false);
+    assert!(wait_until(Duration::from_secs(2), || !pair
+        .listen
+        .status()
+        .suspended));
+}
+
+#[test]
 fn files_over_the_limit_are_not_announced() {
     let pair = Pair::start_with(|settings| settings.max_transfer_bytes = 1024);
     let source = tempfile::tempdir().unwrap();

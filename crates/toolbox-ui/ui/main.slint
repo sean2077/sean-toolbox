@@ -78,6 +78,7 @@ component ShortcutEditor inherits Rectangle {
 // clipboard page. Both bind the same AppWindow properties.
 component ClipboardSettingsCard inherits Card {
     in-out property <bool> sync-enabled;
+    in-out property <bool> auto-suspend;
     in-out property <int> role;
     in-out property <string> listen;
     in-out property <string> peer;
@@ -91,6 +92,12 @@ component ClipboardSettingsCard inherits Card {
             title: @tr("ui.clipboard.enable_title" => "Enable cross-machine clipboard");
             description: @tr("ui.clipboard.enable_hint" => "Uses an encrypted Noise connection. The key file is separate from config.json and is never shown here.");
             Switch { checked <=> root.sync-enabled; accessible-label: @tr("ui.clipboard.enable_title" => "Enable cross-machine clipboard"); enabled: root.editable; toggled => { root.changed(); } }
+        }
+        Divider {}
+        SettingRow {
+            title: @tr("ui.clipboard.auto_suspend_title" => "Pause during remote control");
+            description: @tr("ui.clipboard.auto_suspend_hint" => "While a remote-control session is active, stop reading and writing the clipboard so the two synchronizers do not overwrite each other. The process list is in config.json.");
+            Switch { checked <=> root.auto-suspend; accessible-label: @tr("ui.clipboard.auto_suspend_title" => "Pause during remote control"); enabled: root.editable; toggled => { root.changed(); } }
         }
         Divider {}
         SettingRow {
@@ -208,6 +215,7 @@ export component AppWindow inherits Window {
     in-out property <string> setting-idle: "0";
     in-out property <string> setting-code-path;
     in-out property <bool> setting-clipboard-enabled: false;
+    in-out property <bool> setting-clipboard-auto-suspend: true;
     in-out property <int> setting-clipboard-role: 0;
     in-out property <string> setting-clipboard-listen;
     in-out property <string> setting-clipboard-peer;
@@ -226,6 +234,8 @@ export component AppWindow inherits Window {
     in-out property <string> clipboard-transfer-progress;
     in-out property <string> clipboard-cache-size: "0 KB";
     in-out property <string> clipboard-status-error;
+    in-out property <bool> clipboard-suspended: false;
+    in-out property <string> clipboard-suspend-reason;
     in-out property <string> settings-query;
     in-out property <string> setting-hotkey-error;
     in-out property <string> setting-idle-error;
@@ -272,6 +282,7 @@ export component AppWindow inherits Window {
     callback cancel-import;
     callback refresh-status;
     callback clear-clipboard-cache;
+    callback set-clipboard-suspended(bool);
     callback confirm-action(bool);
     callback open-link(int);
 
@@ -1023,6 +1034,7 @@ export component AppWindow inherits Window {
                                             SettingsHeading { title: @tr("ui.navigation.clipboard" => "Cross-machine clipboard"); description: root.clipboard-connected ? (@tr("ui.clipboard.connected" => "Connected")) + " · " + root.clipboard-peer-label : (@tr("ui.clipboard.disconnected" => "Disconnected")) + (root.clipboard-peer-label == "" ? "" : " · " + root.clipboard-peer-label); }
                                             ClipboardSettingsCard {
                                             sync-enabled <=> root.setting-clipboard-enabled;
+                                            auto-suspend <=> root.setting-clipboard-auto-suspend;
                                             role <=> root.setting-clipboard-role;
                                             listen <=> root.setting-clipboard-listen;
                                             peer <=> root.setting-clipboard-peer;
@@ -1090,6 +1102,7 @@ export component AppWindow inherits Window {
                                     if !root.clipboard-loaded: Caption { text: @tr("ui.clipboard.checking_status" => "Checking clipboard status…"); }
                                     ClipboardSettingsCard {
                                             sync-enabled <=> root.setting-clipboard-enabled;
+                                            auto-suspend <=> root.setting-clipboard-auto-suspend;
                                             role <=> root.setting-clipboard-role;
                                             listen <=> root.setting-clipboard-listen;
                                             peer <=> root.setting-clipboard-peer;
@@ -1109,6 +1122,27 @@ export component AppWindow inherits Window {
                                                     spacing: 8px;
                                                     Rectangle { width: 8px; height: 8px; border-radius: 4px; background: root.clipboard-connected ? Theme.success : Theme.muted; }
                                                     Text { text: root.clipboard-connected ? (@tr("ui.clipboard.connected" => "Connected")) : (@tr("ui.clipboard.disconnected" => "Disconnected")); color: Theme.secondary; font-size: 13px; vertical-alignment: center; }
+                                                }
+                                            }
+                                            Divider {}
+                                            SettingRow {
+                                                title: @tr("ui.clipboard.sync_state_title" => "Sync state");
+                                                description: root.clipboard-suspended ? @tr("ui.clipboard.sync_paused_hint" => "Paused so the remote-control clipboard is not overwritten.") : @tr("ui.clipboard.sync_active_hint" => "Local copies are synchronized with the other PC.");
+                                                HorizontalLayout {
+                                                    spacing: 8px;
+                                                    Text {
+                                                        text: root.clipboard-suspend-reason == "manual" ? @tr("ui.clipboard.manual_pause" => "Manual pause") : root.clipboard-suspend-reason;
+                                                        color: Theme.secondary; font-size: 13px; vertical-alignment: center;
+                                                        visible: root.clipboard-suspended;
+                                                    }
+                                                    ActionButton {
+                                                        text: root.clipboard-suspended ? @tr("ui.clipboard.resume_sync" => "Resume sync") : @tr("ui.clipboard.pause_sync" => "Pause sync");
+                                                        enabled: !root.diagnostic-loading;
+                                                        // An automatic pause stays until the remote session ends;
+                                                        // turn off "Pause during remote control" to override it.
+                                                        visible: !root.clipboard-suspended || root.clipboard-suspend-reason == "manual";
+                                                        clicked => { root.set-clipboard-suspended(!root.clipboard-suspended); }
+                                                    }
                                                 }
                                             }
                                             Divider {}

@@ -93,6 +93,15 @@ impl LoopGuard {
     pub fn clear(&mut self) {
         self.pending = None;
     }
+
+    /// Forget sent, received and pending content. Used while the bridge is
+    /// paused: a resume must not treat pre-pause content as already handled or
+    /// replay a pending copy into a clipboard another program now owns.
+    pub fn reset(&mut self) {
+        self.last_sent = None;
+        self.last_received = None;
+        self.pending = None;
+    }
 }
 
 #[cfg(test)]
@@ -184,6 +193,19 @@ mod tests {
         let now = Instant::now();
         guard.observe(text("x"), now);
         guard.observe(ClipboardContent::default(), now);
+        assert!(guard.ready(now + Duration::from_secs(1)).is_none());
+    }
+
+    #[test]
+    fn reset_drops_pending_and_history() {
+        let mut guard = LoopGuard::new();
+        let now = Instant::now();
+        guard.note_sent(&text("sent"));
+        guard.note_received(&text("received"));
+        guard.observe(text("pending"), now);
+        guard.reset();
+        assert_eq!(guard.last_sent(), None);
+        assert_eq!(guard.last_received(), None);
         assert!(guard.ready(now + Duration::from_secs(1)).is_none());
     }
 

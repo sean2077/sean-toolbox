@@ -837,6 +837,7 @@ impl Controller {
                 .to_string()
                 .into(),
         );
+        ui.set_setting_clipboard_auto_suspend(config.clipboard.suspend.auto);
         ui.set_clipboard_error("".into());
         ui.set_setting_code_path(
             config
@@ -1470,6 +1471,7 @@ impl Controller {
             .parse::<u64>()
             .map_err(|_| UiText::from("Maximum transfer must be a whole number of MiB."))?;
         config.clipboard.max_transfer_bytes = limit_mib.saturating_mul(1024 * 1024);
+        config.clipboard.suspend.auto = ui.get_setting_clipboard_auto_suspend();
         config.check()?;
         Ok(config)
     }
@@ -2246,6 +2248,14 @@ impl Controller {
         self.send(Work::ClearClipboardCache);
     }
 
+    fn set_clipboard_suspended(&self, paused: bool) {
+        if self.ui().get_diagnostic_loading() {
+            return;
+        }
+        self.ui().set_diagnostic_loading(true);
+        self.send(Work::SetClipboardSuspended(paused));
+    }
+
     fn refresh_status(&self) {
         if self.ui().get_diagnostic_loading() {
             return;
@@ -2307,6 +2317,8 @@ impl Controller {
         );
         ui.set_clipboard_cache_size(format_bytes(status.cache_bytes).into());
         ui.set_clipboard_status_error(status.last_error.clone().unwrap_or_default().into());
+        ui.set_clipboard_suspended(status.suspended);
+        ui.set_clipboard_suspend_reason(status.suspended_by.clone().unwrap_or_default().into());
         self.state.borrow_mut().clipboard_status = Some(status);
     }
 
@@ -2788,6 +2800,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.on_cancel_import(|| with_controller(Controller::cancel_import));
     ui.on_refresh_status(|| with_controller(Controller::refresh_status));
     ui.on_clear_clipboard_cache(|| with_controller(Controller::clear_clipboard_cache));
+    ui.on_set_clipboard_suspended(|paused| {
+        with_controller(|controller| controller.set_clipboard_suspended(paused))
+    });
     ui.on_confirm_action(|yes| with_controller(|c| c.confirm(yes)));
     ui.on_open_link(|index| with_controller(|c| c.send(Work::Link(index))));
     skills::connect_callbacks(&ui);

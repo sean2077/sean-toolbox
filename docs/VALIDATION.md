@@ -1141,3 +1141,21 @@ Deskflow 切屏后粘贴和 Windows toast 外观。`wl-clipboard 2.2.1` 不能�
 - 命令行实测：u26 → w11 中文文字，w11 在交互会话用 `Get-Clipboard` 读取内容一致，约 50 ms（与读本机剪贴板相当）；w11 → u26 文字进入 Klipper。w11 `Set-Clipboard -Path` 复制目录 + 5 MB 文件后，u26 `transfer` 为空、`cache_bytes` 保持 0，粘贴前无传输。`clipboard clear-cache` 将 w11 缓存从 221 MB 清到 0。
 - 用户 GUI 验收通过：两向文字、飞书带格式文字、两向截图（含 Claude Code 粘贴）、小文件一次粘贴、100 MB 文件“第一次粘贴开始传输、通知完成后再粘贴”。
 - 测试期间 w11 的剪贴板曾被未知进程持续占用约数分钟（任何程序 `OpenClipboard` 均失败，退出工具箱后依旧），随后自行恢复；新版在写入失败时发通知并记录 `last_error`。
+
+## 2026-11-22：远控会话期间暂停跨机剪贴板（u26 Kubuntu 26.04 / KWin 6.6.7 + UU Remote 0.2.64）
+
+- 分支 `feat/clipboard-suspend-on-remote`。问题：UU 远程（KDE 下走 `org.freedesktop.portal.Clipboard`）与本工具箱（`ext_data_control`）同时把对方的 selection 写入当成“本机复制”转发，远程端剪贴板被另一台机器的内容覆盖。
+- 实现：新增 `remote_session` 进程探测；`uuremote-server` 仅在存在 `ffmpeg` 子进程时算活跃，其余远控按进程名；暂停期间双向丢弃 selection/Offer/Chunk/文件，保持 TCP 与心跳；恢复延迟默认 3 秒，恢复不补发；`clipboard pause|resume` 与剪贴板页按钮只控制手动暂停，自动暂停持续到会话结束。
+- 检查：
+
+| 检查 | 结果 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --locked --workspace --all-targets -- -D warnings` | 通过（`SaveConfig.config` 改为 `Box<Config>`，避免 IPC 事件增大） |
+| `cargo test -p toolbox-clipboard` | 61 通过、0 失败、1 ignored；新增手动、自动、恢复延迟和互斥用例 |
+| `cargo test --locked --workspace` | 通过 |
+| `cargo check -p toolbox-clipboard --target x86_64-pc-windows-msvc` | 通过（ToolHelp 进程枚举仅编译检查，未运行） |
+| `python scripts/translations.py check`（extractor 1.18.1） | 通过 |
+
+- u26 真机：12:54 替换 `~/.local/opt/sean-toolbox/` 两个二进制并重启用户单元；`clipboard status` 显示 `connected=true`、`suspended=true`、`suspended_by=uuremote-server`，6 秒后状态稳定。`clipboard pause` 后 `suspended_by=manual`；`clipboard resume` 后自动会话仍保持暂停并回到 `uuremote-server`。此时 `sent_count=0`，本机 selection 不会被转发给 w11。
+- 未覆盖：用户在 UU viewer 上做双向复制/粘贴的 GUI 验收；UU 会话真正结束后的自动恢复（仅单元测试模拟）；Windows 真机的 `GameViewer.exe` 检测。以上需在对应桌面环境补测。

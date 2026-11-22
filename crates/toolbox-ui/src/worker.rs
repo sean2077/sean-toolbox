@@ -97,6 +97,7 @@ pub enum Work {
     Toggle(String),
     Status,
     ClearClipboardCache,
+    SetClipboardSuspended(bool),
     GetSkills,
     Skills(SkillsCommand),
     ShortcutCapture {
@@ -176,7 +177,7 @@ pub fn run(receiver: Receiver<Work>, latest_query: Arc<AtomicU64>) {
                 kind,
             } => Event::Saved {
                 response: toolbox_ipc::call(HostCommand::SaveConfig {
-                    config: config.clone(),
+                    config: Box::new(config.clone()),
                     expected_revision: revision,
                 })
                 .and_then(successful),
@@ -255,6 +256,14 @@ pub fn run(receiver: Receiver<Work>, latest_query: Arc<AtomicU64>) {
             Work::ClearClipboardCache => Event::Status(
                 toolbox_ipc::call(HostCommand::Clipboard(ClipboardCommand::ClearCache))
                     .and_then(successful),
+            ),
+            Work::SetClipboardSuspended(paused) => Event::Status(
+                toolbox_ipc::call(HostCommand::Clipboard(if paused {
+                    ClipboardCommand::Pause
+                } else {
+                    ClipboardCommand::Resume
+                }))
+                .and_then(successful),
             ),
             Work::GetSkills => {
                 Event::SkillsLoaded(toolbox_ipc::call(HostCommand::GetSkills).and_then(successful))
