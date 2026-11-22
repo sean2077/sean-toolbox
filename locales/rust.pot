@@ -91,6 +91,18 @@ msgctxt "rust.tray_diagnostics"
 msgid "Diagnostics & about"
 msgstr ""
 
+msgctxt "rust.tray_clipboard"
+msgid "Cross-machine clipboard"
+msgstr ""
+
+msgctxt "rust.tray_clipboard_pause"
+msgid "Pause clipboard sync"
+msgstr ""
+
+msgctxt "rust.tray_clipboard_resume"
+msgid "Resume clipboard sync"
+msgstr ""
+
 msgctxt "rust.skills_detail"
 msgid ""
 "Directory: {directory}\n"

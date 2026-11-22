@@ -588,6 +588,15 @@ impl App {
                 ),
                 ("windows", messages::tray_windows().render(locale)),
                 ("skills", messages::common_skills().render(locale)),
+                ("clipboard", messages::tray_clipboard().render(locale)),
+                (
+                    "clipboard_pause",
+                    messages::tray_clipboard_pause().render(locale),
+                ),
+                (
+                    "clipboard_resume",
+                    messages::tray_clipboard_resume().render(locale),
+                ),
                 ("settings", messages::common_settings().render(locale)),
                 ("diagnostics", messages::tray_diagnostics().render(locale)),
                 ("quit", messages::tray_quit().render(locale)),
@@ -718,6 +727,20 @@ impl ApplicationHandler<Event> for App {
                 }
             }
             Event::Menu(event) => {
+                let locale = Locale::from_tag(&self.config.general.language);
+                match event.id.0.as_str() {
+                    "clipboard_pause" => {
+                        self.clipboard.set_manual_suspend(true);
+                        self.status.last_action = messages::tray_clipboard_pause().render(locale);
+                        return;
+                    }
+                    "clipboard_resume" => {
+                        self.clipboard.set_manual_suspend(false);
+                        self.status.last_action = messages::tray_clipboard_resume().render(locale);
+                        return;
+                    }
+                    _ => {}
+                }
                 let page = match event.id.0.as_str() {
                     "projects" => UiPage::Projects,
                     "windows" => UiPage::Windows,

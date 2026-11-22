@@ -89,6 +89,13 @@ host enables it from `config.json`. `Handle::set_manual_suspend` pauses/resumes
 at runtime and waits briefly for the worker so an IPC response carries the new
 status. `Status.suspended` and `Status.suspended_by` expose the state.
 
+Default probe names cover host-side processes only. Viewer executables such as
+`uuremote-viewer` and `GameViewer.exe` are excluded: a machine used as a viewer
+still needs this bridge. On Windows, UU's official host service runs even when
+nobody is connected, so automatic host detection is ambiguous; use the tray
+"Pause clipboard sync"/"Resume clipboard sync" items or `clipboard
+pause|resume` before and after a controlled session.
+
 Suspension prevents two working bridges from overwriting each other; it cannot
 fix a broken peer. As of 2026-11-22, UU Remote's official Windows viewer 4.48
 and the unofficial Linux host 0.2.64 still fail text clipboard in both
