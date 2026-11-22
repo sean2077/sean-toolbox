@@ -89,6 +89,14 @@ host enables it from `config.json`. `Handle::set_manual_suspend` pauses/resumes
 at runtime and waits briefly for the worker so an IPC response carries the new
 status. `Status.suspended` and `Status.suspended_by` expose the state.
 
+Suspension prevents two working bridges from overwriting each other; it cannot
+fix a broken peer. As of 2026-11-22, UU Remote's official Windows viewer 4.48
+and the unofficial Linux host 0.2.64 still fail text clipboard in both
+directions (the host offers a rich format list, the viewer only acknowledges it
+and never requests data; the viewer sends nothing back). See upstream issue
+#211. On such a combination, disable automatic suspension and let this bridge
+own the clipboard instead.
+
 ## Configuration and key
 
 `toolbox-core` stores the `clipboard` section in the normal `config.json`. A
