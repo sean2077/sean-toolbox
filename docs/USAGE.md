@@ -195,12 +195,14 @@ sean-toolbox clipboard keygen
 UU 远程、ToDesk、AnyDesk、RustDesk、VNC 等远控软件自带剪贴板同步。它们和本工具箱同时运行时，双方都会把对方的写入当成"本机复制"再转发，导致远程端粘贴到的内容被另一台电脑的剪贴板覆盖。工具箱因此提供自动让位：
 
 - 检测到名单中的远控进程时，暂停双向剪贴板同步：不读本机 selection，不把对端内容写进本机；连接和心跳保持。
-- UU 远程的主机进程常年驻留，只有连接了 viewer 时才会启动 `ffmpeg` 编码子进程，所以 `uuremote-server` 只在存在 `ffmpeg` 子进程时才算活跃。其他远控进程按进程名判断。
+- UU 远程的主机进程常年驻留，只有连接了 viewer 时才会启动 `ffmpeg` 编码子进程，所以 `uuremote-server` 只在存在 `ffmpeg` 子进程时才算活跃。其他远控进程按进程名判断。名单只包含被控端进程；`GameViewer.exe`、`uuremote-viewer` 这类控制端/viewer 进程不参与自动暂停，因为机器作为控制端时仍然需要本工具箱。
 - 远控会话消失后默认再等 3 秒恢复，避免编码器重启造成短暂恢复。暂停期间发生的复制全部丢弃，恢复时不补发，防止把旧剪贴板灌回本机。
 - 剪贴板页显示"同步状态"，可手动"暂停同步 / 恢复同步"；手动暂停不写入配置，重启后回到自动判断。自动暂停会持续到远控会话结束，界面上的"恢复同步"只撤销手动暂停；要覆盖自动判断，需关闭设置里的"远程控制时暂停"并保存（宿主会重启剪贴板服务）。
 - 这是"只保留一个同步器"的互斥：如果同时使用 Deskflow、Synergy、Input Leap 或 KDE Connect 的剪贴板功能，请直接关闭它们的剪贴板同步，本工具箱不会因为它们的常驻进程而暂停。
 
 自动检测默认开启，进程名单可在 `config.json` 的 `clipboard.suspend.processes` 中增删；`uu_child` 置空表示 `uuremote-server` 一运行就暂停。
+
+**Windows 被控端（例如让 Mac/Windows 控制 w11）**：UU 官方的被控服务常驻，进程名无法区分“正在被控”和“只是安装了 UU”，viewer 进程更不能作为暂停信号。因此在 w11 上保持 `suspend.auto=false`，在让另一台电脑控制 w11 之前，用托盘菜单的“暂停剪贴板同步”（或 `sean-toolbox clipboard pause`）手动暂停；会话结束后选“恢复剪贴板同步”或 `clipboard resume`。这样 UU 官方被控端与官方控制端之间的剪贴板可以正常使用，同时不会和本工具箱互踩。托盘菜单也提供“跨机剪贴板”页入口。
 
 **已知限制（2026-11-22）**：UU Remote 的 Linux host 0.2.64 与官方 Windows viewer 4.48 的文本剪贴板协议不兼容。host 发出 rich format offer 后 viewer 只回确认、不请求数据；反向 viewer 也不发送剪贴板。实测即使暂停本工具箱，UU 双向仍失败，本工具箱的自动让位只能防止两套同步器互踩，不能修复 UU 自身。遇到这种组合时，可关闭本工具箱的“远程控制时暂停”并让 Sean Toolbox 负责 u26 ↔ w11 剪贴板，或等待上游修复；上游跟踪：https://github.com/VallierDev/uu-remote-linux/issues/211
 
@@ -221,8 +223,6 @@ UU 远程、ToDesk、AnyDesk、RustDesk、VNC 等远控软件自带剪贴板同�
     "auto": true,
     "processes": [
       "uuremote-server",
-      "uuremote-viewer",
-      "GameViewer.exe",
       "todesk",
       "anydesk",
       "rustdesk",

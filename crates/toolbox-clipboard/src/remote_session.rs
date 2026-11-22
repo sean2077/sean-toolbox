@@ -18,13 +18,18 @@ use std::{
 };
 
 /// Names matched case-insensitively against the executable basename (`comm`
-/// on Linux, `szExeFile` on Windows). Deskflow, Synergy and KDE Connect are
-/// intentionally absent: they are long-lived local tools, and their clipboard
-/// feature should be switched off directly instead of pausing this bridge.
+/// on Linux, `szExeFile` on Windows). Only host-side processes belong here:
+/// viewer executables such as `uuremote-viewer` and `GameViewer.exe` are
+/// deliberately absent, because a machine used as a viewer still needs this
+/// bridge (for example w11 controlling u26). When the role is ambiguous — a
+/// Windows UU host keeps its service running even when nobody is connected —
+/// pause manually from the tray or with `clipboard pause`.
+///
+/// Deskflow, Synergy and KDE Connect are also absent: they are long-lived
+/// local tools, and their clipboard feature should be switched off directly
+/// instead of pausing this bridge.
 pub const DEFAULT_REMOTE_PROCESSES: &[&str] = &[
     "uuremote-server",
-    "uuremote-viewer",
-    "GameViewer.exe",
     "todesk",
     "anydesk",
     "rustdesk",
@@ -306,5 +311,17 @@ mod tests {
             detect(&settings, &[process(42, 1, "uuremote-server")]),
             Some("uuremote-server".into())
         );
+    }
+
+    #[test]
+    fn default_candidates_exclude_viewer_processes() {
+        for viewer in ["uuremote-viewer", "GameViewer.exe"] {
+            assert!(
+                !DEFAULT_REMOTE_PROCESSES
+                    .iter()
+                    .any(|name| name.eq_ignore_ascii_case(viewer)),
+                "{viewer} is a viewer role and must not auto-pause the host bridge"
+            );
+        }
     }
 }

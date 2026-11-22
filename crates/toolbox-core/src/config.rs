@@ -273,12 +273,11 @@ pub enum ClipboardRole {
 }
 
 /// Process names that keep the clipboard bridge paused while a remote-control
-/// session owns the desktop clipboard. Kept in sync with
-/// `toolbox_clipboard::remote_session::DEFAULT_REMOTE_PROCESSES`.
+/// session owns the desktop clipboard. Host-side processes only; viewer
+/// executables are excluded because a viewer still needs this bridge. Kept in
+/// sync with `toolbox_clipboard::remote_session::DEFAULT_REMOTE_PROCESSES`.
 pub const DEFAULT_REMOTE_PROCESSES: &[&str] = &[
     "uuremote-server",
-    "uuremote-viewer",
-    "GameViewer.exe",
     "todesk",
     "anydesk",
     "rustdesk",
