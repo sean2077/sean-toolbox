@@ -272,6 +272,52 @@ pub enum ClipboardRole {
     Connect,
 }
 
+/// Process names that keep the clipboard bridge paused while a remote-control
+/// session owns the desktop clipboard. Kept in sync with
+/// `toolbox_clipboard::remote_session::DEFAULT_REMOTE_PROCESSES`.
+pub const DEFAULT_REMOTE_PROCESSES: &[&str] = &[
+    "uuremote-server",
+    "uuremote-viewer",
+    "GameViewer.exe",
+    "todesk",
+    "anydesk",
+    "rustdesk",
+    "sunshine",
+    "teamviewer",
+    "wayvnc",
+    "krfb",
+    "x11vnc",
+    "parsecd.exe",
+];
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ClipboardSuspendConfig {
+    /// Pause automatically while a listed remote-control process is active.
+    pub auto: bool,
+    pub processes: Vec<String>,
+    /// Child processes that make a long-lived host count as active. UU Remote
+    /// starts `ffmpeg` only while a viewer is connected; set this to an empty
+    /// list to pause whenever `uuremote-server` is running.
+    pub uu_child: Vec<String>,
+    /// Keep the bridge paused this long after the session disappears.
+    pub recover_delay_seconds: u64,
+}
+
+impl Default for ClipboardSuspendConfig {
+    fn default() -> Self {
+        Self {
+            auto: true,
+            processes: DEFAULT_REMOTE_PROCESSES
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect(),
+            uu_child: vec!["ffmpeg".into()],
+            recover_delay_seconds: 3,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ClipboardSyncConfig {
@@ -280,6 +326,9 @@ pub struct ClipboardSyncConfig {
     pub listen: String,
     pub peer: String,
     pub max_transfer_bytes: u64,
+    /// Pause while another clipboard synchronizer is in control. The settings
+    /// live here so the UI and the host see the same configuration.
+    pub suspend: ClipboardSuspendConfig,
     /// `mode` from builds that offered a transfer-timing choice. It is read so
     /// existing files still load, ignored, and never written back.
     #[serde(rename = "mode", skip_serializing)]
@@ -294,6 +343,7 @@ impl Default for ClipboardSyncConfig {
             listen: "0.0.0.0:24802".into(),
             peer: String::new(),
             max_transfer_bytes: 1024 * 1024 * 1024,
+            suspend: ClipboardSuspendConfig::default(),
             legacy_mode: None,
         }
     }

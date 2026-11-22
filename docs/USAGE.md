@@ -190,6 +190,18 @@ sean-toolbox clipboard keygen
 - 任一边重新复制，都会替换掉对方剪贴板上还没传的文件，并取消正在进行的传输。复制之后又被改动过的文件不会发送。
 - 文字/HTML 单项上限 16 MiB，图片 64 MiB，超出的部分不同步并弹通知；文件总量上限由 `max_transfer_bytes` 决定（最大 1 GiB）。密码管理器标记的敏感内容不同步。本机历史继续用 Klipper / Win+V。
 
+### 远程控制时让位
+
+UU 远程、ToDesk、AnyDesk、RustDesk、VNC 等远控软件自带剪贴板同步。它们和本工具箱同时运行时，双方都会把对方的写入当成"本机复制"再转发，导致远程端粘贴到的内容被另一台电脑的剪贴板覆盖。工具箱因此提供自动让位：
+
+- 检测到名单中的远控进程时，暂停双向剪贴板同步：不读本机 selection，不把对端内容写进本机；连接和心跳保持。
+- UU 远程的主机进程常年驻留，只有连接了 viewer 时才会启动 `ffmpeg` 编码子进程，所以 `uuremote-server` 只在存在 `ffmpeg` 子进程时才算活跃。其他远控进程按进程名判断。
+- 远控会话消失后默认再等 3 秒恢复，避免编码器重启造成短暂恢复。暂停期间发生的复制全部丢弃，恢复时不补发，防止把旧剪贴板灌回本机。
+- 剪贴板页显示"同步状态"，可手动"暂停同步 / 恢复同步"；手动暂停不写入配置，重启后回到自动判断。自动暂停会持续到远控会话结束，界面上的"恢复同步"只撤销手动暂停；要覆盖自动判断，需关闭设置里的"远程控制时暂停"并保存（宿主会重启剪贴板服务）。
+- 这是"只保留一个同步器"的互斥：如果同时使用 Deskflow、Synergy、Input Leap 或 KDE Connect 的剪贴板功能，请直接关闭它们的剪贴板同步，本工具箱不会因为它们的常驻进程而暂停。
+
+自动检测默认开启，进程名单可在 `config.json` 的 `clipboard.suspend.processes` 中增删；`uu_child` 置空表示 `uuremote-server` 一运行就暂停。
+
 ### 配置
 
 在界面里改即可：“设置”页的“跨机剪贴板”分类，或左侧导航的“跨机剪贴板”页（快捷键 `6`，设置在上，连接状态、传输进度和缓存在下）。角色选“监听”时显示监听地址，选“连接”时显示对端地址；对端地址可以填 IP 或主机名加端口，主机名每次重连都会重新解析。改完点“保存设置”，宿主会按新配置重启剪贴板服务。
@@ -202,7 +214,26 @@ sean-toolbox clipboard keygen
   "role": "listen",
   "listen": "0.0.0.0:24802",
   "peer": "",
-  "max_transfer_bytes": 1073741824
+  "max_transfer_bytes": 1073741824,
+  "suspend": {
+    "auto": true,
+    "processes": [
+      "uuremote-server",
+      "uuremote-viewer",
+      "GameViewer.exe",
+      "todesk",
+      "anydesk",
+      "rustdesk",
+      "sunshine",
+      "teamviewer",
+      "wayvnc",
+      "krfb",
+      "x11vnc",
+      "parsecd.exe"
+    ],
+    "uu_child": ["ffmpeg"],
+    "recover_delay_seconds": 3
+  }
 }
 ```
 
@@ -213,9 +244,11 @@ w11 把 `role` 改成 `connect`，填 `peer`。旧版本写入的 `mode` 字段�
 ```text
 sean-toolbox clipboard status
 sean-toolbox clipboard clear-cache
+sean-toolbox clipboard pause
+sean-toolbox clipboard resume
 ```
 
-`status` 输出连接状态、最近收发、收发计数、文件传输进度、缓存占用和错误。u26 需要放行 `24802/tcp`，只允许私网来源（`scripts/kubuntu-setup.sh` 的 firewall 段已包含）；建议给 u26 做 DHCP 保留，或把 `peer` 填成能解析的主机名。
+`status` 输出连接状态、最近收发、收发计数、文件传输进度、缓存占用、暂停状态和错误；`suspended_by` 为 `manual` 或触发暂停的远控进程名。`pause` / `resume` 与界面按钮相同：`pause` 增加手动暂停，`resume` 只撤销手动暂停；自动检测到的远控会话仍会保持暂停。两者只影响当前运行，不修改配置。u26 需要放行 `24802/tcp`，只允许私网来源（`scripts/kubuntu-setup.sh` 的 firewall 段已包含）；建议给 u26 做 DHCP 保留，或把 `peer` 填成能解析的主机名。
 
 收到的文件先放在 `$XDG_CACHE_HOME/sean-toolbox/clipboard`（Linux）或 `%LOCALAPPDATA%\sean-toolbox\clipboard`（Windows），粘贴时由目标程序拷到你选的位置。缓存在启动时、每次收完文件时和每小时清理一次：超过 24 小时的删除，总量超过 2 GiB 时从最旧的删；当前剪贴板上的那份保留，被删后下次粘贴会重新获取。`clear-cache` 或界面里的“清空缓存”删除全部已接收文件（正在进行的传输除外）。发送方不复制文件，没有缓存。
 

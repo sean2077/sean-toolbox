@@ -30,7 +30,8 @@ pub enum HostCommand {
         action: ShortcutCaptureAction,
     },
     SaveConfig {
-        config: Config,
+        /// Boxed to keep IPC events small; serde's wire format is unchanged.
+        config: Box<Config>,
         expected_revision: u64,
     },
     Toggle {
@@ -58,6 +59,10 @@ pub enum ClipboardCommand {
     Status,
     /// Delete received files, except a transfer that is still running.
     ClearCache,
+    /// Pause reading and writing the clipboard until resumed.
+    Pause,
+    /// Resume after a manual or automatic pause.
+    Resume,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,6 +81,10 @@ pub struct ClipboardStatus {
     /// Bytes in the receive cache.
     pub cache_bytes: u64,
     pub last_error: Option<String>,
+    /// The bridge is paused and neither reads nor writes the clipboard.
+    pub suspended: bool,
+    /// `manual` or the detected remote-control process name.
+    pub suspended_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

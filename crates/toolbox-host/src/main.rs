@@ -88,11 +88,17 @@ fn start() -> Result<(), String> {
         Some("clipboard") if args.len() == 2 => match args[1].as_str() {
             "status" => HostCommand::Clipboard(ClipboardCommand::Status),
             "clear-cache" => HostCommand::Clipboard(ClipboardCommand::ClearCache),
+            "pause" => HostCommand::Clipboard(ClipboardCommand::Pause),
+            "resume" => HostCommand::Clipboard(ClipboardCommand::Resume),
             "keygen" => {
                 generate_clipboard_key()?;
                 return Ok(());
             }
-            _ => return Err("Usage: sean-toolbox clipboard status|clear-cache|keygen".into()),
+            _ => {
+                return Err(
+                    "Usage: sean-toolbox clipboard status|clear-cache|pause|resume|keygen".into(),
+                );
+            }
         },
         Some("quit") if args.len() == 1 => HostCommand::Quit,
         _ => return Err("Unknown arguments. Run sean-toolbox --help".into()),
