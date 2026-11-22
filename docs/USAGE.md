@@ -202,6 +202,8 @@ UU 远程、ToDesk、AnyDesk、RustDesk、VNC 等远控软件自带剪贴板同�
 
 自动检测默认开启，进程名单可在 `config.json` 的 `clipboard.suspend.processes` 中增删；`uu_child` 置空表示 `uuremote-server` 一运行就暂停。
 
+**已知限制（2026-11-22）**：UU Remote 的 Linux host 0.2.64 与官方 Windows viewer 4.48 的文本剪贴板协议不兼容。host 发出 rich format offer 后 viewer 只回确认、不请求数据；反向 viewer 也不发送剪贴板。实测即使暂停本工具箱，UU 双向仍失败，本工具箱的自动让位只能防止两套同步器互踩，不能修复 UU 自身。遇到这种组合时，可关闭本工具箱的“远程控制时暂停”并让 Sean Toolbox 负责 u26 ↔ w11 剪贴板，或等待上游修复；上游跟踪：https://github.com/VallierDev/uu-remote-linux/issues/211
+
 ### 配置
 
 在界面里改即可：“设置”页的“跨机剪贴板”分类，或左侧导航的“跨机剪贴板”页（快捷键 `6`，设置在上，连接状态、传输进度和缓存在下）。角色选“监听”时显示监听地址，选“连接”时显示对端地址；对端地址可以填 IP 或主机名加端口，主机名每次重连都会重新解析。改完点“保存设置”，宿主会按新配置重启剪贴板服务。

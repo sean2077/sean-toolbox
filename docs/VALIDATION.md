@@ -1158,4 +1158,5 @@ Deskflow 切屏后粘贴和 Windows toast 外观。`wl-clipboard 2.2.1` 不能�
 | `python scripts/translations.py check`（extractor 1.18.1） | 通过 |
 
 - u26 真机：12:54 替换 `~/.local/opt/sean-toolbox/` 两个二进制并重启用户单元；`clipboard status` 显示 `connected=true`、`suspended=true`、`suspended_by=uuremote-server`，6 秒后状态稳定。`clipboard pause` 后 `suspended_by=manual`；`clipboard resume` 后自动会话仍保持暂停并回到 `uuremote-server`。此时 `sent_count=0`，本机 selection 不会被转发给 w11。
-- 未覆盖：用户在 UU viewer 上做双向复制/粘贴的 GUI 验收；UU 会话真正结束后的自动恢复（仅单元测试模拟）；Windows 真机的 `GameViewer.exe` 检测。以上需在对应桌面环境补测。
+- **真实 UU 验收（2026-11-22 15:00）**：自动暂停生效后，官方 Windows viewer 4.48.0.5446 与 host 0.2.64 的双向文本剪贴板仍失败。host 日志只有 `Native clipboard text format offered` 和 viewer 的 field 22 响应，没有 `Clipboard data request` / `Native clipboard text received`；viewer 的 `fields=[2,13]` 是文件传输握手，不是剪贴板。该现象与上游 issue #211（官方 Mac viewer 与非官方 host）同型，不是本工具箱造成。u26 随后设 `clipboard.suspend.auto=false`，改由 Sean Toolbox 负责 u26 ↔ w11 剪贴板；详见 `docs/USAGE.md` 的“已知限制”。
+- 未覆盖：UU 上游修复后的双向剪贴板验收；Windows 真机的 `GameViewer.exe` 自动检测（仅编译检查）；UU 会话真正结束后的自动恢复（仅单元测试模拟）。
