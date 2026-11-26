@@ -1184,3 +1184,10 @@ Deskflow 切屏后粘贴和 Windows toast 外观。`wl-clipboard 2.2.1` 不能�
 - `cargo fmt --all -- --check`、`cargo clippy --offline --locked --workspace --all-targets -- -D warnings` 均通过；`cargo test --offline --locked --workspace --no-fail-fast` 为 **356 通过、0 失败、2 个既有 ignored**。
 - 该 shell 中独立的 `socket(AF_UNIX, SOCK_STREAM)` 探针可正常绑定，确认此前的 3 个 `toolbox-ipc` 失败来自执行沙箱，不是代码回归；未修改或跳过任何测试。
 - 桌面冷启动、再次唤起、托盘点击和快捷键仍待在安装后的桌面会话中验收；Windows、macOS 真机交互未验证。
+
+## 2026-11-26：最近项目面板不进入任务栏
+
+- 现象（u26，KDE Plasma Wayland）：主窗口和最近项目面板同时存在时，任务栏把它们显示为两个任务（“Sean Toolbox · 最近项目”和“Sean Toolbox”）。Wayland 没有客户端可设的 skip-taskbar 提示，winit 的 `set_skip_taskbar` 只在 Windows 生效。
+- 诊断：临时 KWin 脚本读到面板窗口 `resourceClass=sean-toolbox`、`caption=Sean Toolbox · 最近项目`、760×432、`skipTaskbar=false`、`skipSwitcher=false`；KWin 6 允许脚本写入这两个属性并立即生效。
+- 修复：生成的 KWin 脚本在加载、`windowAdded` 和 `captionChanged` 时，把标题以 `Sean Toolbox · ` 开头的 `sean-toolbox` 窗口设为 `skipTaskbar=true`、`skipSwitcher=true`；主窗口标题恰为 `Sean Toolbox`，不受影响。
+- 检查：`cargo fmt --all -- --check` 和严格 Clippy 通过；workspace 测试 **357 通过、0 失败、2 个既有 ignored**；拼接后的渲染脚本通过 `node --check` 语法检查。

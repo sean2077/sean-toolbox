@@ -154,3 +154,33 @@ if (LAUNCHER) {
         log('could not register ' + LAUNCHER + ' for recent projects');
     }
 }
+
+// Wayland has no client-side skip-taskbar hint. The recent-projects surface is
+// a panel, not a task: keep it out of the taskbar and the window switcher when
+// KWin maps it. The window title is the translated `ui.launcher.title`
+// ("Sean Toolbox · …"); the management window is titled exactly "Sean Toolbox".
+const LAUNCHER_CAPTION = 'Sean Toolbox · ';
+
+function hide_launcher_panel(window) {
+    if (String(window.resourceClass || '').toLowerCase() !== 'sean-toolbox' ||
+        String(window.caption || '').indexOf(LAUNCHER_CAPTION) !== 0) {
+        return;
+    }
+    if (!window.skipTaskbar) {
+        window.skipTaskbar = true;
+    }
+    if (!window.skipSwitcher) {
+        window.skipSwitcher = true;
+    }
+}
+
+function watch_launcher_panel(window) {
+    hide_launcher_panel(window);
+    // The caption may arrive after the compositor maps the surface.
+    window.captionChanged.connect(function () {
+        hide_launcher_panel(window);
+    });
+}
+
+workspace.windowList().forEach(watch_launcher_panel);
+workspace.windowAdded.connect(watch_launcher_panel);
