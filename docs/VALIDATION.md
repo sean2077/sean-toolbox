@@ -1177,3 +1177,10 @@ Deskflow 切屏后粘贴和 Windows toast 外观。`wl-clipboard 2.2.1` 不能�
 | 两份二进制的 `--help` | 正常退出并显示新的主界面默认入口说明 |
 
 - 沙箱限制已用独立的 `socket(AF_UNIX, SOCK_STREAM)` 探针确认：创建阶段即返回 `EPERM`。准备好依赖的 Xvfb 同样无法创建本地 socket，因此本次未完成冷启动、再次唤起、托盘点击和快捷键的原生桌面验收；Windows、macOS 真机交互也未验证。未修改或跳过失败测试。
+
+### 原生复核（u26）
+
+- 环境：Ubuntu 26.04.1 x86_64，KDE Plasma Wayland，Rust 1.99.1；同一提交 `2d34978`，使用锁定依赖。
+- `cargo fmt --all -- --check`、`cargo clippy --offline --locked --workspace --all-targets -- -D warnings` 均通过；`cargo test --offline --locked --workspace --no-fail-fast` 为 **356 通过、0 失败、2 个既有 ignored**。
+- 该 shell 中独立的 `socket(AF_UNIX, SOCK_STREAM)` 探针可正常绑定，确认此前的 3 个 `toolbox-ipc` 失败来自执行沙箱，不是代码回归；未修改或跳过任何测试。
+- 桌面冷启动、再次唤起、托盘点击和快捷键仍待在安装后的桌面会话中验收；Windows、macOS 真机交互未验证。

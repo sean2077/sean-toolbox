@@ -2677,7 +2677,8 @@ fn arguments() -> Result<(UiPage, String), String> {
                     Some("clipboard") => UiPage::Clipboard,
                     _ => {
                         return Err(
-                            "--page expects projects/windows/settings/diagnostics/skills".into(),
+                            "--page expects projects/windows/settings/diagnostics/skills/clipboard"
+                                .into(),
                         );
                     }
                 }
@@ -2685,7 +2686,7 @@ fn arguments() -> Result<(UiPage, String), String> {
             "--endpoint" => endpoint = args.next().ok_or("--endpoint expects an identifier")?,
             "--help" | "-h" => {
                 println!(
-                    "sean-toolbox-ui [--page projects|windows|settings|diagnostics|skills] [--endpoint ID]\nDefaults to the management window's application profiles page (windows).\nStart sean-toolbox to launch the resident host first."
+                    "sean-toolbox-ui [--page projects|windows|settings|diagnostics|skills|clipboard] [--endpoint ID]\nDefaults to the management window's window-switcher page (windows).\nStart sean-toolbox to launch the resident host first."
                 );
                 std::process::exit(0);
             }

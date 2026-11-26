@@ -378,10 +378,11 @@ sean-toolbox clipboard resume
 sean-toolbox                              打开主界面（窗口切换页）
 sean-toolbox show                         打开主界面（窗口切换页）
 sean-toolbox show projects                打开最近项目面板
-sean-toolbox show windows                 打开应用快捷键配置
+sean-toolbox show windows                 打开“窗口切换”页
 sean-toolbox show settings                打开设置
 sean-toolbox show diagnostics             打开运行状态
 sean-toolbox show skills                  打开 Skills 管理
+sean-toolbox show clipboard               打开跨机剪贴板
 sean-toolbox --background                 启动常驻宿主
 sean-toolbox toggle vscode                切换 id 为 vscode 的应用
 sean-toolbox status                       输出 JSON 运行状态

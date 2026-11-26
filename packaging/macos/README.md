@@ -6,7 +6,7 @@
 最低系统版本为 macOS 11。
 
 解压后将完整的 `Sean Toolbox.app` 移到 `/Applications` 或 `~/Applications`，然后打开。
-应用以菜单栏工具运行；默认按 `Ctrl+Alt+Space` 打开最近项目面板，应用配置和设置可从菜单栏打开。
+应用以菜单栏工具运行；启动后打开主界面的“窗口切换”页，`Ctrl+Alt+Space` 打开最近项目面板，应用配置和设置可从菜单栏打开。
 
 ## 系统权限
 

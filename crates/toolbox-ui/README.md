@@ -17,8 +17,8 @@ The UI has two windows:
   skills, settings and diagnostics pages. The preferred size is 1120×780, with
   an 800×580 minimum and compact icon navigation below 980 pixels wide.
   Opening the application icon, left-clicking the tray icon, `sean-toolbox`
-  without arguments and bare `sean-toolbox show` open its application profiles
-  page (`windows`). Direct frontend startup also defaults to this page.
+  without arguments and bare `sean-toolbox show` open its window-switcher page
+  (`windows`). Direct frontend startup also defaults to this page.
 
 Each launcher activation refreshes history, clears the query and focuses search.
 Repeated activations reuse the panel. Up/Down selects a result; Enter or
