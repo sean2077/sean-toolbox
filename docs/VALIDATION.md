@@ -1192,3 +1192,4 @@ Deskflow 切屏后粘贴和 Windows toast 外观。`wl-clipboard 2.2.1` 不能�
 - 修复：生成的 KWin 脚本在加载、`windowAdded` 和 `captionChanged` 时，把标题以 `Sean Toolbox · ` 开头的 `sean-toolbox` 窗口设为 `skipTaskbar=true`、`skipSwitcher=true`；主窗口标题恰为 `Sean Toolbox`，不受影响。
 - 检查：`cargo fmt --all -- --check` 和严格 Clippy 通过；workspace 测试 **357 通过、0 失败、2 个既有 ignored**；拼接后的渲染脚本通过 `node --check` 语法检查。
 - 部署验收（2026-11-26）：u26 与 w11 均更新到 `ec10b82`。u26 重启宿主并重新打开最近项目面板后，KWin 探针读到该窗口 `skipTaskbar=true`、`skipSwitcher=true`，管理窗口保持正常任务栏入口；w11 继续使用原有的 `set_skip_taskbar` 行为。
+- 追加（2026-11-26）：仅由 KWin 脚本在 `windowAdded` 设置 `skipTaskbar` 时，Plasma 任务栏仍保留该窗口的既有条目（实测面板打开期间显示，关闭后才消失）。宿主改为同时安装 KWin 窗口规则 `sean-toolbox-launcher-panel`：`skiptaskbar`/`skipswitcher` 使用 Force 策略，按窗口类与标题前缀匹配，在窗口创建阶段生效。重新验证：面板打开期间任务栏不再出现该条目，主窗口仍正常显示。
