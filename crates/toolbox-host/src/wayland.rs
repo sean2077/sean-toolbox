@@ -20,6 +20,8 @@ const SCRIPT: &str = include_str!("wayland/script.js");
 const LAUNCH_UNIT: &str = "sean-toolbox-launch@.service";
 const SHOW_UNIT: &str = "sean-toolbox-show@.service";
 const KWIN_COMPONENT: &str = "kwin";
+const LAUNCHER_RULE_GROUP: &str = "sean-toolbox-launcher-panel";
+const LAUNCHER_RULE_TITLE: &str = "Sean Toolbox · ";
 
 /// A shortcut the KWin script owns and the binding it expects in
 /// KGlobalAccel. KWin keeps the first binding registered for an action name,
@@ -94,6 +96,9 @@ impl KWinHotkeys {
     /// the KGlobalAccel bindings, which KWin does not update on its own.
     pub fn sync(&mut self, config: &Config) -> Vec<String> {
         let mut warnings = Vec::new();
+        if let Err(error) = self.sync_launcher_rule() {
+            warnings.push(format!("Wayland: {error}"));
+        }
         if let Err(error) = self.write_units() {
             warnings.push(format!("Wayland: {error}"));
         }
@@ -124,6 +129,76 @@ impl KWinHotkeys {
         }
         warnings.extend(self.sync_bindings(bindings));
         warnings
+    }
+
+    /// Plasma's task manager does not withdraw a window whose skip-taskbar
+    /// flag changes after it was added, so the script alone leaves the launcher
+    /// in the taskbar. Install a window rule that KWin applies while creating
+    /// the window, before the task manager sees it.
+    fn sync_launcher_rule(&self) -> Result<(), String> {
+        let rules = query(
+            "kreadconfig6",
+            &[
+                "--file",
+                "kwinrulesrc",
+                "--group",
+                "General",
+                "--key",
+                "rules",
+            ],
+        )
+        .unwrap_or_default();
+        let mut groups: Vec<&str> = rules
+            .split(',')
+            .map(str::trim)
+            .filter(|group| !group.is_empty())
+            .collect();
+        if !groups.contains(&LAUNCHER_RULE_GROUP) {
+            groups.push(LAUNCHER_RULE_GROUP);
+        }
+        for (key, value) in launcher_rule_entries() {
+            query(
+                "kwriteconfig6",
+                &[
+                    "--file",
+                    "kwinrulesrc",
+                    "--group",
+                    LAUNCHER_RULE_GROUP,
+                    "--key",
+                    key,
+                    value,
+                ],
+            )?;
+        }
+        query(
+            "kwriteconfig6",
+            &[
+                "--file",
+                "kwinrulesrc",
+                "--group",
+                "General",
+                "--key",
+                "rules",
+                &groups.join(","),
+            ],
+        )?;
+        query(
+            "kwriteconfig6",
+            &[
+                "--file",
+                "kwinrulesrc",
+                "--group",
+                "General",
+                "--key",
+                "count",
+                &groups.len().to_string(),
+            ],
+        )?;
+        query(
+            qdbus_command()?,
+            &["org.kde.KWin", "/KWin", "org.kde.KWin.reconfigure"],
+        )?;
+        Ok(())
     }
 
     /// KWin keeps the binding an action had when it was first registered, so
@@ -472,6 +547,26 @@ fn update_bindings(bindings: &[ShortcutBinding]) -> Result<Vec<String>, String> 
     Ok(warnings)
 }
 
+/// The rule is installed at host start. KWin rule policies use 2 = Force; the
+/// title match is a substring, while the window class matches exactly.
+fn launcher_rule_entries() -> [(&'static str, &'static str); 10] {
+    [
+        (
+            "Description",
+            "Sean Toolbox: keep the recent-projects panel out of task switchers",
+        ),
+        ("skiptaskbar", "true"),
+        ("skiptaskbarrule", "2"),
+        ("skipswitcher", "true"),
+        ("skipswitcherrule", "2"),
+        ("title", LAUNCHER_RULE_TITLE),
+        ("titlematch", "2"),
+        ("wmclass", "sean-toolbox"),
+        ("wmclasscomplete", "false"),
+        ("wmclassmatch", "1"),
+    ]
+}
+
 fn qdbus_command() -> Result<&'static str, String> {
     for candidate in ["qdbus6", "qdbus"] {
         if env::var_os("PATH").is_some_and(|paths| {
@@ -569,6 +664,24 @@ mod tests {
         assert!(script.contains("const LAUNCHER_CAPTION = 'Sean Toolbox · ';"));
         assert!(script.contains("window.skipTaskbar = true;"));
         assert!(script.contains("window.skipSwitcher = true;"));
+    }
+
+    #[test]
+    fn launcher_rule_uses_forced_skip_flags() {
+        let entries = launcher_rule_entries();
+        let value = |key: &str| {
+            entries
+                .iter()
+                .find(|(name, _)| *name == key)
+                .map(|(_, value)| *value)
+        };
+        assert_eq!(value("skiptaskbar"), Some("true"));
+        assert_eq!(value("skiptaskbarrule"), Some("2"));
+        assert_eq!(value("skipswitcher"), Some("true"));
+        assert_eq!(value("skipswitcherrule"), Some("2"));
+        assert_eq!(value("title"), Some(LAUNCHER_RULE_TITLE));
+        assert_eq!(value("titlematch"), Some("2"));
+        assert_eq!(value("wmclass"), Some("sean-toolbox"));
     }
 
     #[test]
