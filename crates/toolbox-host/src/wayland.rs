@@ -564,6 +564,14 @@ mod tests {
     }
 
     #[test]
+    fn script_keeps_the_launcher_panel_out_of_task_switchers() {
+        let script = render(&Config::default());
+        assert!(script.contains("const LAUNCHER_CAPTION = 'Sean Toolbox · ';"));
+        assert!(script.contains("window.skipTaskbar = true;"));
+        assert!(script.contains("window.skipSwitcher = true;"));
+    }
+
+    #[test]
     fn action_titles_are_stable_for_invoke() {
         assert_eq!(action_title("vscode"), "Sean Toolbox: vscode");
     }
