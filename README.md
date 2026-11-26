@@ -48,8 +48,8 @@ Sean Toolbox 使用 Rust + Slint，支持 Windows、macOS 和 Linux，优先面�
 
 首次启动后：
 
-1. 按 `Ctrl+Alt+Space` 打开最近项目，输入关键词搜索，按 `Enter` 打开。
-2. 从托盘打开“窗口快捷键”，确认程序路径和快捷键。默认示例为 VS Code `F4`、Chrome `F5`；WezTerm 默认不绑定快捷键，由自带的 quake 下拉（Windows fork 或 Linux KWin 脚本）或托盘切换。
+1. 点击应用图标进入主界面的“窗口切换”页，确认程序路径和快捷键；左键点击托盘图标也可唤起主界面。默认示例为 VS Code `F4`、Chrome `F5`；WezTerm 默认不绑定快捷键，由自带的 quake 下拉（Windows fork 或 Linux KWin 脚本）或托盘切换。
+2. 按 `Ctrl+Alt+Space` 打开最近项目，输入关键词搜索，按 `Enter` 打开。
 3. 在“设置”中选择主题、语言和开机启动。开机启动默认关闭。
 4. 从托盘或管理窗口打开“Skills 管理”，添加来源仓库、安装所需 Skill，再按需开启每日自动更新。宿主运行时执行更新，退出期间错过的更新在下次启动补跑。
 
