@@ -763,7 +763,7 @@ impl ApplicationHandler<Event> for App {
                 button_state: tray_icon::MouseButtonState::Up,
                 ..
             }) => {
-                if let Err(e) = self.show(UiPage::Projects) {
+                if let Err(e) = self.show(UiPage::Windows) {
                     self.status.last_action = e;
                 }
             }

@@ -2662,7 +2662,7 @@ impl Controller {
 }
 
 fn arguments() -> Result<(UiPage, String), String> {
-    let mut page = UiPage::Projects;
+    let mut page = UiPage::Windows;
     let mut endpoint = "sean-toolbox-ui-v1".to_owned();
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -2685,7 +2685,7 @@ fn arguments() -> Result<(UiPage, String), String> {
             "--endpoint" => endpoint = args.next().ok_or("--endpoint expects an identifier")?,
             "--help" | "-h" => {
                 println!(
-                    "sean-toolbox-ui [--page projects|windows|settings|diagnostics|skills] [--endpoint ID]\nStart sean-toolbox to launch the resident host first."
+                    "sean-toolbox-ui [--page projects|windows|settings|diagnostics|skills] [--endpoint ID]\nDefaults to the management window's application profiles page (windows).\nStart sean-toolbox to launch the resident host first."
                 );
                 std::process::exit(0);
             }

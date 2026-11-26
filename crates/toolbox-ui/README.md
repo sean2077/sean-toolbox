@@ -11,10 +11,14 @@ The UI has two windows:
   a default size of 760×432 logical pixels, 36-pixel result rows, path tooltips,
   remote markers and a selection counter. Alt+Enter expands a selectable full
   path; Escape closes those details before dismissing the panel.
-  The global shortcut, tray and `sean-toolbox show projects` open this panel.
+  The global shortcut, the tray's recent-projects menu item and
+  `sean-toolbox show projects` open this panel.
 - `AppWindow`: the management window, with projects, application profiles,
   skills, settings and diagnostics pages. The preferred size is 1120×780, with
   an 800×580 minimum and compact icon navigation below 980 pixels wide.
+  Opening the application icon, left-clicking the tray icon, `sean-toolbox`
+  without arguments and bare `sean-toolbox show` open its application profiles
+  page (`windows`). Direct frontend startup also defaults to this page.
 
 Each launcher activation refreshes history, clears the query and focuses search.
 Repeated activations reuse the panel. Up/Down selects a result; Enter or

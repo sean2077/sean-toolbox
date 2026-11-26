@@ -1162,3 +1162,18 @@ Deskflow 切屏后粘贴和 Windows toast 外观。`wl-clipboard 2.2.1` 不能�
 - 追加（2026-11-22）：默认检测名单移除 viewer 进程（`GameViewer.exe`、`uuremote-viewer`），避免 w11 控制 u26 时误暂停；托盘新增“跨机剪贴板”和“暂停/恢复剪贴板同步”。Windows 被控端（w11 被 Mac/Windows 控制）使用手动暂停，因为官方 UU 被控服务常驻、进程名无法区分被控与仅安装。
 - w11 真机（2026-11-22）：更新到 0.4.0（commit `9224510`）。SSH 会话直接运行 cargo 时，`.cargo/bin` 的 shim 触发 Windows “untrusted mount point”，构建时以 `RUSTC` 指向工具链的真实 rustc；安装后用交互计划任务 `SeanToolboxStartOnce` 在 session 1 启动宿主（SSH 会话无法访问剪贴板）。`clipboard pause` → `suspended_by=manual`，`resume` → `suspended=false`；u26 与 w11 均 `connected=true`。w11 配置已设 `suspend.auto=false`；Mac/Windows 被控端使用官方 UU 共享剪贴板的端到端测试待用户连接后确认。
 - 未覆盖：UU 上游修复后的双向剪贴板验收；Windows 真机的 `GameViewer.exe` 自动检测（仅编译检查）；UU 会话真正结束后的自动恢复（仅单元测试模拟）。
+
+## 2026-11-26：图标默认打开主界面
+
+- 基线 `a4dd497`，修复分支 `fix/icon-open-main`；Debian 13 x86_64，Rust 1.99.1，使用锁定依赖的本地缓存。
+- 主程序无参数、裸 `show`、托盘左键和独立界面程序的默认入口统一为管理窗口的“窗口切换”页。最近项目快捷键、托盘“最近项目”、`show projects` 和 `--background` 的路径经独立源码复查保持原行为。
+
+| 检查 | 结果 |
+| --- | --- |
+| `cargo fmt --all -- --check` | 通过 |
+| `cargo clippy --offline --locked --workspace --all-targets -- -D warnings` | 通过 |
+| `cargo test --offline --locked --workspace --no-fail-fast` | 353 通过，3 失败，2 个既有 ignored；失败均为 `toolbox-ipc` 的 Unix socket 用例，报 `PermissionDenied: Operation not permitted` |
+| `cargo build --offline --locked -p toolbox-host -p toolbox-ui` | 通过，两份二进制均完成构建 |
+| 两份二进制的 `--help` | 正常退出并显示新的主界面默认入口说明 |
+
+- 沙箱限制已用独立的 `socket(AF_UNIX, SOCK_STREAM)` 探针确认：创建阶段即返回 `EPERM`。准备好依赖的 Xvfb 同样无法创建本地 socket，因此本次未完成冷启动、再次唤起、托盘点击和快捷键的原生桌面验收；Windows、macOS 真机交互也未验证。未修改或跳过失败测试。

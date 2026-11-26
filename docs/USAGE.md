@@ -2,6 +2,12 @@
 
 [返回首页](../README.md)
 
+## 打开工具箱
+
+点击应用图标或左键点击托盘图标，会打开主界面（管理窗口）的“窗口切换”页，侧栏可进入最近项目、Skills、剪贴板、设置和运行状态。宿主已在后台运行时，再次点击图标会唤起主界面。
+
+`Ctrl+Alt+Space`、托盘菜单的“最近项目”和 `sean-toolbox show projects` 用于打开独立的最近项目面板。开机启动或 `--background` 仍只启动常驻宿主。
+
 ## 最近项目
 
 按 `Ctrl+Alt+Space` 唤出项目面板。每次打开都会刷新历史、清空搜索并聚焦输入框；空搜索按最近访问顺序显示，输入后按项目名和路径模糊匹配。
@@ -369,7 +375,8 @@ sean-toolbox clipboard resume
 ## 命令行
 
 ```text
-sean-toolbox                              打开最近项目面板
+sean-toolbox                              打开主界面（窗口切换页）
+sean-toolbox show                         打开主界面（窗口切换页）
 sean-toolbox show projects                打开最近项目面板
 sean-toolbox show windows                 打开应用快捷键配置
 sean-toolbox show settings                打开设置
